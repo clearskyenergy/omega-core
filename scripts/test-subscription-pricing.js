@@ -17,7 +17,7 @@ async function main() {
   rejects(function () { P.quote(['lite', 'permitting', 'sitefinder'], b, { plan: 'pro' }); });
   rejects(function () { P.quote(['lite', 'storage', 'plansets', 'finance', 'compute'], b, { plan: 'field' }); });
   var all = M.catalog().map(function (m) { return m.key; });
-  eq(P.quote(all, b).recurringCents, 900000, 'whole menu plus bundled Logic');
+  eq(P.quote(all, b).recurringCents, 1029900, 'whole menu plus bundled Logic ($9,000 + Omega Maximus at $1,299 from 2026-11)');
   eq(P.quote(['lite', 'logic-office'], b).recurringCents, 200000);
   var logic = all.filter(function (k) { return k.indexOf('logic-') === 0; });
   eq(P.quote(M.starters().ev.concat(logic), b).monthlyCents, 379900, 'Logic outside Field cap');

@@ -18,7 +18,8 @@
                   among them, the battery itself as a REFERENCE product line:
                   resolved on the server from the seller's own battery list
                   (omega-prime-project.js units(), the list the quote was
-                  priced from), never from a request body, and marked
+                  priced from) by Q.offered, the rule the quote door prices
+                  by, never from a request body, and marked
                   { reference: true, mfr } on the order's line
      bought in    procure { mfr, mfrOrgId|null, sku, model }: the office knows
                   the unit is bought from its maker, not built on its floor
@@ -120,15 +121,10 @@ function destination(quote) {
   return { name: str(cust.company || cust.name || 'Project site', 120), line1: a.line1 || '', city: a.city || '', state: a.state || '', zip: a.zip || '', country: 'US' };
 }
 
-/* The quoted battery, from the seller's OWN list on the server (the list
-   the quote was priced from): by its key, else the same SKU (the list keeps
-   one entry per SKU). The quote record only names which one. */
-function unitFrom(list, quoted) {
-  quoted = quoted || {};
-  var key = str(quoted.key, 120), sku = str(quoted.sku, 100);
-  var byKey = key ? list.filter(function (u) { return u && u.key === key; })[0] : null;
-  return byKey || (sku ? list.filter(function (u) { return u && u.sku === sku; })[0] : null) || null;
-}
+/* The quoted battery is the seller's OWN list's entry (the list the quote
+   was priced from) by Q.offered, the ONE rule the quote door prices by: by
+   its key, else the same product under another key. The quote record only
+   names which one. */
 
 /* The products the order line is checked against: the seller's published,
    orderable products, and — when the battery's SKU is not one of them — the
@@ -214,8 +210,8 @@ async function create(db, o) {
   var name = str(ctx.org.name, 120) || word;
   if (!X.subscribed(ctx, now)) throw notOnLogic(name);
   var sf = data(await db.collection('omega_orgs').doc(org).collection('storefront').doc('config').get()) || {};
-  var unit = unitFrom(Q.unitsFor(org, ctx.org, sf), q.unit);
-  if (!unit) throw plain(409, 'The battery on this quote (' + (str(q.unit && (q.unit.key || q.unit.sku), 120) || 'none') + ') is not in ' + name + '’s battery list any more, so its order line could not be checked. Choose it again in Omega Prime, save a new revision of the quote, and send it.');
+  var unit = Q.offered(Q.unitsFor(org, ctx.org, sf), q.unit);
+  if (!unit) throw plain(409, Q.notListed(q.unit, name) + ' any more, so its order line could not be checked. Choose the unit on Omega Prime’s Proposal step (the drawing is kept), save the proposal and send it again.');
   var cat = catalogFor(unit, sf.products, name);
   var input = lines(q, unit, cat, name);
   var id = orderId(org, q), no = orderNo(id, now), url = logicUrl(org, id);
@@ -255,5 +251,5 @@ async function create(db, o) {
   });
 }
 
-module.exports = { DAILY_CAP: DAILY_CAP, orderId: orderId, orderNo: orderNo, logicUrl: logicUrl, destination: destination, unitFrom: unitFrom,
+module.exports = { DAILY_CAP: DAILY_CAP, orderId: orderId, orderNo: orderNo, logicUrl: logicUrl, destination: destination,
   catalogFor: catalogFor, lines: lines, build: build, create: create, plain: plain, live: live, earlierOrder: earlierOrder };

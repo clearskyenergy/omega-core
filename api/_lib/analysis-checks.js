@@ -260,6 +260,12 @@ function run(opts) {
     });
   });
 
+  /* Preview price book: reference projects against the cited bands, and
+     how old the read date is. Publication age of an annual edition is not
+     the staleness clock. */
+  var PB = require('./pricing-benchmarks');
+  PB.checks({ now: now, staleDays: staleDays, errorDays: errorDays }).forEach(add);
+
   var errors = checks.filter(function (c) { return !c.ok && c.severity === 'error'; });
   var warnings = checks.filter(function (c) { return !c.ok && c.severity === 'warn'; });
   return {

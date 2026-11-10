@@ -33,7 +33,7 @@
       return s.db.runTransaction(function (tx) {
         return tx.get(ref).then(function (snap) {
           var old = snap.exists ? snap.data() : null;
-          if (old && (!doc.remoteProjectId || old.editor !== 'v2')) throw new Error('This record belongs to another drawing. Save a new Site Plan instead.');
+          if (old && (!doc.remoteProjectId || old.editor !== 'v2')) throw new Error('This record belongs to another drawing. Save a new Omega Maximus project instead.');
           if (old && (old.savedBy && old.savedBy.at || 0) !== (doc.workspaceRevision || 0)) throw new Error('Someone saved a newer version. Reopen the workspace project before saving; your draft is still here.');
           record.orgId = old ? old.orgId : s.org;
           record.remoteProjectId = id;
@@ -100,7 +100,7 @@
           mw:(q.solarKwDc||q.bessKw||q.chargerKw||0)/1000,mwh:(q.bessKwh||0)/1000,
           assetSpec:{solarKwDc:q.solarKwDc||0,bessKw:q.bessKw||0,bessKwh:q.bessKwh||0,chargerKw:q.chargerKw||0},
           sizePending:!(q.solarKwDc>0||q.bessKw>0||q.chargerKw>0),
-          links:[{label:'OMEGA Site Plan trial',url:location.origin+'/editor-v2?id='+encodeURIComponent(doc.remoteProjectId)}],updatedAt:Date.now()};
+          links:[{label:'Omega Maximus trial',url:location.origin+'/editor-v2?id='+encodeURIComponent(doc.remoteProjectId)}],updatedAt:Date.now()};
         var create=clean(record);
         create.developerUid=s.user.uid;create.status='open';create.awardedTo=null;create.org=prof.org||'';
         if(prof.orgKey) create.orgKey=prof.orgKey;

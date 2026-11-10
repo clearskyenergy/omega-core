@@ -29,10 +29,16 @@
      patch()        the dotted update Prime writes afterwards
      unitFor()      the unit a saved record resumes with: ONE rule for
                     Prime, the server's quote and Site Map's build
+     offered()      whether a workspace's list offers the unit a record
+                    carries, and which entry it is: ONE rule for the
+                    server's quote and the order hand-off
      restore()      a saved record → the state the page resumes from
      runInput()     what /api/price-site is sent, computed ONE way for the
                     page and the server's quote
      zipOf(), peaks()   reading an address and a bill's monthly peaks
+     subName()      a substation's name as shown: HIFLD's 'UNKNOWN307104'
+                    reads "Unnamed substation (HIFLD 307104)"; the record
+                    keeps the raw name
      primeType()    an editor project-type word folded onto Prime's five
                     (bess, ev, solar, compute, microgrid), main #348
      forType()      the unit list for a project type: the battery list
@@ -696,6 +702,20 @@
     return { name: str(s.name), kv: fin(s.kv), minkv: fin(s.minkv), owner: str(s.owner), status: str(s.status),
       lines: fin(s.lines), lat: fin(s.lat), lng: fin(s.lng), mi: fin(s.mi != null ? s.mi : s.miles) };
   }
+  /* A substation's name as Prime shows it. HIFLD names about half its
+     records by a number alone (38,479 'UNKNOWN…' of 75,328 on 2026-10-20,
+     the nearest to 29 W Main St, Mesa among them): 'UNKNOWN307104' is an
+     unnamed substation, 'TAP302679' an unnamed tap on a line (HIFLD's TYPE
+     says TAP). They read as words with HIFLD's number kept; a real name,
+     even one that starts the same way ('TAPIA 1102'), is shown as it is.
+     Display only: the record keeps the name HIFLD gave (subOf). */
+  function subName(name) {
+    var s = str(name).replace(/^\s+|\s+$/g, ''), m = /^UNKNOWN\s*(\d*)$/i.exec(s);
+    if (m) return 'Unnamed substation' + (m[1] ? ' (HIFLD ' + m[1] + ')' : '');
+    m = /^TAP\s*(\d*)$/i.exec(s);
+    if (m) return 'Unnamed tap' + (m[1] ? ' (HIFLD ' + m[1] + ')' : '');
+    return s;
+  }
   function siteOf(st) {
     var label = str(st.geoLabel || st.addr);
     return { lat: fin(st.lat), lng: fin(st.lng), label: label, src: str(st.geoSrc),
@@ -830,6 +850,27 @@
     return fromBessEntry(b0);
   }
 
+  /* ── IS IT ON THE LIST? ONE RULE ─────────────────────────────────────
+     unitFor() resumes a record with its unit even when the list no longer
+     offers it (a saved design keeps its unit; a picker only stops offering
+     it). A PROPOSAL is an offer of the unit to a customer, so the server's
+     quote prices, and the order hand-off orders, only a unit the
+     workspace's own list offers: the list's entry by key, else the same
+     product under another key (units() keeps one entry per SKU). Both
+     doors ask THIS (api/customer-quote.js, api/_lib/prime-order.js), and
+     both take the entry's own figures, never the record's. null: not on
+     the list (the FENECON XXL a record carries outside FENECON's own
+     workspace, from before 2026-10-17), and the rep chooses the unit to
+     quote on the Proposal step, the drawing kept.
+     u: the carried unit, or just { key, sku }. */
+  function offered(list, u) {
+    if (!u || !Array.isArray(list)) return null;
+    var key = str(u.key), sku = norm(u.sku), i;
+    if (key) for (i = 0; i < list.length; i++) if (list[i] && list[i].key === key) return list[i];
+    if (sku) for (i = 0; i < list.length; i++) if (list[i] && norm(list[i].sku) === sku) return list[i];
+    return null;
+  }
+
   /* A saved projects/{id} document → what the page needs to resume
      (`/omega-prime?id=`). Pure: it reads the record and decides nothing
      the page has not been told. runFresh: the stored Run was priced for
@@ -862,11 +903,11 @@
 
   var P = { HERO: HERO, STEPS: STEPS, UNIT_KEYS: UNIT_KEYS, R60: R60, XXL: XXL,
     fromEntry: fromEntry, units: units, snapshot: snapshot, repFootprint: repFootprint, isPlaceholder: isPlaceholder,
-    bessEntry: bessEntry, zipOf: zipOf, peaks: peaks,
+    bessEntry: bessEntry, zipOf: zipOf, peaks: peaks, subName: subName,
     primeType: primeType, forType: forType, screenable: screenable, typeOf: typeOf, orgId: orgId, linkQuery: linkQuery,
     FOOTPRINTS: FOOTPRINTS, CONTAINER_20: CONTAINER_20, ftToDeg: ftToDeg, pathFt: pathFt, arrange: arrange, feed: feed, conduitPath: conduitPath, area: area,
     hash: hash, fnv1a: fnv1a, layout: layout, upgrade: upgrade,
-    runInput: runInput, runRecord: runRecord, sub: subOf, projectDoc: projectDoc, patch: patch, unitFor: unitFor, restore: restore };
+    runInput: runInput, runRecord: runRecord, sub: subOf, projectDoc: projectDoc, patch: patch, unitFor: unitFor, offered: offered, restore: restore };
   root.OmegaPrimeProject = P;
   if (typeof module !== 'undefined' && module.exports) module.exports = P;
 })(typeof window !== 'undefined' ? window : this);

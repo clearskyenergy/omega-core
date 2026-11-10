@@ -33,6 +33,8 @@ function quote(keys, book, options) {
   if (['monthly', 'annual'].indexOf(interval) < 0) fail('Invalid billing interval');
   if (interval === 'annual' && options.credit && book.policy.annualTransformationCredit !== true) fail('Annual prepay excludes the transformation credit');
   var modules = M.normalize(keys), editor = 0, logic = 0, logicCount = 0, deliverables = 0, lines = [];
+  /* a module first sold after this book's version is not on it (pricebook.js soldIn) */
+  modules.forEach(function (k) { if (!B.sells(book, k)) fail(M.get(k).name + ' is not on price book ' + book.version + '.'); });
   modules.forEach(function (k) {
     var m = M.get(k), price = book.modules[k].priceCents;
     if (m.shelf === 'platform') { logic += price; logicCount++; }
@@ -113,7 +115,7 @@ function quote(keys, book, options) {
       negotiated: negotiated ? 'Negotiated: ' + money(negotiated.amountCents) + '/month for ' + book.plans[negotiated.plan].name + ' (list ' + money(negotiated.listCents) + '/month). ' + negotiated.reason : null } };
 }
 function catalog(book) {
-  return M.catalog().map(function (m) {
+  return M.catalog().filter(function (m) { return B.sells(book, m.key); }).map(function (m) {
     m.priceCents = book.modules[m.key].priceCents; m.priceDisplay = money(m.priceCents) + '/month';
     m.usageDisplay = Object.keys(book.usage).filter(function (k) { return book.usage[k].module === m.key; })
       .map(function (k) { return book.usage[k].included + ' ' + book.usage[k].name + '/cycle'; }).join(' · ');

@@ -51,7 +51,8 @@
       valueStack: doc.valueStack || null,
       grid: liveGrid() || doc.grid || null,
       milestones: doc.milestones || null,
-      costLines: doc.costLines || null
+      costLines: doc.costLines || null,
+      solar: doc.solarDesign || null
     };
   }
 
@@ -124,6 +125,44 @@
     return n;
   }
 
+  var busy = false;
+  function usd(v) { return v == null || !isFinite(+v) ? '—' : '$' + Math.round(+v).toLocaleString(); }
+  function pct(v) { return v == null || !isFinite(+v) ? '—' : (+v * 100).toFixed(1) + '%'; }
+
+  /* What Run did, whether the drawing has moved on since, and Run itself. */
+  function runHeader(host, state) {
+    var Run = root.OmegaEditorV2Run, last = state.doc.lastRun, box = el('div', 'quiet-block');
+    box.id = 'run-head';
+    if (busy) box.appendChild(el('p', null, 'Running the cost, the value stack and the solar year on the server…'));
+    else if (!last) box.appendChild(el('p', null, 'Run prices the drawing and runs the value stack and the solar year on the server. Until then a price, a tariff and an IRR stay blank.'));
+    else {
+      var stale = Run && Run.isStale ? Run.isStale(state.doc, last) : false;
+      box.appendChild(el('p', stale ? 'run-stale' : null, stale ? 'The drawing changed since the last run (' + String(last.at || '').slice(0, 16).replace('T', ' ') + '). Run again for numbers that match it.'
+        : 'Run on ' + String(last.at || '').slice(0, 16).replace('T', ' ') + '. Screening figures, not a quote.'));
+      var notes = last.notes || {}, k;
+      for (k in notes) if (notes.hasOwnProperty(k) && notes[k]) box.appendChild(el('p', 'run-note', notes[k]));
+    }
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn primary';
+    b.id = 'analyze-run';
+    b.textContent = busy ? 'Running…' : (last ? 'Run again' : 'Run');
+    b.disabled = busy;
+    b.addEventListener('click', function () { var r = document.getElementById('btn-run'); if (r) r.click(); });
+    box.appendChild(b);
+    host.appendChild(box);
+  }
+
+  function costFold(host, cr) {
+    var c = fold(host, 'Cost estimate', true);
+    c.appendChild(el('div', 'score-num', usd(cr.total)));
+    var i;
+    for (i = 0; i < (cr.lines || []).length; i++) c.appendChild(el('p', null, cr.lines[i].label + '  ' + usd(cr.lines[i].usd)));
+    if (cr.contPct != null) c.appendChild(el('p', null, 'Includes ' + cr.contPct + '% contingency.'));
+    if (cr.benchmark) c.appendChild(el('p', null, 'The battery is priced at the benchmark rate because no model is named on the drawing.'));
+    c.appendChild(el('p', null, 'Source: the platform cost engine, the same one Site Map\'s Run uses' + (cr.at ? ', ' + String(cr.at).slice(0, 10) : '') + '. A screening estimate, not a quote.'));
+  }
+
   function show(state) {
     if (typeof document === 'undefined') return;
     var host = document.getElementById('analyze-body');
@@ -132,7 +171,7 @@
     var facts = factsFrom(state.doc, D.summary(state.doc));
     var x = (PI || root.OmegaProjectIntelligence).assess(facts);
     host.innerHTML = '';
-    host.appendChild(el('p', null, 'Read from the drawing. A price, a tariff, and an IRR stay blank until one is stored.'));
+    runHeader(host, state);
 
     var rom = fold(host, 'ROM', true);
     heading(rom, 'Power');
@@ -149,27 +188,41 @@
     rom.appendChild(el('p', null, (facts.solarKw || 0) + ' kW-DC on the drawing. Annual kWh is not estimated from the nameplate.'));
     if (facts.billKwh != null) rom.appendChild(el('p', null, 'Bill annual use ' + Math.round(facts.billKwh).toLocaleString() + ' kWh, as entered.'));
     heading(rom, 'Financials');
-    if (facts.cost > 0) rom.appendChild(el('p', null, 'Installed estimate $' + Math.round(facts.cost).toLocaleString() + ', stored on the project.'));
-    else rom.appendChild(el('p', null, 'No installed estimate is stored.'));
-    if (facts.revenue > 0) rom.appendChild(el('p', null, 'Year-one value $' + Math.round(facts.revenue).toLocaleString() + ', stored on the project.'));
-    else rom.appendChild(el('p', null, 'No year-one value is stored.'));
+    var cr = state.doc.costRun;
+    if (facts.cost > 0) rom.appendChild(el('p', null, 'Installed estimate ' + usd(facts.cost) + (cr ? ', from Run' : ', stored on the project') + '.'));
+    else rom.appendChild(el('p', null, 'No installed estimate yet. Run prices the drawing.'));
+    if (facts.revenue > 0) rom.appendChild(el('p', null, 'Year-one value ' + usd(facts.revenue) + (state.doc.valueStack && state.doc.valueStack.sig ? ', the owner\'s share of the value stack' : ', stored on the project') + '.'));
+    else rom.appendChild(el('p', null, 'No year-one value yet. Run computes it from the battery on the drawing.'));
 
-    var vs = fold(host, 'Value stack', false);
+    if (cr && cr.total > 0) costFold(host, cr);
+
+    var vsr = facts.valueStack;
+    var vs = fold(host, 'Value stack', !!(vsr && vsr.streams && vsr.streams.length));
     if (facts.bessKw <= 0) vs.appendChild(el('p', null, 'Place a battery to size a value stack. There is not one on the drawing.'));
     else vs.appendChild(el('p', null, facts.bessKw + ' kW / ' + facts.bessKwh + ' kWh on the drawing.'));
-    if (facts.valueStack && facts.valueStack.streams && facts.valueStack.streams.length) {
+    if (vsr && vsr.streams && vsr.streams.length) {
       var max = 0, s, i;
-      for (i = 0; i < facts.valueStack.streams.length; i++) if (+facts.valueStack.streams[i].usd > max) max = +facts.valueStack.streams[i].usd;
-      for (i = 0; i < facts.valueStack.streams.length; i++) {
-        s = facts.valueStack.streams[i];
-        var bar = el('div', 'stream', (s.name || 'Stream') + '  $' + Math.round(+s.usd || 0).toLocaleString());
+      for (i = 0; i < vsr.streams.length; i++) if (+vsr.streams[i].usd > max) max = +vsr.streams[i].usd;
+      for (i = 0; i < vsr.streams.length; i++) {
+        s = vsr.streams[i];
+        var bar = el('div', 'stream', (s.name || 'Stream') + '  ' + usd(s.usd) + ' / yr' + (s.tier ? '  · ' + s.tier : ''));
         var fill = el('i', 'stream-fill');
         fill.style.width = (max > 0 ? Math.round((+s.usd || 0) / max * 100) : 0) + '%';
         bar.appendChild(fill);
         vs.appendChild(bar);
       }
-      vs.appendChild(el('p', null, 'Source: ' + (facts.valueStack.source || 'the value-stack run stored on this project') + '.'));
-    } else vs.appendChild(el('p', null, 'No dispatch is stored. Revenue streams are computed on the server and then kept on the project.'));
+      if (vsr.gross != null) vs.appendChild(el('p', null, 'Gross ' + usd(vsr.gross) + ' a year' + (vsr.owner != null ? '; the owner keeps ' + usd(vsr.owner) : '') + '.'));
+      if (vsr.tariff) vs.appendChild(el('p', null, 'Tariff: ' + vsr.tariff));
+      if (vsr.where) vs.appendChild(el('p', null, 'Market from ZIP ' + vsr.where + '.'));
+      if (vsr.confidence) vs.appendChild(el('p', null, 'Confidence: ' + vsr.confidence + '. Computed rates come from the tariff; planning rates are leads until a programme\'s own terms replace them.'));
+      if (vsr.missing && vsr.missing.length) {
+        var nc = el('details', 'fold-sub');
+        nc.appendChild(el('summary', null, 'Not counted (' + vsr.missing.length + ')'));
+        for (i = 0; i < vsr.missing.length; i++) nc.appendChild(el('p', null, vsr.missing[i]));
+        vs.appendChild(nc);
+      }
+      vs.appendChild(el('p', null, 'Source: ' + (vsr.source || 'the value-stack run stored on this project') + (vsr.at ? ', ' + String(vsr.at).slice(0, 10) : '') + '. A screening estimate, not a quote.'));
+    } else vs.appendChild(el('p', null, facts.bessKw > 0 ? 'Run computes the streams on the server from the battery, the tariff and the programmes open at the site.' : 'No value stack without a battery.'));
 
     var grid = fold(host, 'Grid check', false);
     var designKw = facts.bessKw + facts.chargerKw;
@@ -202,18 +255,39 @@
     bill.appendChild(fileLabel);
     bill.appendChild(el('p', null, 'The file name is kept on the project. The tariff is read on the server, not in this panel.'));
 
-    var gen = fold(host, 'Generation', false);
+    var gen = fold(host, 'Generation', !!facts.solar);
     gen.appendChild(el('p', null, (facts.solarKw || 0) + ' kW-DC on the drawing' + (facts.solarKwAc ? (', about ' + facts.solarKwAc + ' kW-AC.') : '.')));
-    gen.appendChild(el('p', null, 'Source: the arrays on the drawing. An annual kWh figure needs a weather run, and none is stored here.'));
+    var sd = facts.solar;
+    if (sd && sd.acKwh > 0) {
+      gen.appendChild(el('p', null, 'Year 1 ' + Math.round(sd.acKwh).toLocaleString() + ' kWh AC · ' + Math.round(sd.specificYield || 0).toLocaleString() + ' kWh/kW' +
+        (sd.p90 > 0 ? (' · P50 ' + Math.round(sd.p50).toLocaleString() + ' / P90 ' + Math.round(sd.p90).toLocaleString() + ' kWh') : '') + '.'));
+      gen.appendChild(el('p', null, 'Source: the solar design run' + (sd.at ? (' on ' + String(sd.at).slice(0, 10)) : '') + ' (' + (sd.kwDc || 0) + ' kW-DC). A screening estimate, not a production guarantee. Run it again after the drawing changes.'));
+    } else {
+      gen.appendChild(el('p', null, 'Source: the arrays on the drawing. An annual kWh figure needs the solar design run, and none is stored yet.'));
+    }
+    if (root.OmegaEditorV2Solar && root.OmegaEditorV2Solar.open) {
+      var solarBtn = document.createElement('button');
+      solarBtn.type = 'button';
+      solarBtn.className = 'btn';
+      solarBtn.id = 'btn-solar-report';
+      solarBtn.textContent = sd ? 'Solar design report' : 'Run the solar design';
+      solarBtn.addEventListener('click', function () { root.OmegaEditorV2Solar.open(); });
+      gen.appendChild(solarBtn);
+    }
     if (facts.billKwh != null && facts.solarKw > 0) {
       gen.appendChild(el('p', null, 'The bill\'s annual use is ' + Math.round(facts.billKwh).toLocaleString() + ' kWh. Solar kWh is not estimated from the nameplate.'));
     }
 
-    var irr = fold(host, 'IRR', false);
-    if (facts.valueStack && facts.valueStack.irr != null && isFinite(+facts.valueStack.irr)) {
-      irr.appendChild(el('p', null, 'Stored IRR ' + facts.valueStack.irr + '.'));
-      irr.appendChild(el('p', null, 'Source: ' + (facts.valueStack.source || 'the value-stack run stored on this project') + '.'));
-    } else irr.appendChild(el('p', null, 'No IRR is stored. This panel does not calculate one.'));
+    var irr = fold(host, 'IRR', !!(vsr && (vsr.irr != null || vsr.npv != null)));
+    if (vsr && (vsr.irr != null || vsr.npv != null || vsr.capexUsd != null)) {
+      irr.appendChild(el('div', 'score-num', vsr.irr != null ? pct(vsr.irr) : 'No IRR'));
+      if (vsr.irr == null) irr.appendChild(el('p', null, vsr.irrNote || 'The streams do not return the cost within the term, so no IRR is shown.'));
+      irr.appendChild(el('p', null, (vsr.years || 20) + '-year unlevered pre-tax' + (vsr.npv != null ? '. NPV ' + usd(vsr.npv) : '') + (vsr.paybackYears != null ? '. Payback ' + vsr.paybackYears + ' years' : '') + '.'));
+      if (vsr.irrBankable != null || vsr.irr != null) irr.appendChild(el('p', null, 'Bankable case (computed and published rates only): ' + (vsr.irrBankable != null ? pct(vsr.irrBankable) : 'no IRR') + '.'));
+      if (vsr.capexUsd != null) irr.appendChild(el('p', null, 'Cost ' + usd(vsr.capexUsd) + (vsr.capexSource === 'site-map' ? ', the installed estimate from Run (battery, solar and chargers)' : (vsr.capexSource === 'model' ? ', the generic cost model (Run did not price the drawing)' : '')) +
+        (vsr.incentiveUsd != null ? '; incentives ' + usd(vsr.incentiveUsd) : '') + (vsr.netCostUsd != null ? '; net ' + usd(vsr.netCostUsd) : '') + '.'));
+      irr.appendChild(el('p', null, 'Source: ' + (vsr.source || 'the value stack') + '. A screening estimate, not a quote.'));
+    } else irr.appendChild(el('p', null, 'No IRR yet. Run computes it on the server against the installed estimate.'));
     if (facts.cost > 0 && facts.revenue > 0 && x.scenarios && x.scenarios[1]) {
       var pay = x.scenarios[1];
       irr.appendChild(el('p', null, 'Simple payback ' + (pay.paybackYears != null ? (pay.paybackYears.toFixed(1) + ' years') : '—') + '. That is net cost divided by the year-one value. It is not an IRR.'));
@@ -236,7 +310,7 @@
 
     var R = root.OmegaEditorV2Reports;
     var reports = fold(host, 'Reports', false);
-    reports.appendChild(el('p', null, 'Each report is built from the drawing as it is now. A figure that is not on the drawing is left blank. The permit set and the one-line are in the Outputs menu.'));
+    reports.appendChild(el('p', null, 'Each report is built from the drawing as it is now. A figure that is not on the drawing is left blank. The permit set and the one-line are in Outputs.'));
     if (R && R.list) {
       var kinds = R.list(), ri, rbtn;
       for (ri = 0; ri < kinds.length; ri++) {
@@ -260,25 +334,6 @@
     if (!Object.keys(fields).length) { if (done) done(false); return; }
     root.OmegaEditorV2Doc.setMeta(state, fields);
     if (done) done(true);
-  }
-
-  function showOutputs(state) {
-    if (typeof document === 'undefined') return;
-    var host = document.getElementById('outputs-body');
-    if (!host) return;
-    var R = root.OmegaEditorV2Reports;
-    host.innerHTML = '';
-    host.appendChild(el('p', null, 'Each report is built from the drawing as it is now. A figure that is not on the drawing is left blank.'));
-    var list = R.list(), i, btn;
-    for (i = 0; i < list.length; i++) {
-      btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'btn';
-      btn.textContent = list[i].title;
-      btn.setAttribute('data-report', list[i].id);
-      btn.addEventListener('click', function () { download(state, this.getAttribute('data-report')); });
-      host.appendChild(btn);
-    }
   }
 
   function download(state, kind) {
@@ -330,9 +385,16 @@
       return assess(state.doc, D.summary(state.doc));
     },
     show: show,
-    showOutputs: showOutputs,
     showFunding: showFunding,
     readBill: readBill,
+    running: function (on) {
+      busy = !!on;
+      var head = typeof document !== 'undefined' && document.getElementById('run-head');
+      if (head && root.OmegaEditorV2App) {
+        var b = document.getElementById('analyze-run');
+        if (b) { b.disabled = busy; b.textContent = busy ? 'Running…' : 'Run again'; }
+      }
+    },
     download: download,
     VERSION: 'editor-v2-analyze/2'
   };

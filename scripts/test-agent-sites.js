@@ -316,7 +316,7 @@ eq('scopes outside the list are dropped', Auth.normScopes(['sites:read', 'admin:
   var spec = res(); openapi({ method: 'GET', headers: { host: 'silmarillion.clearskyomega.com' } }, spec);
   eq('openapi → 200', spec.code, 200);
   eq('servers[0] is the host that was asked', spec.body.servers[0].url, 'https://silmarillion.clearskyomega.com');
-  eq('three operations for the GPT', Object.keys(spec.body.paths).map(function (p) { return Object.keys(spec.body.paths[p]).map(function (m) { return spec.body.paths[p][m].operationId; }); }).reduce(function (a, b) { return a.concat(b); }, []).sort(), ['getSiteOutline', 'listSites', 'uploadSites']);
+  eq('five operations for the GPT', Object.keys(spec.body.paths).map(function (p) { return Object.keys(spec.body.paths[p]).map(function (m) { return spec.body.paths[p][m].operationId; }); }).reduce(function (a, b) { return a.concat(b); }, []).sort(), ['createIntakeLink', 'getSiteOutline', 'listIntakeLinks', 'listSites', 'uploadSites']);
   ok('bearer auth is declared', spec.body.components.securitySchemes.agentKey.scheme === 'bearer');
 
   console.log((fail ? '✗' : '✓') + ' agent sites: ' + pass + ' passed, ' + fail + ' failed');

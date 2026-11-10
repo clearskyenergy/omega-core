@@ -1,0 +1,104 @@
+{
+  "source": "utility-unit-cost",
+  "url": "https://www.pge.com/assets/pge/docs/about/doing-business-with-pge/unit-cost-guide.pdf",
+  "comedUrl": "https://www.comed.com/cdn/assets/v3/assets/blt3ebb3fed6084be2a/blt2bdb5921266bf5c4/67742fbd63a97db2f50004f7/DER_Interconnection_Guidelines_for_Customers_2024-v3.pdf",
+  "pgePublished": "2026-03",
+  "comedPublished": "2024-11-30",
+  "read": "2026-10-18",
+  "threshold": 0.05,
+  "ok": true,
+  "records": [
+    {
+      "id": "pge.xfmr.150",
+      "usd": 53985,
+      "unit": "$/each",
+      "bookLine": "el.transformer.kva",
+      "source": "pge"
+    },
+    {
+      "id": "pge.xfmr.300",
+      "usd": 64203,
+      "unit": "$/each",
+      "bookLine": "el.transformer.kva",
+      "source": "pge"
+    },
+    {
+      "id": "pge.xfmr.750",
+      "usd": 91961,
+      "unit": "$/each",
+      "bookLine": "el.transformer.kva",
+      "source": "pge"
+    },
+    {
+      "id": "pge.xfmr.1000",
+      "usd": 108288,
+      "unit": "$/each",
+      "bookLine": "el.transformer.kva",
+      "source": "pge"
+    },
+    {
+      "id": "pge.xfmr.1500",
+      "usd": 138188,
+      "unit": "$/each",
+      "bookLine": "el.transformer.kva",
+      "source": "pge"
+    },
+    {
+      "id": "pge.switch.pme5",
+      "usd": 93417,
+      "unit": "$/each",
+      "bookLine": "el.switchgear",
+      "source": "pge"
+    },
+    {
+      "id": "pge.switch.pcc",
+      "usd": 67553,
+      "unit": "$/each",
+      "bookLine": "el.switchgear",
+      "source": "pge"
+    },
+    {
+      "id": "pge.relay.ipac",
+      "usd": 150000,
+      "unit": "$/each",
+      "bookLine": "el.protection",
+      "source": "pge"
+    },
+    {
+      "id": "pge.relay.dtt",
+      "usd": 655636,
+      "unit": "$/each",
+      "bookLine": "el.protection",
+      "source": "pge"
+    },
+    {
+      "id": "pge.ug.sf",
+      "usd": 880,
+      "unit": "$/ft",
+      "bookLine": null,
+      "source": "pge"
+    },
+    {
+      "id": "comed.relay.substation",
+      "usd": 150000,
+      "unit": "$/each",
+      "bookLine": "el.protection",
+      "source": "comed"
+    },
+    {
+      "id": "comed.ug.12kv",
+      "usd": 275,
+      "unit": "$/ft",
+      "bookLine": null,
+      "source": "comed"
+    },
+    {
+      "id": "comed.xfmr.btm500",
+      "usd": 50000,
+      "unit": "$/each",
+      "bookLine": "el.transformer.kva",
+      "source": "comed"
+    }
+  ],
+  "note": "Utility interconnection facilities, as printed. A PG&E transformer row includes 100 ft of secondary cable. These are not a bare $/kVA, not a customer trench, and not escalated. ComEd figures are general cost guidance from the 2024 DER guide (Appendix 7; some appendix pages still carry a 2023 running header)."
+}

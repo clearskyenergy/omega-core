@@ -40,6 +40,10 @@ var CATALOG = [
     'openDcClusterDialog derSetDc openOmegaCore'),
   record('ops', 'Omega Operate', 'premium', 'sitelifecycle omconsole slaintel fieldservice ownerreport fleetcommand', 'ops', 'OmegaOM.open OmegaFleetOM.open'),
   record('whitelabel', 'Omega Storefront', 'premium', '', 'whitelabel', ''),
+  /* Omega Maximus, "editor maximum" (/editor-v2): one standalone tool and no
+     Site Map command. Sold from price book 2026-11 (`since`; Tommy,
+     2026-10-20: "maximus is a module that is $1299 a month"). */
+  record('maximus', 'Omega Maximus', 'premium', 'siteplantrial', 'maximus', ''),
   record('permitting', 'Omega Permits', 'deliverable', '', 'permitting', 'OmegaPermitMatrix.open', 'matrices'),
   record('sitefinder', 'Omega Sites', 'deliverable', 'sitefinder sitediscovery', 'sitefinder', '', 'siteStudies'),
   record('logic-office', 'Logic Office', 'platform', '', 'logic-office', ''),
@@ -59,8 +63,12 @@ var NOT_SOLD = [
 ];
 var BY_KEY = {};
 CATALOG.forEach(function (m) { BY_KEY[m.key] = m; });
+/* A module first sold after the oldest book in use carries `since`, the
+   first price-book version that prices it. A book covers exactly the
+   modules sold as of its version (pricebook.js soldIn), so a used book is
+   never repriced and still loads. */
+BY_KEY.maximus.since = '2026-11';
 /* Argument-sensitive launchers must never grant Compute from the Lite build family. */
-BY_KEY.lite.tools.push('siteplantrial');
 BY_KEY.lite.ribbon = BY_KEY.lite.ribbon.concat(["_guidedPick('der')", "_guidedPick('standard')", "_guidedPick('deluxe')", "_guidedPick('l2')", "_guidedPick('ev')", "homeStartWizard('FOM')", "openRpPanel('summary')", "rpTab('summary')"]);
 BY_KEY.compute.ribbon.push("_guidedPick('compute')");
 BY_KEY.estimate.ribbon.push("openRpPanel('cost')", "rpTab('cost')", '#rp-tab-cost', '#rp-cost',
@@ -118,6 +126,7 @@ var FEATURES = {
   compute: ['Compute campus design', 'Power and load screening', 'Compute site pro forma and land lease proposals'],
   ops: ['Site lifecycle', 'Field service', 'Owner reporting'],
   whitelabel: ['Your branded storefront', 'Embedded customer experience', 'Reseller delivery'],
+  maximus: ['CAD site design with guided builds', 'Run: installed cost, value stack and IRR', 'Permit set, one-line, parcels and 3D'],
   permitting: ['Permitting matrices', 'Jurisdiction checklist', 'Verified coverage shown below'],
   sitefinder: ['Site discovery', 'Parcel studies', 'Northern Illinois coverage'],
   'logic-office': ['Orders and customers', 'Office workflow', 'Fulfilment tracking'],
@@ -143,6 +152,7 @@ var BLURBS = {
   ops: 'Run what you built: site lifecycle, the O&M console, SLA intelligence, field service, owner reporting and fleet command.',
   whitelabel: 'Your own branded storefront and customer experience on your site, powered by the platform, for resellers.',
   permitting: 'The permitting matrix and jurisdiction checklist for a site, counted per matrix; coverage is shown where it is verified.',
+  maximus: 'The editor maximum: design a site in CAD on the parcel and the photo, run its installed cost, value stack and IRR on the server, and print the permit set, the one-line and a 3D view.',
   sitefinder: 'Find sites: parcel discovery and screening across a territory, counted per site study.',
   'logic-office': 'Omega Logic\'s office: orders, customers, pricing, acceptance and fulfilment tracking, on the desktop and the phone app.',
   'logic-plant': 'The plant: the production board, work instructions at every bench, scans, tests and release.',

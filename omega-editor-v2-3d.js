@@ -616,6 +616,12 @@
     l = Math.sqrt(xx * xx + xy * xy + xz * xz) || 1;
     xx /= l; xy /= l; xz /= l;
     var yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    /* The world is east, up, north: a LEFT-handed frame. The cross products
+       above are the right-handed look-at, which put world west on the right
+       of the screen: the 3D view read as the plan in a mirror (Tommy,
+       2026-10-20: "its like reversed"). Screen right is the other way;
+       screen up was taken before the flip and stays. */
+    xx = -xx; xy = -xy; xz = -xz;
     return [
       xx, yx, zx, 0,
       xy, yy, zy, 0,

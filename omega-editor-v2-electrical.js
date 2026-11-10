@@ -1041,7 +1041,7 @@
         item: mod.make + ' ' + mod.line,
         sku: mod.sku,
         fact: mod.watts + ' W, frame ' + mod.widthMm + ' × ' + mod.heightMm + ' mm',
-        sheet: 'Datasheet PDF is not in the Site Plan catalog.'
+        sheet: 'Datasheet PDF is not in the Omega Maximus catalog.'
       });
     }
     for (i = 0; i < equipment.length; i++) {

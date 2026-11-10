@@ -21,16 +21,16 @@ async function main() {
       return { Item: item };
     } };
   var opts = { apply: true, realmId: '123', incomeAccountId: '7', taxable: false };
-  var dry = await I.sync(null, b, {}, deps); eq(dry.items.length, 32); eq(calls, 0); eq(loads, 0);
+  var dry = await I.sync(null, b, {}, deps); eq(dry.items.length, 33 /* + module:maximus, from book 2026-11 */); eq(calls, 0); eq(loads, 0);
   deps.Q.ENV = 'production'; await refuses(function () { return I.sync(db, b, opts, deps); }, /sandbox-only/); eq(calls, 0); eq(loads, 0); deps.Q.ENV = 'sandbox';
   connection.env = 'production'; await refuses(function () { return I.sync(db, b, opts, deps); }, /not the requested sandbox/); eq(calls, 0); connection.env = 'sandbox';
   connection.realmId = '456'; await refuses(function () { return I.sync(db, b, opts, deps); }, /not the requested sandbox/); eq(calls, 0); connection.realmId = '123';
   await refuses(function () { return I.sync(db, b, { apply: true, realmId: '123', incomeAccountId: '7' }, deps); }, /taxability/); eq(calls, 0);
   await refuses(function () { return I.sync(new DB(), b, opts, deps); }, /Seeded price book/); eq(calls, 0);
-  await I.sync(db, b, opts, deps); eq(writes, 32);
-  var saved = await B.load(db, b.version); eq(Object.keys(saved.qbo.items).length, 32); eq(saved.modules.lite.qboItemId, '1');
-  await I.sync(db, saved, opts, deps); eq(writes, 32, 'retry creates nothing');
-  rows['Omega Design'].Active = false; await refuses(function () { return I.sync(db, saved, opts, deps); }, /accounting review/); eq(writes, 32); rows['Omega Design'].Active = true;
+  await I.sync(db, b, opts, deps); eq(writes, 33);
+  var saved = await B.load(db, b.version); eq(Object.keys(saved.qbo.items).length, 33); eq(saved.modules.lite.qboItemId, '1');
+  await I.sync(db, saved, opts, deps); eq(writes, 33, 'retry creates nothing');
+  rows['Omega Design'].Active = false; await refuses(function () { return I.sync(db, saved, opts, deps); }, /accounting review/); eq(writes, 33); rows['Omega Design'].Active = true;
   saved.frozen = true; var before = calls; await refuses(function () { return I.sync(db, saved, opts, deps); }, /immutable/); eq(calls, before);
   saved.frozen = false; saved.qbo.realmId = '999'; await refuses(function () { return I.sync(db, saved, opts, deps); }, /realm mismatch/); eq(calls, before);
   /* Simulate a price book frozen during network I/O. The final transaction

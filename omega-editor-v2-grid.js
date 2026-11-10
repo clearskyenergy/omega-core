@@ -11,6 +11,9 @@
  * utility details"). The server decides whose wire it is, in every state,
  * ComEd included; this file routes nothing by state. It does not carry a
  * service URL, names no utility, and does not decide whether a unit fits.
+ * Where no figure is read, or more than one utility is mapped, the card
+ * lists who may serve the point and what each publishes in the words and
+ * order Omega Prime's Circuit step uses (GV.whoServes, 2026-10-20).
  *
  * The layer is off until it is switched on. Nothing it reads is written
  * onto the drawing.
@@ -190,24 +193,23 @@
 
   /* The door's answer → the record: the grid record Site Map and Prime
      write (GV.fromHosting: substation, circuit, verdict), plus what the card
-     says about the utility, the territory, the circuit's power and the
-     utility's own map. Read live; nothing here is written onto the drawing. */
+     says about the utility, who may serve the point (GV.whoServes, the list
+     Prime and the Grid panel draw), the circuit's power and the utility's
+     own map. Read live; nothing here is written onto the drawing. */
   function applyAnswer(res) {
     var GV = verdict();
     if (!res || !res.verdict || !res.verdict.verdict || !GV || !GV.fromHosting) return null;
     var at = new Date().toISOString();
     var rec = GV.fromHosting(res, at);
     if (!rec) return null;
-    var t = res.territory || {}, chosen = res.utility && res.utility.eiaId, href = res.verify && safeHref(res.verify.viewerUrl);
+    var href = res.verify && safeHref(res.verify.viewerUrl);
     var best = res.circuits && res.best != null ? res.circuits[res.best] || null : null, up = (best && best.upstream) || {};
     rec.kind = res.coverage || 'none';
     rec.coverage = res.coverage || null;
     rec.utility = res.utility ? { key: res.utility.key || null, display: res.utility.display || '', eiaId: res.utility.eiaId || null } : null;
     rec.note = res.note || '';
     rec.verify = href ? { viewerUrl: href, label: res.verify.label || '' } : null;
-    rec.candidates = !t.confident && t.candidates && t.candidates.length > 1 ? t.candidates.map(function (c) {
-      return { display: c.display || c.name || '', chosen: !!(c.eiaId && c.eiaId === chosen), weak: !!c.weak, why: c.why || '' };
-    }) : null;
+    rec.who = GV.whoServes ? GV.whoServes(res) : null;
     rec.power = best ? { id: best.id || '', name: best.name || '', substation: best.substation || '', kv: best.kv == null ? null : best.kv,
       transformerKw: up.transformerKw == null ? null : up.transformerKw, bankKw: up.bankKw == null ? null : up.bankKw,
       substationKw: up.substationKw == null ? null : up.substationKw, pnode: up.pnode || null,
@@ -249,6 +251,31 @@
     return bits.length ? 'Where the power comes from: ' + bits.join(' · ') + '.' : '';
   }
 
+  /* Who may serve the point, a line each in the list's own order and words
+     (GV.whoServes): the heading, then each utility (its name in bold), why
+     the maps name it, what it publishes and the route it offers instead, and
+     its own pages, https only; the bill line; and the utilities the maps
+     name that cannot be the point's, in one fold with their reasons. */
+  function whoLines(w) {
+    var out = [];
+    if (!w) return out;
+    out.push({ text: w.head, who: 'head' });
+    w.items.forEach(function (c) {
+      out.push({ text: c.name + c.mark, bold: c.name, who: 'name' });
+      if (c.why) out.push({ text: c.why, who: 'why' });
+      if (c.says) out.push({ text: c.says, who: 'says' });
+      c.links.forEach(function (l) {
+        var u = safeHref(l.url);
+        if (u) out.push({ text: l.label, href: u, who: 'link' });
+      });
+    });
+    if (w.confirm) out.push({ text: w.confirm, who: 'confirm' });
+    if (w.fold) {
+      out.push({ text: w.fold.title, who: 'fold', fold: w.fold.items.map(function (c) { return { text: c.name + ' (' + c.why + ')' }; }) });
+    }
+    return out;
+  }
+
   function summaryLines(view, rec, status) {
     var lines = [];
     var sub = view && view.feeding;
@@ -267,11 +294,7 @@
       if (!rec.utility && rec.coverage === 'outside') words = '';
       lines.push({ text: 'Serving utility: ' + (rec.utility && rec.utility.display ? rec.utility.display : 'none on record') + (words ? ' · ' + words : '') });
     }
-    if (rec && rec.candidates) {
-      lines.push({ text: 'More than one utility is mapped at this point: ' + rec.candidates.map(function (x) {
-        return x.display + (x.chosen ? ' (the one read here)' : '') + (x.weak && x.why ? ' (' + x.why + ')' : '');
-      }).join(', ') + '. Confirm the utility with the customer’s bill.' });
-    }
+    if (rec && rec.who) lines = lines.concat(whoLines(rec.who));
     var c = rec && rec.circuit;
     if (c && (c.id || c.netKw != null || c.publishedKw != null)) {
       var said = circuitText(c);
@@ -500,7 +523,8 @@
       cardOpen = false;
       loadedKey = '';
     },
-    VERSION: 'editor-v2-grid/2'
+    whoLines: whoLines,
+    VERSION: 'editor-v2-grid/3'
   };
   root.OmegaEditorV2Grid = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

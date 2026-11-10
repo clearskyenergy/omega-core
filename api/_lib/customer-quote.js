@@ -175,6 +175,17 @@ function tenantCatalog(orgId, og, sf) {
   return out;
 }
 function unitsFor(orgId, og, sf) { return PP.units(tenantCatalog(orgId, og, sf), CC.entries(), { isOwn: BP.isOwn }) || []; }
+/* Which entry of that list a quoted unit IS, or null: omega-prime-project.js
+   offered(), the ONE rule the door prices by and prime-order orders by. */
+var offered = PP.offered;
+/* the words both doors refuse a unit the list does not offer with */
+function notListed(unit, workspace) {
+  var u = unit || {}, name = str(u.name || [str(u.mfr, 80), str(u.model, 120)].filter(Boolean).join(' '), 200), id = str(u.key || u.sku, 120), ws = str(workspace, 120);
+  return (name ? 'The ' + name : 'The battery' + (id ? ' (' + id + ')' : '')) + ' is not on ' + (ws ? ws + '’s' : 'your workspace’s') + ' battery list';
+}
+/* What a page may show of the list to choose from: the units themselves
+   (contract C1: specs, never a price), the batteries only. */
+function choicesOf(list) { return (list || []).filter(function (u) { return PP.screenable(u); }).map(PP.snapshot); }
 
 /* ── the unit, the site, the plan, as quoted ──────────────────────────── */
 function unitOf(u) {
@@ -392,4 +403,4 @@ module.exports = { VALID_DAYS: VALID_DAYS, MAX_VALID_DAYS: MAX_VALID_DAYS, QUEST
   endOfUtcDay: endOfUtcDay, validUntilAt: validUntilAt, validUntilOf: validUntilOf, changeable: changeable, questionsOf: questionsOf,
   quoteNo: quoteNo, ipHash: ipHash, money: money, content: content, snapshotOf: snapshotOf, customerView: customerView, tenantView: tenantView,
   summaryRow: summaryRow, mirror: mirror, email: email, str: str, para: para,
-  tenantCatalog: tenantCatalog, unitsFor: unitsFor, logicUrl: logicUrl, handoffUrl: handoffUrl };
+  tenantCatalog: tenantCatalog, unitsFor: unitsFor, offered: offered, notListed: notListed, choicesOf: choicesOf, logicUrl: logicUrl, handoffUrl: handoffUrl };

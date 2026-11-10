@@ -40,11 +40,9 @@
 var A = require('../_lib/admin');
 var Auth = require('../_lib/agent-auth');
 var S = require('../_lib/agent-sites');
-var KMZ = require('../_lib/kmz');
 
 var MAX_SITES = 100;
 var MAX_DEALS_SCAN = 2000;
-var MAX_KMZ_B64 = 6 * 1024 * 1024;
 
 /* Every deal the key may see, as [{ id, data }]. */
 function visibleDeals(db, caller) {
@@ -75,20 +73,6 @@ function list(req, caller) {
   });
 }
 
-/* Resolve the outline for one uploaded site: KMZ bytes, KML text, or a ring. */
-function outlineOf(site, caller) {
-  if (site.kmzBase64) {
-    if (typeof site.kmzBase64 !== 'string' || site.kmzBase64.length > MAX_KMZ_B64) return { error: 'kmzBase64 too large' };
-    var buf;
-    try { buf = Buffer.from(site.kmzBase64, 'base64'); } catch (e) { return { error: 'kmzBase64 is not base64' }; }
-    var kml;
-    try { kml = KMZ.isZip(buf) ? KMZ.kmlFromKMZ(buf) : buf.toString('utf8'); }
-    catch (e) { return { error: 'could not open the KMZ: ' + e.message }; }
-    return S.outlineFromKML(kml, site.name, { source: 'agent-kmz', fileName: site.fileName || 'agent.kmz', by: caller.label, targetMw: site.sizeMw });
-  }
-  return S.outlineFromInput(site, { by: caller.label });
-}
-
 function upsert(req, caller) {
   Auth.requireScope(caller, 'sites:write');
   var b = req.body || {};
@@ -107,7 +91,7 @@ function upsert(req, caller) {
         var v = S.validateSite(raw);
         if (!v.ok) { results.push({ index: i, name: (raw && raw.name) || '', action: 'error', error: v.error }); return; }
         var site = v.site;
-        var o = outlineOf(site, caller);
+        var o = S.uploadOutline(site, caller.label, 'agent');
         if (o.error) { results.push({ index: i, name: site.name, action: 'error', error: o.error }); return; }
         var match = S.matchExisting(site, existing);
         if (match) {

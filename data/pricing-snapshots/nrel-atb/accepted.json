@@ -1,0 +1,44 @@
+{
+  "source": "nrel-atb",
+  "url": "https://data.openei.org/files/8759/2025_v1_Model_Parameters_08-27-2026.csv",
+  "page": "https://data.openei.org/submissions/8759",
+  "published": "2025",
+  "read": "2026-10-18",
+  "threshold": 0.01,
+  "ok": true,
+  "records": [
+    {
+      "id": "utility-60mw",
+      "tech": "Utility Scale Battery Storage",
+      "detail": "60MW 240MWh",
+      "value": 1372,
+      "units": "$/kW",
+      "dollarYear": 2023
+    },
+    {
+      "id": "utility-60mw",
+      "tech": "Utility Scale Battery Storage",
+      "detail": "60MW 240MWh",
+      "value": 343,
+      "units": "$/kWh",
+      "dollarYear": 2023
+    },
+    {
+      "id": "commercial-1800kw",
+      "tech": "Commercial Scale Battery Storage",
+      "detail": "1800 kW 7200 kWh",
+      "value": 1612,
+      "units": "$/kW",
+      "dollarYear": 2023
+    },
+    {
+      "id": "commercial-1800kw",
+      "tech": "Commercial Scale Battery Storage",
+      "detail": "1800 kW 7200 kWh",
+      "value": 403,
+      "units": "$/kWh",
+      "dollarYear": 2023
+    }
+  ],
+  "note": "The commercial Battery Capital Cost Constant is not a column in this CSV. The workbook value of 0 was read separately and is not re-derived here."
+}

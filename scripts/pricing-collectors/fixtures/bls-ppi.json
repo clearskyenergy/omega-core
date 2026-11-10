@@ -1,0 +1,11 @@
+{
+  "status": "REQUEST_SUCCEEDED",
+  "Results": {
+    "series": [
+      { "seriesID": "WPU10260314", "data": [ { "year": "2026", "period": "M09", "value": "607.705" }, { "year": "2026", "period": "M08", "value": "602.663" } ] },
+      { "seriesID": "WPU11710216", "data": [ { "year": "2026", "period": "M09", "value": "221.225" } ] },
+      { "seriesID": "WPU1174", "data": [ { "year": "2026", "period": "M09", "value": "434.493" } ] },
+      { "seriesID": "WPU1175", "data": [ { "year": "2026", "period": "M09", "value": "433.602" } ] }
+    ]
+  }
+}

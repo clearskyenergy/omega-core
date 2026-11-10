@@ -30,6 +30,7 @@ function siteSummary() {
     id: { type: 'string' }, name: { type: 'string' }, address: { type: 'string' }, state: { type: 'string' },
     stage: { type: 'string', description: 'referred, screening, qualified, … or dead/parked/discarded' },
     projectType: { type: 'string' }, partnerOrg: { type: 'string' }, partnerName: { type: 'string' },
+    channel: { type: 'string', description: 'How the site came in: Agent, Intake link, or what the portfolio recorded.' },
     sizeMw: { type: ['number', 'null'] }, sizeMwh: { type: ['number', 'null'] },
     acres: { type: ['number', 'null'], description: 'Measured from the traced outline when one exists, else the stated figure.' },
     lat: { type: ['number', 'null'] }, lng: { type: ['number', 'null'] },
@@ -49,7 +50,7 @@ function spec(base) {
     info: {
       title: 'ClearSky OMEGA — Sites for agents',
       version: '1.0.0',
-      description: 'Read the JV portfolio\'s larger sites, fetch a site\'s traced outline as KML and a KMZ download link, and upload new sites with their outline. ' +
+      description: 'Read the JV portfolio\'s larger sites, fetch a site\'s traced outline as KML and a KMZ download link, upload new sites with their outline, and make shareable intake links so anyone can submit a site. ' +
         'Every figure is screening evidence from hand-traced geometry, not a survey or a utility study. Attribution, stage and funding on a site are never changed through this API.'
     },
     servers: [{ url: base }],
@@ -58,6 +59,13 @@ function spec(base) {
       securitySchemes: { agentKey: { type: 'http', scheme: 'bearer', description: 'An OMEGA agent key (omega_ak_…), minted by ClearSky with scripts/agent-key.js.' } },
       schemas: {
         SiteSummary: siteSummary(),
+        IntakeLink: { type: 'object', properties: {
+          id: { type: 'string' }, url: { type: 'string', description: 'The link to share. Give it to the user verbatim.' },
+          orgId: { type: 'string' }, partnerName: { type: 'string' }, label: { type: 'string' },
+          active: { type: 'boolean' }, revoked: { type: 'boolean' }, expiresAt: { type: ['string', 'null'] },
+          dailyCap: { type: 'integer' }, count: { type: 'integer', description: 'Sites submitted through it so far.' },
+          lastSubmittedAt: { type: ['string', 'null'] }, createdAt: { type: ['string', 'null'] }, createdBy: { type: 'string' }
+        } },
         SiteUpload: { type: 'object', required: ['name'], properties: {
           name: { type: 'string', maxLength: 160 },
           externalId: { type: 'string', description: 'Your own id for the site. Re-uploading with the same externalId updates rather than duplicates.' },
@@ -88,6 +96,7 @@ function spec(base) {
             { name: 'state', in: 'query', schema: { type: 'string' }, description: 'Two-letter US state.' },
             { name: 'hasOutline', in: 'query', schema: { type: 'boolean' }, description: 'Only sites with a traced outline (a KMZ can be produced).' },
             { name: 'since', in: 'query', schema: { type: 'string', format: 'date-time' }, description: 'Only sites updated at or after this time.' },
+            { name: 'channel', in: 'query', schema: { type: 'string' }, description: 'Only sites that came in this way, e.g. "Intake link" for the shareable form, "Agent" for uploads.' },
             { name: 'includeDead', in: 'query', schema: { type: 'boolean' } },
             { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 } }
           ],
@@ -112,6 +121,32 @@ function spec(base) {
               acres: { type: ['number', 'null'] }, gridScore: { type: ['number', 'null'] }, flags: { type: 'array', items: { type: 'string' } }, outlineUrl: { type: 'string' }
             } } }
           } } } } }, '400': { description: 'Malformed body' }, '403': { description: 'The key lacks sites:write' } }
+        }
+      },
+      '/api/agent/intake-links': {
+        get: {
+          operationId: 'listIntakeLinks',
+          summary: 'List the shareable site-intake links made for this key\'s org',
+          description: 'Each link opens a public form anyone can fill in to submit a site (with a Google Earth KMZ/KML if they have one). count is how many sites came in through it; revoked links stay listed.',
+          responses: { '200': { description: 'The links', content: { 'application/json': { schema: { type: 'object', properties: {
+            ok: { type: 'boolean' }, links: { type: 'array', items: { $ref: '#/components/schemas/IntakeLink' } }
+          } } } } }, '403': { description: 'The key lacks sites:write' } }
+        },
+        post: {
+          operationId: 'createIntakeLink',
+          summary: 'Make a shareable site-intake link, or revoke one',
+          description: 'With label: makes a link to a public form. Anyone holding it can submit a site; each submission lands in the portfolio at stage referred, credited to this key\'s org, channel "Intake link", and the link reads nothing back. Give the user the url verbatim. ' +
+            'With revoke: closes that link at once. Find what came in with listSites channel="Intake link".',
+          requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: {
+            label: { type: 'string', maxLength: 80, description: 'What the link is for, e.g. "Landowner outreach — West Texas". Shown to the user, not the public.' },
+            dailyCap: { type: 'integer', minimum: 1, maximum: 200, default: 50, description: 'Most submissions a day.' },
+            expiresAt: { type: 'string', format: 'date', description: 'Optional close date, at most a year away.' },
+            revoke: { type: 'string', description: 'A link id (il_…) to close instead of making one.' }
+          } } } } },
+          responses: { '200': { description: 'The new link, or the revoke', content: { 'application/json': { schema: { type: 'object', properties: {
+            ok: { type: 'boolean' }, link: { $ref: '#/components/schemas/IntakeLink' }, note: { type: 'string' },
+            id: { type: 'string' }, revoked: { type: 'boolean' }
+          } } } } }, '400': { description: 'Missing label or bad value' }, '403': { description: 'The key lacks sites:write' }, '404': { description: 'No such link for this key' } }
         }
       },
       '/api/agent/site-outline': {

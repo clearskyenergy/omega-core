@@ -6,8 +6,15 @@
 var M = require('./modules');
 /* Signed off by Tommy on 2026-09-26 ("do the version rename"): the release
    version. A book named *-proposed is sandbox-only by validate(); this one
-   may be seeded for the production company (seed-pricebook.js --live). */
-var VERSION = '2026-10';
+   may be seeded for the production company (seed-pricebook.js --live).
+   2026-11 adds Omega Maximus at $1,299/month (Tommy, 2026-10-20). 2026-10 is
+   used and is never repriced: it stays as it was and still loads, because a
+   book covers exactly the modules sold as of its version (soldIn). Seed
+   2026-11 BEFORE this code is deployed: signup, the offerings and a legacy
+   plan's add-ons read the book named here. */
+var VERSION = '2026-11';
+/* Prices set by name rather than by shelf. */
+var EXPLICIT = { maximus: 129900 };
 function integer(n, name, min) {
   if (typeof n !== 'number' || !isFinite(n) || Math.floor(n) !== n || n < (min || 0) || n > 1000000000) {
     var e = new Error('Invalid ' + name); e.status = 400; throw e;
@@ -15,6 +22,13 @@ function integer(n, name, min) {
   return n;
 }
 function error(message) { var e = new Error(message); e.status = 409; throw e; }
+/* The modules a book of this version sells: the catalog, less any module
+   first sold in a later version. Versions compare as strings (YYYY-MM). */
+function soldIn(version) {
+  return M.catalog().filter(function (m) { return !m.since || String(version) >= m.since; }).map(function (m) { return m.key; });
+}
+/* Does this book price this module? */
+function sells(book, key) { return !!(book && book.modules && Object.prototype.hasOwnProperty.call(book.modules, key)); }
 function proposed() {
   var b = { version: VERSION, currency: 'USD', enabled: false, frozen: false, usedAt: null,
     floorCents: 50000, modules: {}, logins: { builders: 3, viewers: 10, builderCents: 5000, viewerCents: 1500 },
@@ -32,7 +46,7 @@ function proposed() {
   var logic = { 'logic-office': 150000, 'logic-plant': 75000, 'logic-materials': 50000,
     'logic-logistics': 50000, 'logic-customer': 25000 };
   var shelves = { floor: 50000, addon: 25000, standard: 25000, premium: 50000, deliverable: 75000 };
-  M.catalog().forEach(function (m) { b.modules[m.key] = { priceCents: m.shelf === 'platform' ? logic[m.key] : shelves[m.shelf] }; });
+  soldIn(VERSION).forEach(function (k) { var m = M.get(k); b.modules[k] = { priceCents: EXPLICIT[k] != null ? EXPLICIT[k] : (m.shelf === 'platform' ? logic[k] : shelves[m.shelf]) }; });
   b.usage = {
     evApplications: { module: 'evrebates', name: 'EV applications', included: 20, overageCents: 5000, packUnits: 10, packCents: 50000 },
     matrices: { module: 'permitting', name: 'Permitting matrices', included: 1, overageCents: 250000, packUnits: 1, packCents: 250000 },
@@ -44,8 +58,10 @@ function validate(b) {
   if (!b || !/^[a-z0-9][a-z0-9-]{2,59}$/.test(b.version || '') || b.currency !== 'USD') error('Invalid price book');
   integer(b.floorCents, 'floor', 50000);
   if (typeof b.frozen !== 'boolean' || typeof b.enabled !== 'boolean') error('Price book flags required');
-  var keys = M.catalog().map(function (m) { return m.key; });
-  if (!b.modules || Object.keys(b.modules).sort().join() !== keys.slice().sort().join()) error('Price book must cover the catalog exactly');
+  /* every module sold as of this version, and nothing outside the catalog;
+     a module first sold later may be priced early and is then on this book */
+  var all = M.catalog().map(function (m) { return m.key; }), keys = b.modules ? Object.keys(b.modules) : [];
+  if (!b.modules || soldIn(b.version).some(function (k) { return keys.indexOf(k) < 0; }) || keys.some(function (k) { return all.indexOf(k) < 0; })) error('Price book must cover the catalog exactly');
   keys.forEach(function (k) { integer(b.modules[k].priceCents, k + ' price', 1); });
   if (b.modules.lite.priceCents < b.floorCents) error('Lite is below the floor');
   ['field', 'pro'].forEach(function (p) {
@@ -100,5 +116,5 @@ function freeze(tx, ref, book, now) {
   validate(book); if (book.frozen && book.usedAt != null) return;
   tx.update(ref, { frozen: true, usedAt: book.usedAt == null ? now : book.usedAt });
 }
-module.exports = { VERSION: VERSION, proposed: proposed, validate: validate, integer: integer,
+module.exports = { VERSION: VERSION, proposed: proposed, validate: validate, integer: integer, soldIn: soldIn, sells: sells,
   writable: writable, stable: stable, seed: seed, load: load, freeze: freeze };

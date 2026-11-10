@@ -24,7 +24,7 @@ async function main() {
   db.seed('omega_orgs/example.com/members/owner', { role: 'owner', status: 'active' });
   await denied('GET', {}, 403); // proposed book disabled
   b.enabled = true; db.seed('pricebook/' + b.version, b);
-  var out = await req(); assert.equal(out.quote.monthlyCents, 50000); count++; assert.equal(out.modules.length, 19); count++;
+  var out = await req(); assert.equal(out.quote.monthlyCents, 50000); count++; assert.equal(out.modules.length, 20 /* Omega Maximus, from book 2026-11 */); count++;
   assert(!JSON.stringify(out).includes('qboItemId')); count++;
   await denied('POST', { modules: ['lite'], monthlyCents: 1 }, 400);
   await denied('POST', { modules: ['lite'], serviceFee: { mode: 'waived', reason: 'Forged' } }, 400);

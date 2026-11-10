@@ -22,10 +22,14 @@ tenants/*/*.md
 #                  scripts/seed-omega-orgs.js only (LIVE-1, 2026-09-24)
 #   products.csv   the human-editable source of products.json; nothing
 #                  fetches it, the import script reads it from disk
+#   portfolio-diligence.json  a workspace's diligence lists, with an
+#                  offtake partner's terms; read by
+#                  scripts/enable-portfolio-diligence.js only (2026-10-25)
 # The notes are tenants/<slug>/NOTES.md (the *.md lines above).
-# scripts/tests/tdiscreet.js checks all three stay unserved.
+# scripts/tests/tdiscreet.js checks all of them stay unserved.
 tenants/*/billing.json
 tenants/*/products.csv
+tenants/*/portfolio-diligence.json
 
 # ── NOT WEB CONTENT, AND ONE OF THEM IS THE CUSTOMER BOOK ────────────────
 # Vercel serves the repo root, so anything sitting here is a URL. These were:

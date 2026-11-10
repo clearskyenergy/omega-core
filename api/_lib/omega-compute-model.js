@@ -56,6 +56,11 @@
      no cost build-up, no proxy index and no third-party price sheet. The
      build-up (CMDC categories, the $/GPU index, where each price came from)
      is staff-only, as the lease card's is.
+   · A CONTRACTED OFFTAKE (2026-10-25): cashFlow() takes an optional `deal`
+     (take-or-pay at a contract price, a partner's fee as its own line, the
+     site's share of gross). api/_lib/compute-contract.js contractCase() is
+     the one caller; it builds the deal and reads this cash flow, so there is
+     one engine and one chipset library.
 
    ─────────────────────────────────────────────────────────────────────────────
    ⚠ MARKET REFERENCES, NOT UNDERWRITING
@@ -266,11 +271,24 @@ function capexOf(c, cap, I) {
 }
 
 /* ── the monthly cash flow (the Dynamic Cash Flow sheet) ─────────────── */
-function cashFlow(c, cap, capex, I, lease) {
-  var D = I.debt, T = I.termMonths, H = 8760 / 12;
-  var price = gpuPrice(c, I.pricingBasis, I.customGpuHour);
+/* `deal` (optional) is a CONTRACTED OFFTAKE, built by api/_lib/compute-contract.js
+   and read here so there is one cash flow, not two:
+     { price, takeOrPay, escalator, merchant, merchantPrice, fee, revenueShare, residualUsd }
+   (shares as fractions). Under a deal the contracted share of the GPU-hours
+   the skid is up is paid at the contract price whatever is used (take-or-pay:
+   no utilisation, no ramp, no price decline; the price steps by `escalator`
+   each contract year); the rest is sold at `merchantPrice` with the model's
+   utilisation, ramp and price decline when `merchant`, else unsold; the
+   power is drawn at full from month 1; the partner's fee is its own line,
+   taken off revenue before EBITDA and never inside opex; the site's share
+   of gross is a site cost beside the lease; `residualUsd` replaces capex x
+   residualPct when the capital holds something that is not the cards (a
+   site bought). Without a deal nothing below changes. */
+function cashFlow(c, cap, capex, I, lease, deal) {
+  var D = I.debt, T = I.termMonths, H = 8760 / 12, K = deal || null;
+  var price = K ? K.price : gpuPrice(c, I.pricingBasis, I.customGpuHour);
   var priced = price != null && price > 0;
-  var p = (priced ? price : 0) * I.priceRealization;
+  var p = (priced ? price : 0) * (K ? 1 : I.priceRealization);
   var debt = capex * D.ltc, fee = debt * D.feePct, equityCapex = capex - debt;
   var ioInterest = debt * D.rate / 12;
   var principalMo = D.maturityMonths <= D.interestOnlyMonths ? 0 : debt * (1 - D.balloonPct) / Math.max(1, D.maturityMonths - D.interestOnlyMonths);
@@ -281,17 +299,25 @@ function cashFlow(c, cap, capex, I, lease) {
   var months = [], cumProject = -capex, cumEquity = 0, opening = debt, projectPayback = null, equityPayback = null;
   var sum = { revenue: 0, electricity: 0, network: 0, other: 0, fixed: 0, maintenance: 0, lease: 0, opex: 0, ebitda: 0, fcf: 0, residual: 0,
               interest: 0, principal: 0, balloon: 0, debtService: 0, equity: 0 };
+  if (K) { sum.contracted = 0; sum.merchant = 0; sum.partnerFee = 0; sum.revenueShare = 0; }
   for (var m = 1; m <= T; m++) {
     var ramp = I.ramp[Math.min(m, I.ramp.length) - 1], yrs = (m - 1) / 12;
-    var rev = cap.gpus * p * H * I.utilization * I.uptime * ramp * Math.pow(1 + I.priceChangePct, yrs);
-    var elec = cap.facilityKw * H * I.electricity * I.uptime * ramp * Math.pow(1 + I.electricityEscalationPct, yrs);
+    var rev, revC = 0, revM = 0;
+    if (K) {
+      revC = cap.gpus * p * H * I.uptime * K.takeOrPay * Math.pow(1 + K.escalator, Math.floor(yrs));
+      revM = K.merchant && K.merchantPrice > 0
+        ? cap.gpus * K.merchantPrice * I.priceRealization * H * I.utilization * I.uptime * (1 - K.takeOrPay) * ramp * Math.pow(1 + I.priceChangePct, yrs) : 0;
+      rev = revC + revM;
+    } else rev = cap.gpus * p * H * I.utilization * I.uptime * ramp * Math.pow(1 + I.priceChangePct, yrs);
+    var elec = cap.facilityKw * H * I.electricity * I.uptime * (K ? 1 : ramp) * Math.pow(1 + I.electricityEscalationPct, yrs);
     var net = rev * I.networkStoragePct, oth = rev * I.otherVariablePct;
     var fixed = I.fixedOpexMonthly * Math.pow(1 + I.fixedOpexEscalationPct, yrs);
     var maint = rev * I.maintenanceReservePct;
     var ls = leaseMo * Math.pow(1 + leaseEsc, Math.floor((m - 1) / 12));
-    var opex = elec + net + oth + fixed + maint + ls;
-    var ebitda = rev - opex, fcf = ebitda;
-    var residual = m === T ? capex * I.residualPct : 0;
+    var share = K ? rev * K.revenueShare : 0, pfee = K ? rev * K.fee : 0;
+    var opex = elec + net + oth + fixed + maint + ls + share;
+    var ebitda = rev - pfee - opex, fcf = ebitda;
+    var residual = m === T ? (K && K.residualUsd != null ? K.residualUsd : capex * I.residualPct) : 0;
     var interest = m > D.maturityMonths ? 0 : opening * D.rate / 12;
     var principal = (D.ltc === 0 || m <= D.interestOnlyMonths || m > D.maturityMonths) ? 0 : Math.min(opening, principalMo);
     var balloon = (debt > 0 && m === D.maturityMonths) ? Math.min(Math.max(0, opening - principal), debt * D.balloonPct) : 0;
@@ -301,11 +327,14 @@ function cashFlow(c, cap, capex, I, lease) {
     cumProject += fcf + residual; cumEquity += equity;
     if (projectPayback == null && cumProject >= 0) projectPayback = m;
     if (equityPayback == null && cumEquity >= 0) equityPayback = m;
-    months.push({ m: m, revenue: r2(rev), electricity: r2(elec), network: r2(net), other: r2(oth), fixed: r2(fixed), maintenance: r2(maint), lease: r2(ls),
-                  opex: r2(opex), ebitda: r2(ebitda), fcf: r2(fcf), residual: r2(residual), cumProject: r2(cumProject),
-                  debtOpening: r2(opening), interest: r2(interest), principal: r2(principal), balloon: r2(balloon), debtService: r2(ds), debtEnding: r2(ending),
-                  equity: r2(equity), cumEquity: r2(cumEquity), dscr: ds > 0 ? round(ebitda / ds, 3) : null,
-                  amortizing: principal > 0 && balloon === 0 });
+    var row = { m: m, revenue: r2(rev), electricity: r2(elec), network: r2(net), other: r2(oth), fixed: r2(fixed), maintenance: r2(maint), lease: r2(ls),
+                opex: r2(opex), ebitda: r2(ebitda), fcf: r2(fcf), residual: r2(residual), cumProject: r2(cumProject),
+                debtOpening: r2(opening), interest: r2(interest), principal: r2(principal), balloon: r2(balloon), debtService: r2(ds), debtEnding: r2(ending),
+                equity: r2(equity), cumEquity: r2(cumEquity), dscr: ds > 0 ? round(ebitda / ds, 3) : null,
+                amortizing: principal > 0 && balloon === 0 };
+    if (K) { row.contracted = r2(revC); row.merchant = r2(revM); row.partnerFee = r2(pfee); row.revenueShare = r2(share);
+             sum.contracted += revC; sum.merchant += revM; sum.partnerFee += pfee; sum.revenueShare += share; }
+    months.push(row);
     sum.revenue += rev; sum.electricity += elec; sum.network += net; sum.other += oth; sum.fixed += fixed; sum.maintenance += maint; sum.lease += ls;
     sum.opex += opex; sum.ebitda += ebitda; sum.fcf += fcf; sum.residual += residual;
     sum.interest += interest; sum.principal += principal; sum.balloon += balloon; sum.debtService += ds; sum.equity += equity;
@@ -315,14 +344,20 @@ function cashFlow(c, cap, capex, I, lease) {
 
   /* annual summary */
   var years = [];
+  /* under a deal each year also carries its parts: what was contracted and
+     sold merchant, the partner's fee and the site's share, and the cost
+     lines the opex is made of, so a contract's year table is this one */
+  var dealKeys = ['contracted', 'merchant', 'partnerFee', 'revenueShare', 'electricity', 'network', 'other', 'fixed', 'maintenance', 'residual', 'interest', 'principal', 'balloon'];
   for (var y = 0; y * 12 < T; y++) {
     var slice = months.slice(y * 12, y * 12 + 12), a = { year: y + 1, revenue: 0, opex: 0, lease: 0, ebitda: 0, debtService: 0, equity: 0, minDscr: null };
+    if (K) { a.months = slice.length; dealKeys.forEach(function (k) { a[k] = 0; }); }
     slice.forEach(function (mm) {
       a.revenue += mm.revenue; a.opex += mm.opex; a.lease += mm.lease; a.ebitda += mm.ebitda; a.debtService += mm.debtService; a.equity += mm.equity;
+      if (K) dealKeys.forEach(function (k) { a[k] += mm[k]; });
       if (mm.amortizing && mm.dscr != null && (a.minDscr == null || mm.dscr < a.minDscr)) a.minDscr = mm.dscr;
     });
     a.dscr = a.debtService > 0 ? round(a.ebitda / a.debtService, 2) : null;
-    ['revenue', 'opex', 'lease', 'ebitda', 'debtService', 'equity'].forEach(function (k) { a[k] = Math.round(a[k]); });
+    ['revenue', 'opex', 'lease', 'ebitda', 'debtService', 'equity'].concat(K ? dealKeys : []).forEach(function (k) { a[k] = Math.round(a[k]); });
     years.push(a);
   }
 
@@ -344,7 +379,7 @@ function cashFlow(c, cap, capex, I, lease) {
   var equityFlows = months.map(function (mm) { return mm.equity; });
   var out = {
     priced: priced, gpuHourPrice: priced ? r2(price) : null, realizedGpuHour: priced ? r2(p) : null,
-    pricingBasis: I.pricingBasis, pricingBasisLabel: BASIS_LABEL[I.pricingBasis],
+    pricingBasis: K ? 'contract' : I.pricingBasis, pricingBasisLabel: K ? 'Contracted $/GPU-hour (take-or-pay)' : BASIS_LABEL[I.pricingBasis],
     capex: Math.round(capex),
     debt: { funded: Math.round(debt), fee: Math.round(fee), reserve: Math.round(reserve), equityCapex: Math.round(equityCapex), initialEquity: Math.round(initialEquity),
             interestOnlyPayment: r2(ioInterest), principalAfterIo: r2(principalMo), ltc: D.ltc, rate: D.rate, maturityMonths: D.maturityMonths,
@@ -359,7 +394,7 @@ function cashFlow(c, cap, capex, I, lease) {
       projectIrrPct: pct(irr(projectFlows)), equityIrrPct: pct(irr(equityFlows)),
       year1Revenue: years[0] ? years[0].revenue : 0, year1Ebitda: years[0] ? years[0].ebitda : 0, year1DebtService: years[0] ? years[0].debtService : 0,
       year1Dscr: years[0] ? years[0].dscr : null, year1EquityCashFlow: years[0] ? years[0].equity : 0,
-      residualValue: Math.round(capex * I.residualPct)
+      residualValue: Math.round(K && K.residualUsd != null ? K.residualUsd : capex * I.residualPct)
     },
     bankability: {
       targetDscr: D.targetDscr, minDscrAmortizing: minDscr, monthsBelowTarget: below, amortizingMonths: amort.length,

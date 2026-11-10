@@ -97,6 +97,25 @@ async function withCaller(caller, key, options) {
   var view = project(caller, billing, records[0].exists ? records[0].data() : null, records[1].exists ? records[1].data() : null, Date.now());
   requireModule(view, key, options); return view;
 }
+/* A module on ANY plan, for a door that belongs to one module (Omega
+ * Maximus's own): a package by its modules[] (withCaller), a legacy plan by
+ * the ONE legacy rule, addons.held (the Modules page's moduleState, with the
+ * add-ons bought by card), so the server never refuses what the page shows
+ * as Live, or opens what it shows as Opt in. Staff pass. */
+async function withModuleAnyPlan(caller, key, options) {
+  if (caller.staff) return { packaged: false, staff: true };
+  var A = require('./admin');
+  options = options || {};
+  var orgId = options.orgId || caller.orgId;
+  var billing = await A.billingOf(orgId);
+  var m = M.get(key), name = m ? m.name : key;
+  if (billing.packaged === true) return withCaller(caller, key, options).then(null, function (e) {
+    if (e && e.status === 403 && /not in your package/i.test(e.message || '')) deny(name + ' is not in this workspace\'s package. Opt in on the Modules page.');
+    throw e;
+  });
+  if (!require('./addons').held(orgId, billing, key, Date.now())) deny(name + ' is not on this workspace\'s plan. Opt in on the Modules page.');
+  return { packaged: false, held: true };
+}
 /* Customer Editor Lite has its own buyer authorization and persistence. This
  * projection is drawing chrome only, never a platform membership or API grant. */
 function customerDrawing(active) {
@@ -105,4 +124,4 @@ function customerDrawing(active) {
   v.catalog = M.catalog(); v.notSold = M.notSold(); v.readOnlyRibbon = M.readOnlyRibbon();
   return v;
 }
-module.exports = { customerDrawing: customerDrawing, project: project, legacy: legacy, requireModule: requireModule, withToken: withToken, withCaller: withCaller, live: live };
+module.exports = { customerDrawing: customerDrawing, project: project, legacy: legacy, requireModule: requireModule, withToken: withToken, withCaller: withCaller, withModuleAnyPlan: withModuleAnyPlan, live: live };

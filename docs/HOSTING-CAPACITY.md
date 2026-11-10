@@ -163,6 +163,12 @@ Several of those pages are an interconnection form rather than a feeder
 map. They stay as links until someone opens the map and records the
 service.
 
+Arizona was opened utility by utility on 2026-10-20: no utility there
+publishes distribution hosting capacity (APS and SRP above are
+interconnection pages, as the table says). The list, the links, the route
+each utility offers instead and the City of Mesa's own service-area map are
+in `docs/HOSTING-ARIZONA.md`.
+
 **Publishers not in the atlas, and not probed.** Central Hudson and
 Orange & Rockland (New York joint-utilities maps), Unitil
 (Massachusetts and New Hampshire), United Illuminating (Connecticut),

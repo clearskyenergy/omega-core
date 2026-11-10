@@ -85,7 +85,10 @@ async function deliver(evt, sig, stale) {
   var out = { code: 0, body: null, status: function (c) { this.code = c; return this; }, json: function (b) { if (this.body == null) this.body = b; return this; }, send: function (b) { this.body = b; return this; }, end: function () { return this; } };
   await hook(req, out); return out;
 }
-var NOW = Math.floor(Date.parse('2026-09-24T12:00:00Z') / 1000), MONTH = 30 * 86400;
+/* The run's own clock, never a fixed day: buyer-design judges a grant against
+   Date.now(), so a period that ended a month after a fixed 2026-09-24 read as
+   expired from 2026-10-24 and failed CI on every branch. */
+var NOW = Math.floor(Date.now() / 1000), MONTH = 30 * 86400;
 function sub(id, status, extra) {
   return Object.assign({ id: id, object: 'subscription', customer: 'cus_T1', status: status, current_period_end: NOW + MONTH, collection_method: 'charge_automatically',
     items: { data: [{ price: { recurring: { interval: 'month' }, metadata: {} } }] },

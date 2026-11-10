@@ -1,0 +1,22 @@
+EDITION 18.0
+Levelized Cost of Energy—Key Assumptions
+Renewable Energy: Solar PV
+Units Community and C&I Utility Geothermal
+Total Capital Cost $/kW $1,600 – $3,300 $1,150 – $1,600
+Units Geothermal Wind—Onshore Wind—Offshore Gas Peaking (New Build)
+Total Capital Cost $/kW $5,000 – $6,460 $1,900 – $2,300 $3,450 – $6,550
+Inverter Cost $/kW $19 – $50 $19 – $50
+Total Capital Cost (excl. Inverter) $/kWh $122 – $313 $122 – $313
+Units Gas Peaking (New Build) U.S. Nuclear (New Build) Coal (New Build) Gas Combined Cycle (New Build)
+Total Capital Cost $/kW $1,150 – $1,450 $9,020 – $14,820 $3,405 – $7,210 $1,200 – $1,600
+Initial Capital Cost—DC $/kWh $113 – $244 $107 – $232 $238 – $445 $721 – $1,338
+EDITION 17.0
+Units Rooftop Residential Community and C&I Utility
+Total Capital Cost $/kW $2,300 – $4,150 $1,300 – $2,900 $850 – $1,400
+Units Geothermal Wind—Onshore Wind—Offshore
+Total Capital Cost $/kW $4,860 – $6,280 $1,300 – $1,900 $3,750 – $5,750
+Inverter Cost $/kW $30 – $60 $30 – $60
+Total Capital Cost (excl. Inverter) $/kWh $249 – $421 $249 – $421
+Units Gas Peaking (New Build) U.S. Nuclear (New Build) Coal (New Build) Gas Combined Cycle
+Total Capital Cost $/kW $700 – $1,150 $8,765 – $14,400 $3,310 – $7,005 $850 – $1,300
+Initial Capital Cost—DC $/kWh $220 – $311 $159 – $282 $160 – $282 $318 – $430 $984 – $1,406

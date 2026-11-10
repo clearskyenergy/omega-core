@@ -358,4 +358,18 @@ var emptyCam = { target: { x: 210, y: 0, z: -80 }, yaw: 0, pitch: 1.2, radius: 5
 var emptyScr = V.projectPoint(emptyCam, 1.2, 800, 640, [210, 0, -80]);
 check(V.pickMesh(pickScene, emptyCam, 1.2, 800, 640, emptyScr.x, emptyScr.y) === null, 'empty ground is not a component');
 
+/* The 3D view is the plan, not its mirror (Tommy, 2026-10-20: "its like reversed"):
+   the world is east, up, north, and from every side the screen keeps the map's hand. */
+(function () {
+  function at(yaw) {
+    var cam = { target: { x: 0, y: 0, z: 0 }, yaw: yaw, pitch: 0.6, radius: 500, fovy: Math.PI / 4, near: 1, far: 20000 };
+    function P(p) { return V.projectPoint(cam, 1.6, 1600, 1000, p); }
+    return { E: P([100, 0, 0]), W: P([-100, 0, 0]), N: P([0, 0, 100]), S: P([0, 0, -100]) };
+  }
+  var s0 = at(0), e90 = at(Math.PI / 2), n180 = at(Math.PI), w270 = at(-Math.PI / 2);
+  check(s0.E.x > s0.W.x && s0.N.y < s0.S.y, 'from the south, east is on the right and north is ahead');
+  check(e90.N.x > e90.S.x, 'from the east, north is on the right');
+  check(n180.W.x > n180.E.x, 'from the north, west is on the right');
+  check(w270.S.x > w270.N.x, 'from the west, south is on the right');
+})();
 console.log('teditorv23d: ' + n + ' checks passed');

@@ -11,6 +11,7 @@ without a person signing in.
 ```
 ChatGPT Custom GPT ──Action (bearer key)──▶ /api/agent/sites          list · upload
                                            /api/agent/site-outline   ring · KML · KMZ link
+                                           /api/agent/intake-links   shareable intake links
                                                       │
                                                       ▼
                                          Firestore `deals` (the OSA portfolio)
@@ -67,6 +68,13 @@ Suggested instructions for the GPT (edit freely):
 > id so re-uploads update instead of duplicating. Report per-site results
 > exactly as returned (created / updated / unchanged / error).
 >
+> When the user wants a link or a form they can send to someone (a
+> landowner, a broker) so that person can submit a site, call
+> `createIntakeLink` with a short `label` saying what it is for, and give the
+> user the returned `url` verbatim. To see what came in, call `listSites`
+> with `channel` "Intake link". To close a link, call `createIntakeLink`
+> with `revoke` set to its id; `listIntakeLinks` shows them all.
+>
 > Every acreage and score is screening evidence from hand-traced geometry.
 > Say so when it matters; never call it a survey, a utility study or an
 > interconnection clearance.
@@ -78,6 +86,8 @@ Suggested instructions for the GPT (edit freely):
 | `listSites` | reads `deals` where `orgsInvolved` contains the key's org | `sites:read` |
 | `getSiteOutline` | reads one such deal; builds KML/KMZ from its `outline` | `sites:read` |
 | `uploadSites` | creates a deal at `referred`, originated by the key's org, channel `Agent`; or additively updates a match | `sites:write` |
+| `listIntakeLinks` | reads the key's org's rows in `intake_links` | `sites:write` |
+| `createIntakeLink` | makes a shareable intake link for the key's org (an admin key may name `org`), or revokes one | `sites:write` |
 
 An update may add an outline, fill a blank size/address/state/type, append
 a note, and set an `externalId`. It **never** changes `origination`,
@@ -91,7 +101,43 @@ Sites with only a pin have no acreage and sort below any outlined site.
 
 Dead, parked and discarded sites are excluded unless `includeDead=true`.
 
-## 4. Where the outline comes from
+## 4. Shareable intake links
+
+A link anyone can open to submit ONE site at a time, without an account:
+`/site-intake?l=il_…` (`site-intake.html`, public like `quote.html`: no
+Firebase, no tenant runtime, no platform name). Each submission becomes a
+deal at `referred`, credited to the org the link was made for, channel
+`Intake link`, with the submitter as the contact and `intake{}` (link id,
+label, a six-character `reference` the submitter is shown, their name,
+email, company and phone). A Google Earth KMZ/KML goes through the same
+outline reader as `uploadSites`, so the acreage is measured and the grid
+features scored on the way in.
+
+Who makes one (`api/_lib/intake-links.js manager()`):
+
+| who | where | for which org |
+|---|---|---|
+| an OSA owner or administrator | portfolio › Inbox › Intake links | any |
+| a limited administrator | same | the orgs on their account, and their own |
+| a partner administrator | same | their own |
+| ClearSky staff (verified @clearsky-usa.com) | same | any |
+| an agent key with `sites:write` | `createIntakeLink` | the key's org (an admin key: any) |
+
+What a link can NOT do: read anything back, match or update an existing deal
+(a same-named site is filed as a new referral for a person to merge), set
+stage, attribution, money or an `externalId`. What holds it: 5 submissions a
+minute per address, the link's own daily cap (default 50, at most 200) taken
+in a transaction, a revoke or expiry checked inside that transaction, a 3 MB
+file limit. The person who made the link is emailed each submission
+(Reply-To the submitter); an agent-made link mails nobody, and the submitter
+is never mailed (an open form that mails a typed address is a spam relay).
+Links live in `intake_links/{id}`, Admin SDK only, closed explicitly in
+`firestore.rules` (deploy the rules by hand: `firebase deploy --only
+firestore:rules`).
+
+Tests: `node scripts/test-site-intake.js`.
+
+## 5. Where the outline comes from
 
 `deals/{id}.outline` is new with this feature:
 
@@ -116,7 +162,7 @@ Sites traced before this shipped have a score and no shape. Their
 `getSiteOutline` answer says so and the KML carries a pin; re-score them from
 the KMZ button, or have the agent re-upload the file, and the ring appears.
 
-## 5. The KMZ link
+## 6. The KMZ link
 
 `getSiteOutline` returns the KML inline (an Action can only read text) and a
 `kmzUrl` a person clicks. The link needs no header, so it carries an HMAC
@@ -130,7 +176,7 @@ deploys — a digest of the service-account private key already present. Set
 the explicit variable when you want to rotate links independently of the
 credential. `/api/health` reports whether it is set.
 
-## 6. Operating notes
+## 7. Operating notes
 
 - Keys live in `agent_keys/{sha256}`; `firestore.rules` denies the
   collection to every client, explicitly. Only the Admin SDK reads it.

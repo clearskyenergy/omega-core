@@ -8,6 +8,12 @@
  * run() on a fake network: ComEd reads its sentence byte for byte, Mesa AZ
  * names the City of Mesa beside Salt River Project, Springfield IL (outside
  * ComEd, never asked before) names CWLP, and a door that fails says so.
+ * 2026-10-20: who may serve the point is the one list Omega Prime's Circuit
+ * step draws (GV.whoServes), a card line each: downtown Mesa lists the City
+ * of Mesa with the city's service-area map and folds Salt River Project and
+ * APS away with the reason; the city's map down lists all three with their
+ * routes and pages. Each is held to Prime's own candidatesBlock on the same
+ * answer: the same words, in the same order, with the same links.
  */
 'use strict';
 var assert = require('assert');
@@ -130,6 +136,9 @@ check(/GV\.hosting\(body\)/.test(self) && self.indexOf("fetch('/api/hosting-capa
 check(self.indexOf('probePoint') < 0 && self.indexOf('OmegaComEdLayers') < 0 && self.indexOf('circuitSourceLine') < 0, 'the ComEd-only probe and its sentence are gone from the layer');
 check(page.indexOf('omega-comed-layers.js') < 0, 'Site Plan no longer loads the ComEd-only module');
 check(app.indexOf('row.href') >= 0 && /\^https:/.test(app.slice(app.indexOf('row.href') - 40, app.indexOf('row.href') + 120)), 'the card draws a link only for https');
+check(/rec\.who = GV\.whoServes \? GV\.whoServes\(res\) : null;/.test(self) && self.indexOf('rec.candidates') < 0, 'who serves the point is the one list (GV.whoServes), not the layer\'s own');
+check(/if \(row\.fold\) \{/.test(app) && app.indexOf('createElement(\'details\')') >= 0 && app.indexOf('createElement(\'summary\')') >= 0, 'the card folds what the list folds');
+check(/row\.bold && String\(row\.text\)\.indexOf\(row\.bold\) === 0/.test(app), 'a utility\'s name is bold, the rest of its line is not');
 
 var blank = GL.lineOf({ attributes: { OWNER: '' }, geometry: { paths: [[[-112.07, 33.306], [-112.06, 33.31]]] } });
 check(blank.kind === 'line' && blank.name === 'Line', 'the shared reader leaves a blank voltage unlabeled');
@@ -166,26 +175,38 @@ var asked = [];
 function network(routes) {
   return function (url) {
     asked.push(url);
-    for (var i = 0; i < routes.length; i++) if (routes[i][0].test(url)) return Promise.resolve(JSON.parse(JSON.stringify(routes[i][1])));
+    for (var i = 0; i < routes.length; i++) if (routes[i][0].test(url)) {
+      if (routes[i][1] instanceof Error) return Promise.reject(routes[i][1]);
+      return Promise.resolve(JSON.parse(JSON.stringify(routes[i][1])));
+    }
     return Promise.resolve({ features: [] });
   };
 }
+/* the City of Mesa's own electric service area (2026-10-20): a polygon
+   1.5 km around downtown, as the city's map answers at 29 W Main St */
+var MESA_AREA = /GCX_ExploreMesa\/MapServer\/13\/query/;
+function square(lat, lng, m) { var a = m / 111320, b = m / (111320 * Math.cos(lat * Math.PI / 180)); return { rings: [[[lng - b, lat - a], [lng + b, lat - a], [lng + b, lat + a], [lng - b, lat + a], [lng - b, lat - a]]] }; }
+var MESA_ROWS = [['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1166094, 3e10],
+  ['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]];
+var MESA_SUB = { attributes: { NAME: 'Mesa Downtown', MAX_VOLT: 69, OWNER: 'Salt River Project' }, geometry: { x: -111.8270, y: 33.4190 } };
 var COMED_AT = new RegExp('^' + CS.SERVICE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/' + CS.ATTRIB_LAYER + '/query\\?');
 var SITES = {
   chicago: { anchor: { lat: 41.81522, lng: -87.62261 }, address: '3400 S Federal St, Chicago, IL 60616',
     sub: { attributes: { NAME: 'Crawford', MAX_VOLT: 138, OWNER: 'Commonwealth Edison' }, geometry: { x: -87.6150, y: 41.8210 } },
     net: network([[/Electricity_Rates_H3_Res5/, Esri([['4110', 'COMMONWEALTH EDISON CO', 'INVESTOR OWNED', 'IL', 4130749, 6.1e10]])], [/tigerweb/, Places('Chicago')],
       [COMED_AT, { features: [{ attributes: { Feeder: 'F0297', SS_N: 'Crawford TSS 21', BESS_HC: 15620, PV_HC_kW: 15620, EV_HC_kW: 16100, Feeder_Q: 4895, Queue_RD: '09/30/2026' } }] }]]) },
-  mesa: { anchor: { lat: 33.4152, lng: -111.8329 }, address: '29 W Main St, Mesa, AZ 85201',
-    sub: { attributes: { NAME: 'Mesa Downtown', MAX_VOLT: 69, OWNER: 'Salt River Project' }, geometry: { x: -111.8270, y: 33.4190 } },
-    net: network([[/Electricity_Rates_H3_Res5/, Esri([['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1166094, 3e10],
-      ['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]])], [/tigerweb/, Places('Mesa')]]) },
+  mesa: { anchor: { lat: 33.4152, lng: -111.8329 }, address: '29 W Main St, Mesa, AZ 85201', sub: MESA_SUB,
+    net: network([[/Electricity_Rates_H3_Res5/, Esri(MESA_ROWS)], [/tigerweb/, Places('Mesa')],
+      [MESA_AREA, { features: [{ attributes: { FACILITYID: 'ELSA2' }, geometry: square(33.4152, -111.8329, 1500) }] }]]) },
+  /* the city's map down: every utility on the national map, the bill decides */
+  mesaDown: { anchor: { lat: 33.4152, lng: -111.8329 }, address: '29 W Main St, Mesa, AZ 85201', sub: MESA_SUB,
+    net: network([[/Electricity_Rates_H3_Res5/, Esri(MESA_ROWS)], [/tigerweb/, Places('Mesa')], [MESA_AREA, new Error('the city\'s map is down')]]) },
   /* Illinois outside ComEd: the old layer never asked here */
   springfield: { anchor: { lat: 39.7817, lng: -89.6501 }, address: 'Springfield, IL 62701',
     sub: { attributes: { NAME: 'Dallman', MAX_VOLT: 138, OWNER: 'City of Springfield' }, geometry: { x: -89.6050, y: 39.7560 } },
     net: network([[/Electricity_Rates_H3_Res5/, Esri([['17828', 'CITY OF SPRINGFIELD - (IL)', 'MUNICIPAL', 'IL', 70000, 2.5e8]])], [/tigerweb/, Places('Springfield')]]) }
 };
-var HERE = SITES.chicago, DOOR_FAIL = null, posted = [];
+var HERE = SITES.chicago, DOOR_FAIL = null, posted = [], lastAnswer = null;
 function respond(body, status) { return Promise.resolve({ ok: status === 200, status: status, json: function () { return Promise.resolve(JSON.parse(JSON.stringify(body))); } }); }
 var ctx = {
   console: { info: function () {}, log: function () {} }, Promise: Promise, JSON: JSON, Math: Math, Date: Date, isFinite: isFinite, setTimeout: setTimeout,
@@ -196,7 +217,7 @@ var ctx = {
       posted.push({ body: b, auth: opts.headers.Authorization, method: opts.method });
       if (DOOR_FAIL) { var f = DOOR_FAIL; DOOR_FAIL = null; return respond(f.body, f.status); }
       return H.run({ lat: b.lat, lng: b.lng, unit: b.unit, substation: b.substation, mode: b.mode },
-        { fetchJson: HERE.net, db: function () { return null; }, now: function () { return 1790000000000; }, log: function () {} }).then(function (r) { return respond(r, 200); });
+        { fetchJson: HERE.net, db: function () { return null; }, now: function () { return 1790000000000; }, log: function () {} }).then(function (r) { lastAnswer = JSON.parse(JSON.stringify(r)); return respond(r, 200); });
     }
     if (/Substations\/FeatureServer\/0\/query/i.test(url)) return respond({ features: [HERE.sub] }, 200);
     if (/Transmission_Lines\/FeatureServer\/0\/query/.test(url)) return respond({ features: [{ attributes: { VOLTAGE: 138, OWNER: 'Tx Co', ID: 'T9' }, geometry: { paths: [[[HERE.anchor.lng - 0.01, HERE.anchor.lat], [HERE.anchor.lng + 0.01, HERE.anchor.lat + 0.002]]] } }] }, 200);
@@ -210,6 +231,33 @@ vm.createContext(ctx);
 });
 var VG = ctx.OmegaEditorV2Grid;
 var BESS = { bessKw: 2508, bessKwh: 5015 };
+/* Omega Prime's own candidatesBlock (cut out of the page with its esc and
+   safeHref, run on the same client): the list the card is held to, word
+   for word, link for link */
+var HS = require(path.join(ROOT, 'api/_lib/hosting-sources'));
+var primeSrc = fs.readFileSync(path.join(ROOT, 'omega-prime.html'), 'utf8');
+function cut(src, name) {
+  var i = src.indexOf('function ' + name + '('), j = src.indexOf('{', i), d = 0, k;
+  check(i >= 0, 'omega-prime.html has ' + name);
+  for (k = j; k < src.length; k++) { if (src[k] === '{') d++; else if (src[k] === '}' && !--d) break; }
+  return src.slice(i, k + 1);
+}
+var primeCtx = { GV: ctx.OmegaGridVerdict };
+vm.createContext(primeCtx);
+vm.runInContext(cut(primeSrc, 'esc') + '\n' + cut(primeSrc, 'safeHref') + '\n' + cut(primeSrc, 'candidatesBlock'), primeCtx, { filename: 'omega-prime.html' });
+function primeWords(res) {
+  return primeCtx.candidatesBlock(JSON.parse(JSON.stringify(res))).replace(/<[^>]*>/g, '').replace(/&#39;/g, '\'').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+}
+function primeLinks(res) { var out = [], re = /<a href="([^"]*)"/g, h = primeCtx.candidatesBlock(JSON.parse(JSON.stringify(res))), m; while ((m = re.exec(h))) out.push(m[1].replace(/&amp;/g, '&')); return out; }
+/* the card's who-serves lines, read as the card paints them */
+function whoOf(lines) { return lines.filter(function (r) { return r.who; }); }
+function cardWords(lines) {
+  return whoOf(lines).map(function (r) { return r.text + (r.href ? ' ↗' : '') + (r.fold ? r.fold.map(function (x) { return x.text; }).join('') : ''); }).join('');
+}
+function samePrime(lines, res, what) {
+  check(cardWords(lines).length > 0 && cardWords(lines) === primeWords(res), what + ': the list in Omega Prime\'s words and order');
+  check(JSON.stringify(whoOf(lines).filter(function (r) { return r.href; }).map(function (r) { return r.href; })) === JSON.stringify(primeLinks(res)), what + ': the same links, in the same order');
+}
 function wait(cond, tries) { return new Promise(function (res, rej) { (function tick(i) { if (cond()) return res(); if (i > (tries || 400)) return rej(new Error('timed out')); setTimeout(function () { tick(i + 1); }, 5); })(0); }); }
 function at(site) {
   HERE = site; var before = posted.length;
@@ -234,22 +282,52 @@ wait(function () { return !!VG.record(); }).then(function () {
   check(VG.card().lines.some(function (r) { return r.href === CS.REFERER; }), 'ComEd\'s own map, to check it');
   check(/Source: ComEd's published hosting capacity · ComEd_BESS_Hosting_Capacity_[A-Z]{3}20\d\d layer 75 · refreshed 2026-09-30, resolved at the parcel\./.test(text), 'the source, in the answer\'s words');
   check(!/Feeder_Q|BESS_HC/.test(text), 'no upstream field name on the card');
+  check(!whoOf(VG.card().lines).length && primeWords(lastAnswer) === '', 'a figure read for the one utility mapped: no list, here or in Prime');
   return at(SITES.mesa);
 }).then(function (m) {
   /* Mesa, Arizona: the real utility, never one utility's words */
   check(m.body.body.lat === 33.4152 && m.body.body.substation.name === 'Mesa Downtown', 'Mesa: one question at the new point');
   check(m.rec.utility.display === 'City of Mesa' && m.rec.coverage === 'no-public-map' && m.rec.circuit === null && m.rec.verdict.key === 'study', 'Mesa: the City of Mesa, nothing published, a study');
   check(m.text.indexOf('Serving utility: City of Mesa · publishes no hosting capacity') >= 0, 'Mesa: named in Prime\'s words');
-  check(/More than one utility is mapped at this point: City of Mesa \(the one read here\), Salt River Project, Arizona Public Service\. Confirm the utility with the customer’s bill\./.test(m.text), 'Mesa: every utility on the map, the bill decides');
-  check(/encloses Arizona Public Service and City of Mesa islands/.test(m.text), 'Mesa: the server\'s caution');
+  check(m.text.indexOf('More than one utility') < 0 && m.text.indexOf('islands') < 0, 'Mesa: the city\'s own service-area map settles it; one utility, no SRP caution');
+  check(/City of Mesa publishes no hosting capacity/.test(m.text), 'Mesa: in the server\'s words');
   check(!/comed|feeder_q/i.test(JSON.stringify(m.lines)), 'Mesa: no ComEd word anywhere');
-  check(!m.lines.some(function (r) { return r.href; }), 'Mesa: no map invented for a city that publishes none');
+  /* who serves the point: the City of Mesa by its own map, with the city's
+     service-area map; Salt River Project and APS folded away with the reason */
+  var MESA_E = HS.byKey('mesa'), INSIDE = 'the point is inside the City of Mesa\'s own electric service area (the city\'s map)', mw = whoOf(m.lines);
+  check(JSON.stringify(mw.map(function (r) { return [r.who, r.text]; })) === JSON.stringify([['head', 'Who serves this point'], ['name', 'City of Mesa'],
+    ['why', 'inside its own electric service area (the city\'s map)'], ['says', 'Publishes no hosting capacity.'], ['link', MESA_E.check.label],
+    ['fold', 'Also on the territory maps, not this point (2)']]), 'Mesa: who serves the point, a line each, in Prime\'s order');
+  check(mw[1].bold === 'City of Mesa' && mw[4].href === MESA_E.check.url, 'Mesa: the City of Mesa in bold, and the city\'s own service-area map to check');
+  check(JSON.stringify(mw[5].fold) === JSON.stringify([{ text: 'Salt River Project (' + INSIDE + ')' }, { text: 'Arizona Public Service (' + INSIDE + ')' }]), 'Mesa: Salt River Project and APS folded, each with the reason');
+  samePrime(m.lines, lastAnswer, 'Mesa');
+  check(JSON.stringify(m.lines.filter(function (r) { return r.href; }).map(function (r) { return r.href; })) === JSON.stringify([MESA_E.check.url, MESA_E.viewerUrl]),
+    'Mesa: the city\'s service-area map in the list and its page to check it on; never a hosting map that does not exist');
+  return at(SITES.mesaDown);
+}).then(function (md) {
+  /* the city's map down: every utility on the national map named, each with
+     what it publishes, the route it offers instead and its own pages; the
+     bill decides */
+  check(md.rec.utility.display === 'City of Mesa' && md.rec.coverage === 'no-public-map', 'Mesa, the city\'s map down: the city still leads inside the city');
+  var dw = whoOf(md.lines), MESA_E = HS.byKey('mesa'), SRP_E = HS.byKey('srp'), APS_E = HS.byKey('aps');
+  check(dw[0].text === 'More than one utility is mapped at this point.' && dw[dw.length - 1].text === 'Confirm the utility with the customer’s bill.' && !dw.some(function (r) { return r.fold; }),
+    'Mesa, the city\'s map down: more than one utility mapped, the bill decides, nothing folded');
+  check(JSON.stringify(dw.filter(function (r) { return r.who === 'name'; }).map(function (r) { return r.text; })) === JSON.stringify(['City of Mesa — the one read here', 'Salt River Project', 'Arizona Public Service']),
+    'Mesa, the city\'s map down: all three, the city first and marked');
+  check(JSON.stringify(dw.filter(function (r) { return r.who === 'says'; }).map(function (r) { return r.text; })) === JSON.stringify(['Publishes no hosting capacity.',
+    'Publishes no hosting capacity. Instead: ' + SRP_E.route + '.', 'Publishes no hosting capacity. Instead: ' + APS_E.route + '.']), 'Mesa, the city\'s map down: what each publishes, and the route the others offer');
+  check(JSON.stringify(dw.filter(function (r) { return r.href; }).map(function (r) { return r.href; })) === JSON.stringify([MESA_E.check.url, SRP_E.viewerUrl, SRP_E.check.url, APS_E.viewerUrl, APS_E.check.url]),
+    'Mesa, the city\'s map down: each utility\'s own pages');
+  samePrime(md.lines, lastAnswer, 'Mesa, the city\'s map down');
+  check(/encloses Arizona Public Service and City of Mesa islands/.test(md.text) && /The City of Mesa's own service-area map did not answer/.test(md.text), 'Mesa, the city\'s map down: the server\'s caution, and the map that did not answer');
   return at(SITES.springfield);
 }).then(function (sp) {
   /* Illinois outside ComEd: asked now, and named */
   check(sp.body.body.lat === 39.7817 && sp.rec && sp.rec.utility.display === 'City Water, Light & Power (Springfield)', 'Springfield IL is asked, and CWLP named');
   check(sp.text.indexOf('Serving utility: City Water, Light & Power (Springfield) · publishes no hosting capacity') >= 0 && /CWLP publishes no hosting capacity/.test(sp.text), 'in the server\'s words');
   check(sp.lines.some(function (r) { return r.href === 'https://www.cwlp.com/Renewable.aspx'; }), 'with CWLP\'s own page');
+  check(whoOf(sp.lines)[0].text === 'Who serves this point', 'Springfield: who serves the point, where no figure is read');
+  samePrime(sp.lines, lastAnswer, 'Springfield');
   DOOR_FAIL = { status: 503, body: { error: 'offline' } };
   return at(SITES.mesa);
 }).then(function (f) {

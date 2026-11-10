@@ -824,6 +824,29 @@
       example:'Shareholder introduction' },
     { key:'referredAt',  header:'Referred date', label:'Referred date',
       example:'2026-08-31' },
+    /* ── The rest of what a deal's drawer shows, so an imported deal arrives
+       as complete as one typed in by hand. All optional; an empty column
+       writes nothing. Grid score and the prescreen are not columns: they
+       are measured here, never copied from a sheet. */
+    { key:'categories',  header:'Categories', label:'Categories',
+      example:'bess',
+      hint:'The technology present, comma separated: bess, solar, compute, der, dcfc, l2, '
+         + 'powergen, charging. Added to what the project type already implies.' },
+    { key:'contactName', header:'Contact name', label:'Contact name',
+      example:'Jo Smith',
+      hint:'The person at the referring organisation. Set on a new deal only: it is part of '
+         + 'the attribution, which an import never rewrites.' },
+    { key:'contactEmail', header:'Contact email', label:'Contact email',
+      example:'jo@sunesol.com' },
+    { key:'rep',         header:'Screening rep (email)', label:'Screening rep',
+      example:'andrew@clearsky-usa.com',
+      hint:'Who screens it. The gate into Screening asks for one.' },
+    { key:'budgetUsd',   header:'OSA budget (USD)', label:'OSA budget',
+      numeric:true, example:'25000',
+      hint:'What OSA is putting into pre-development. The gate into Pre-development asks for it.' },
+    { key:'link',        header:'Files link', label:'Files link',
+      example:'https://drive.google.com/drive/folders/…',
+      hint:'The site’s Drive or Dropbox folder. Added to Files as the project folder.' },
     /* ── Two optional columns for a portfolio, not a single referral ──
        `ref` is the partner's own id for the site ("CT-25"). It is what lets
        their screening scorecard land on the right deal without matching on
@@ -859,6 +882,8 @@
                : f.key === 'projectType'? 'solar_bess'
                : f.key === 'address'   ? '275 Research Parkway, Meriden, CT'
                : f.key === 'siteNotes' ? 'Ground mount, 4 acres behind the plant.'
+               : f.key === 'categories' ? 'BESS'
+               : f.key === 'rep'       ? 'andrew@clearsky-usa.com'
                : '');
     }).join(','));
     return rows.join('\n') + '\n';
@@ -927,7 +952,13 @@
       address:['location','address','city','site address'],
       state:['state','region','province'],
       clientOrgId:['client','customer','account'],
-      categories:['category','categories','technology','tech','type'],
+      projectType:['project type','type'],
+      categories:['category','categories','technology'],
+      contactName:['contact name','contact'],
+      contactEmail:['contact email','email'],
+      rep:['screening rep','rep'],
+      budgetUsd:['osa budget','budget'],
+      link:['files link','folder','drive','link'],
       sizeMw:['mw','size','capacity','power'],
       sizeMwh:['mwh','energy','duration'],
       capexUsd:['capex','cost','total cost','budget'],
@@ -1012,6 +1043,21 @@
       var size = F().num(v.sizeMw);
       if (size == null && defSize != null) { size = defSize; if (lands) defaulted.sizeMw++; }
 
+      /* Categories: our keys or the short labels the drawer shows (BESS,
+         PV, DC…). A word we do not know is named, never guessed. */
+      var cats = [];
+      String(v.categories || '').split(/[,;\/|]+/).forEach(function (w) {
+        w = String(w).trim(); if (!w) return;
+        var k = catKey(w);
+        if (k) { if (cats.indexOf(k) < 0) cats.push(k); }
+        else warnings.push('Category "' + w + '" is not one we track \u2014 left out.');
+      });
+      var link = '';
+      if (String(v.link || '').trim()) {
+        link = F().normalizeUrl ? F().normalizeUrl(String(v.link).trim()) : String(v.link).trim();
+        if (!link) warnings.push('Files link "' + String(v.link).trim() + '" is not a web address \u2014 left out.');
+      }
+
       out.push({
         row: r + 1,
         values: {
@@ -1028,6 +1074,12 @@
           sizeMw:      size,
           channel:     String(v.channel || '').trim() || 'Imported',
           referredAt:  parseDate(v.referredAt),
+          categories:  cats,
+          contactName: String(v.contactName || '').trim(),
+          contactEmail: email(v.contactEmail, 'Contact email', warnings),
+          rep:         email(v.rep, 'Screening rep', warnings),
+          budgetUsd:   F().num(v.budgetUsd),
+          link:        link,
           ref:         String(v.ref || '').trim(),
           promote:     SS() ? SS().isYes(v.promote) : /^\s*(y|yes|true|1)\s*$/i.test(String(v.promote || ''))
         },
@@ -1048,6 +1100,26 @@
       });
     }
     return out;
+  }
+
+  /* One of ours, by key or by the short label the drawer prints. */
+  function catKey(w) {
+    w = String(w || '').trim().toLowerCase();
+    var list = (cfg().partner || {}).categories || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].key === w || String(list[i].short || '').toLowerCase() === w
+          || String(list[i].label || '').toLowerCase() === w) return list[i].key;
+    }
+    return '';
+  }
+
+  /* An address, lower-cased, or '' with a warning naming the column. */
+  function email(v, label, warnings) {
+    var e = String(v || '').trim().toLowerCase();
+    if (!e) return '';
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e)) return e;
+    warnings.push(label + ' "' + e + '" is not an email address \u2014 left out.');
+    return '';
   }
 
   function parseDate(v) {
@@ -1124,6 +1196,28 @@
     });
   }
 
+  /* Categories as a set: what the deal has, what the type implies, what the
+     sheet adds. Never removes one. */
+  function mergeCats(have, implied, extra) {
+    var out = [];
+    [have || [], implied || [], extra || []].forEach(function (l) {
+      l.forEach(function (c) { if (c && out.indexOf(c) < 0) out.push(c); });
+    });
+    return out;
+  }
+
+  /* The sheet's files link as the project-folder entry the Files tab lists,
+     the same shape addLink() writes. Null when there is none, or when the
+     deal already has that address. */
+  function linkRec(url, existing) {
+    if (!url) return null;
+    for (var i = 0; i < (existing || []).length; i++) if (existing[i] && existing[i].url === url) return null;
+    var me = (A() && A().me && A().me()) || {};
+    return { id: 'lk_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+             url: url, label: 'Project folder (imported)', kind: 'folder', note: '',
+             addedBy: me.email || '', addedByName: me.name || '', addedAt: stamp() };
+  }
+
   function runImport(rows, batchLabel, onProgress, opts) {
     opts = opts || {};
     var good = rows.filter(function (r) { return r.ok; });
@@ -1154,6 +1248,15 @@
         ['monthlyBillUsd', 'annualKwh', 'meters', 'loadKw'].forEach(function (k) {
           if (val[k] != null) body['energy.' + k] = val[k];
         });
+        /* The drawer's other facts, when the sheet carries them. The contact
+           is not among them: it sits in the attribution block, which an
+           import never rewrites (the rules refuse it once it locks). */
+        var cats = mergeCats(r.updates.categories, body.categories || [], val.categories);
+        if (cats.length !== (r.updates.categories || []).length || body.categories) body.categories = cats;
+        if (val.rep) body['assignment.rep'] = val.rep;
+        if (val.budgetUsd != null) body['preDev.budgetUsd'] = val.budgetUsd;
+        var lk = linkRec(val.link, r.updates.links);
+        if (lk) body.links = (r.updates.links || []).concat([lk]);
         p = F().patch(r.updates, body, { type:'import', message:'Updated by import ' + batchLabel })
              .then(function () { results.updated++; return r.updates.id; });
       } else {
@@ -1164,8 +1267,10 @@
           clientOrgId: val.clientOrgId,
           address: val.address,
           channel: val.channel,
-          categories: (t.categories || []).slice(),
+          categories: mergeCats([], t.categories, val.categories),
           sizeMw: val.sizeMw,
+          contactName: val.contactName,
+          contactEmail: val.contactEmail,
           referredAt: val.referredAt || stamp()
         }).then(function (ref) {
           /* The fields create() does not know about. Same second write the
@@ -1182,6 +1287,10 @@
             }
           };
           if (val.ref) extra.externalIds = { partnerRef: val.ref };
+          if (val.rep) extra['assignment.rep'] = val.rep;
+          if (val.budgetUsd != null) extra['preDev.budgetUsd'] = val.budgetUsd;
+          var lk = linkRec(val.link, []);
+          if (lk) extra.links = [lk];
           return _db.collection(F().COLLECTION).doc(ref.id).update(extra)
             .then(function () { results.created++; return ref.id; });
         });

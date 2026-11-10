@@ -330,6 +330,7 @@
     "api/sales.js": {
       "maxDuration": 60
     },
+    "api/site-intake.js": { "maxDuration": 30, "includeFiles": "omega-site-intel.js" },
     "api/agent/*.js": {
       "maxDuration": 30,
       "includeFiles": "omega-site-intel.js"

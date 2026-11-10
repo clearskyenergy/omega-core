@@ -58,6 +58,8 @@ var HIT_TTL_MS = 7 * 24 * 3600 * 1000, EMPTY_TTL_MS = 24 * 3600 * 1000, RESOLVE_
 var PER_MINUTE = 30;
 var MAX_PROBES = 4;
 var STATE_LAYER_KEYS = UT.STATE_LAYERS.map(function (l) { return l.key; });
+var AREA_FAILED = {};
+UT.SERVICE_AREAS.forEach(function (l) { AREA_FAILED[l.key] = l.words.failed; });
 var UA = 'ClearSky-OMEGA hosting capacity (https://clearskyomega.com)';
 
 module.exports = A.handler(function (req, res) {
@@ -400,7 +402,7 @@ function noteFor(coverage, entry, util, ctx) {
       return (entry && entry.note ? entry.note + ' ' : '') + 'OMEGA does not read it; open the utility\'s page to register.';
     case 'not-wired':
       return entry ? who + ': ' + (entry.note || 'a published map that OMEGA has not wired yet.') :
-        who + ' is outside the utilities OMEGA has researched (IL, FL, GA, NJ, AZ, CA, CT, MA, RI); the DOE atlas lists the hosting capacity maps utilities publish.';
+        who + ' is outside the utilities OMEGA has researched (' + HS.STATES.join(', ') + '); the DOE atlas lists the hosting capacity maps utilities publish.';
     case 'unreachable':
       return who + '\'s hosting capacity service did not answer (' + (ctx.why || 'it failed') + '). Try again in a minute, or open its map.';
     default:
@@ -515,12 +517,22 @@ function compose(input, mode, terr, probes, tried, lat, lng) {
   if (terr.approximate) note += ' Every territory layer failed, so the utility is a rough guess.';
   else if (terr.partial && (terr.failed || []).some(function (k) { return STATE_LAYER_KEYS.indexOf(k) >= 0; }))
     note += ' The state\'s own territory layer did not answer, so these candidates are the national layer\'s; confirm the utility with a bill.';
+  (terr.failed || []).forEach(function (k) { if (AREA_FAILED[k]) note += ' ' + AREA_FAILED[k]; });
 
+  /* every utility the territory names, with what it publishes (the
+     registry's words, its route and its own pages): the list a person reads
+     where no figure is read, or where more than one utility is mapped */
+  var candidates = terr.candidates.map(function (x) {
+    var o = {}, k;
+    for (k in x) if (x.hasOwnProperty(k)) o[k] = x[k];
+    o.hosting = HS.publication(x.registryKey ? HS.byKey(x.registryKey) : null);
+    return o;
+  });
   var source = src ? { key: src.key, label: src.label, grain: src.grain, addressResolved: src.addressResolved, distanceM: src.distanceM,
     refreshed: src.refreshed, units: src.units, layer: src.layer } : null;
   return {
     version: VERSION, point: { lat: lat, lng: lng },
-    territory: { candidates: terr.candidates, confident: confident, caution: terr.caution || null, source: terr.source, approximate: !!terr.approximate,
+    territory: { candidates: candidates, confident: confident, caution: terr.caution || null, source: terr.source, approximate: !!terr.approximate,
                  partial: !!terr.partial, evidence: wire ? 'hosting-layer' : (terr.candidates.length ? 'territory' : null) },
     utility: util, coverage: coverage, mode: mode, source: source,
     circuits: circuits, best: best, body: body, verdict: verdict,

@@ -858,13 +858,22 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
       <div class="card">
         <div class="card-h"><h2>Deals</h2>
           <div class="chips" id="pipe-chips" style="margin-left:auto"></div>
-          <button class="btn-x" onclick="doScreenCompute()" title="Run the four compute gates on every compute deal in this filter that has an address">Screen for compute…</button>
-          <button class="btn-x" onclick="doImportReferrals()">Import referrals…</button></div>
+          <button class="btn-x" onclick="doScreenCompute()" title="Run the four compute gates on every compute deal in this filter that has an address">Screen for compute…</button></div>
         <div class="tbl-wrap"><table>
           <thead><tr><th>Site</th><th>Brought by</th><th>Stage</th><th class="num">Size</th>
             <th class="num">Capex</th><th class="num">Closed</th><th class="num">Drawn</th>
             <th>Age</th></tr></thead>
           <tbody id="pipe-rows"></tbody></table></div>
+      </div>
+      <div class="card" id="imp-card">
+        <div class="card-h"><h2>Imported deals</h2>
+          <div class="chips" id="imp-chips" style="margin-left:auto"></div>
+          <button class="btn-x" onclick="doImportReferrals()">Import deals…</button></div>
+        <div class="card-b" style="padding-bottom:12px"><div id="imp-note"></div></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Site</th><th>Brought by</th><th>Came in</th><th>Stage</th>
+            <th>Screening rep</th><th>Still to fill in</th><th>Age</th></tr></thead>
+          <tbody id="imp-rows"></tbody></table></div>
       </div>
     </section>
 
@@ -1009,6 +1018,14 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
             <th>Record</th><th>Source</th><th>Filed by</th><th>Status</th>
             <th class="num">Size</th><th>Suggested stage</th><th></th></tr></thead>
           <tbody id="inbox-rows"></tbody></table></div>
+      </div>
+      <div class="card" id="intake-card" style="display:none">
+        <div class="card-h"><h2>Intake links</h2>
+          <button class="btn-x" style="margin-left:auto" onclick="newIntakeLink()">New link</button></div>
+        <div class="card-b" style="padding-bottom:12px"><div id="intake-note"></div></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Link</th><th>Credited to</th><th class="num">Sites</th><th>Status</th><th></th></tr></thead>
+          <tbody id="intake-rows"></tbody></table></div>
       </div>
       <div class="card"><div class="card-b">
         <div class="sec-note" style="margin-top:0">Adoption asks one question the source
@@ -1190,7 +1207,7 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
      the four gates live in the function, not here. -->
 <script src="/omega-grid-atlas-client.js"></script>
 <script src="/omega-compute-lease.js"></script>
-<script src="/tenants/osa/ingest-data.js?v=7"></script>
+<script src="/tenants/osa/ingest-data.js?v=8"></script>
 <script src="/tenants/osa/grid-atlas-adapter.js?v=9"></script>
 <!-- Scores a site from the KMZ the site team already drew. Grid Atlas is a
      page with no API and the OGI endpoint is not configured, so this is the
@@ -1458,6 +1475,7 @@ function refresh(manual){
        assignee dropdown needs them (see optUsers). The rules already decide
        who may read them; asking is not a grant. */
     if ((A.can('approve_any') || A.can('write_deal')) && !S.invites.length) loadInvites();
+    if (canMakeIntakeLinks() && !S.intakeLoaded) loadIntakeLinks();
     /* Point the logo and the Portal button at THIS person's own tenant. Runs
        here because A.me() is resolved by now; harmless to repeat. */
     resolveHome();
@@ -1589,9 +1607,9 @@ function go(v,silent){
 function render(){
   if(!S.loaded) return;
   renderBanners(); renderDash(); renderPipeline(); renderPartners(); renderJD();
-  renderFunding(); renderSupply(); renderInbox(); renderWork();
+  renderFunding(); renderSupply(); renderInbox(); renderWork(); renderImported();
   renderMatrix(); renderPipelineWidget(); renderBoard(); renderVerify(); renderDesign();
-  renderSettings(); renderStaff(); renderInvites(); renderViewSwitch(); renderBuyer();
+  renderSettings(); renderStaff(); renderInvites(); renderIntakeLinks(); renderViewSwitch(); renderBuyer();
   renderUsers(); renderOrgs(); renderCounts();
   if(S.openId) renderDrawer();
 }
@@ -1856,6 +1874,97 @@ function renderPipeline(){
       + '</tr>'; }).join('');
 }
 function setPipe(k){ S.pipeFilter=k; render(); }
+
+/* ── IMPORTED DEALS ─────────────────────────────────────────────────────
+   Every deal that came in from somewhere else rather than being typed in
+   here: a spreadsheet (importBatch), a record adopted from the editor, the
+   intake queue or the marketplace (adoptedFrom), the JV agent's upload or a
+   shareable intake link (their channel). They are ordinary deals and stay in
+   the list above too; this section is where they are worked as a batch,
+   because an imported deal arrives with only what the source knew. "Still
+   to fill in" names what its drawer would show blank, and the next gate's
+   needs, so the person filling them in knows where to start. */
+var IMP_KINDS=[{k:'all',l:'All'},{k:'sheet',l:'Spreadsheet'},{k:'adopted',l:'Adopted'},
+               {k:'agent',l:'Agent'},{k:'intake',l:'Intake link'},{k:'gaps',l:'Needs filling in'}];
+function importSource(d){
+  var ch=String(d.origination.channel||'');
+  if(ch==='Intake link') return {k:'intake',l:'Intake link'};
+  if(ch==='Agent') return {k:'agent',l:'JV agent'};
+  if(d.adoptedFrom) return {k:'adopted',l:ch||'Adopted'};
+  if(d.importBatch) return {k:'sheet',l:'Spreadsheet'};
+  return null;
+}
+function importGaps(d){
+  var out=[];
+  if(!d.projectType) out.push('Project type');
+  if(!d.address) out.push('Address');
+  if(d.sizeMw==null) out.push('Size');
+  if(d.energy.monthlyBillUsd==null && d.energy.annualKwh==null) out.push('Bill or annual kWh');
+  if(!d.assignment.rep) out.push('Screening rep');
+  if(d.grid.score==null) out.push('Grid score');
+  if(!(d.links||[]).length) out.push('Files');
+  return out;
+}
+function nextGate(d){
+  if(F.isExit(d.stage)) return null;
+  var here=F.stageOf(d.stage).rank, next=null;
+  F.STAGES.forEach(function(st){ if(!next && st.rank>here) next=st; });
+  if(!next) return null;
+  var miss=(F.missingFor(d,next.key)||[]).map(fieldLabel);
+  return { label:next.label, miss:miss };
+}
+function impRows(k){
+  return S.deals.filter(function(d){
+    if(d.stage==='discarded') return false;
+    var src=importSource(d); if(!src) return false;
+    if(k==='all') return true;
+    if(k==='gaps') return importGaps(d).length>0;
+    return src.k===k;
+  });
+}
+function renderImported(){
+  var card=document.getElementById('imp-card'); if(!card) return;
+  var k=S.impFilter||'all';
+  document.getElementById('imp-chips').innerHTML=IMP_KINDS.map(function(c){
+    return '<button class="chip'+(k===c.k?' on':'')+'" onclick="setImp(\''+c.k+'\')">'
+      + c.l+' <span class="mono">'+impRows(c.k).length+'</span></button>'; }).join('');
+  var all=impRows('all'), gaps=impRows('gaps').length;
+  document.getElementById('imp-note').innerHTML = all.length
+    ? '<div class="sub" style="font-size:13px">'+all.length+' imported deal'+(all.length===1?'':'s')
+      + (gaps?' \u00b7 <b>'+gaps+'</b> still missing something their drawer asks for':' \u00b7 all filled in')
+      + '. They are in the list above too. <b>Import deals\u2026</b> takes the template, which carries '
+      + 'every field a deal\u2019s drawer shows that a sheet can know.</div>'
+    : '<div class="sub" style="font-size:13px">Nothing imported yet. <b>Import deals\u2026</b> downloads the template or takes '
+      + 'a filled-in file; adopted records, the JV agent\u2019s uploads and intake-link submissions '
+      + 'land here too.</div>';
+  var rows=impRows(k).slice().sort(function(a,b){
+    return String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')); });
+  var host=document.getElementById('imp-rows');
+  if(!rows.length){ host.innerHTML='<tr><td colspan="7"><div class="empty"><b>Nothing here</b>'
+    +'No imported deals match this filter.</div></td></tr>'; return; }
+  host.innerHTML=rows.map(function(d){
+    var st=F.stageOf(d.stage), src=importSource(d), g=importGaps(d), nx=nextGate(d);
+    var batch=d.importBatch && src.k==='sheet' ? String(d.importBatch) : '';
+    return '<tr class="row" onclick="openDeal(\''+d.id+'\')">'
+      + '<td><div class="t-name">'+esc(d.name)+'</div><div class="t-sub">'+esc(d.address||'\u2014')
+      +   (d.categories.length?' \u00b7 '+d.categories.map(function(c){return c.toUpperCase();}).join(', '):'')
+      +   '</div></td>'
+      + '<td>'+(d.origination.partnerOrg
+          ? esc(d.origination.partnerName||A.orgName(d.origination.partnerOrg))
+          : '<span style="color:var(--warn);font-weight:600">Unattributed</span>')+'</td>'
+      + '<td><div>'+esc(src.l)+'</div>'
+      +   (batch?'<div class="t-sub" title="'+esc(batch)+'">'+esc(batch.length>34?batch.slice(0,33)+'\u2026':batch)+'</div>':'')
+      +   '<div class="t-sub mono">'+esc(F.fmtDate(d.origination.referredAt||d.createdAt))+'</div></td>'
+      + '<td><span class="pill" style="background:'+st.color+'18;color:'+st.color+'">'
+      +   '<span class="dot"></span>'+esc(st.label)+'</span></td>'
+      + '<td style="font-size:12.5px">'+(d.assignment.rep?esc(d.assignment.rep)
+          :'<span style="color:var(--warn)">nobody yet</span>')+'</td>'
+      + '<td style="font-size:12.5px">'+(g.length?esc(g.join(' \u00b7 ')):'<span class="sub">Nothing \u2014 complete</span>')
+      +   (nx&&nx.miss.length?'<div class="t-sub">'+esc(nx.label)+' needs: '+esc(nx.miss.join(' \u00b7 '))+'</div>':'')+'</td>'
+      + '<td class="mono" style="font-size:12px">'+(F.ageDays(d)!=null?F.ageDays(d)+'d':'\u2014')+'</td>'
+      + '</tr>'; }).join('');
+}
+function setImp(k){ S.impFilter=k; renderImported(); }
 
 /* ── The pipeline widget on the matrix view ────────────────────────────────
    Feeds /omega-pipeline.js the same STAGES the gates come from, and defines
@@ -4294,8 +4403,8 @@ function renderWork(){
    skips them so they cannot land as real deals. */
 function doImportReferrals(){
   Forms.open({
-    title:'Import referrals',
-    intro:'For a batch that arrives as a list rather than one at a time.',
+    title:'Import deals',
+    intro:'For a batch that arrives as a list rather than one at a time. Imported deals are listed together under Imported deals on the Pipeline.',
     fields:[
       {type:'static',html:'<b>Start with the template.</b> It has the exact columns, two '
         + 'filled-in example rows showing what each one wants, and it uploads back with '
@@ -4309,6 +4418,11 @@ function doImportReferrals(){
         + 'they advance to Screening and get an editor project in the same upload. A '
         + '<i>Ref</i> column (the partner\u2019s own site id) lets their scorecard land on the right '
         + 'deal and makes a re-upload an update instead of a second copy.'},
+      {type:'static',html:'<b>Fill in what the deal\u2019s drawer asks for.</b> Besides the site, '
+        + 'the template takes the client, project type and categories, site notes and energy (bill, '
+        + 'annual kWh, meters, peak load), the contact, the <i>screening rep</i>, the <i>OSA budget</i> '
+        + 'and a <i>Files link</i> to the site\u2019s folder. Grid score and the prescreen are measured '
+        + 'here after import, never copied from a sheet.'},
       {key:'what',type:'radio',label:'What now',required:true,value:'template',
         options:[
           {value:'template',label:'Download the template',
@@ -5093,6 +5207,82 @@ function doResendInvite(email){
    osa.clearskyomega.com; served from omega-core the same expression names a
    URL that 404s, and it was going into invitations. */
 function osaUrl(){ return location.origin + location.pathname; }
+
+/* ── INTAKE LINKS ─────────────────────────────────────────────────────
+   A link anyone can open to submit a site: /site-intake?l=il_…  Each
+   submission lands here at Referred, credited to the org the link was made
+   for, channel "Intake link". The browser never writes intake_links (the
+   rules close it); /api/site-intake makes, lists and closes them and checks
+   the role again (api/_lib/intake-links.js). The JV's agent can make the
+   same links through /api/agent/intake-links. */
+function canMakeIntakeLinks(){
+  return A.can('approve_any') || A.can('approve_scoped') || A.can('approve_own_org');
+}
+function loadIntakeLinks(){
+  S.intakeLoaded = true;
+  return apiPost('/api/site-intake', { action:'list' }).then(function(j){
+    S.intakeLinks = (j && j.links) || []; S.intakeErr = ''; renderIntakeLinks();
+  }, function(e){ S.intakeLinks = []; S.intakeErr = (e && e.message) || 'Could not load the links'; renderIntakeLinks(); });
+}
+function renderIntakeLinks(){
+  var card = document.getElementById('intake-card'); if(!card) return;
+  if(!canMakeIntakeLinks()){ card.style.display='none'; return; }
+  card.style.display='';
+  var links = S.intakeLinks || [];
+  document.getElementById('intake-note').innerHTML = S.intakeErr
+    ? '<div class="banner warn">'+esc(S.intakeErr)+'</div>'
+    : '<div class="banner info">Send a link to anyone — a landowner, a broker, a partner. They fill in '
+      + 'one form (with a Google Earth file if they have one) and the site lands in the pipeline at '
+      + '<b>Referred</b>, credited to the organisation on the link. You are emailed each one. A link '
+      + 'reads nothing back; close it here when it has done its job.</div>';
+  document.getElementById('intake-rows').innerHTML = links.length ? links.map(function(l){
+    var status = l.revoked ? 'Closed' : (l.active ? 'Open' : 'Expired');
+    return '<tr><td><div class="t-name">'+esc(l.label)+'</div>'
+      + '<div class="t-sub mono" style="font-size:11.5px;word-break:break-all">'+esc(l.url)+'</div></td>'
+      + '<td>'+esc(l.partnerName || A.orgName(l.orgId) || l.orgId)+'</td>'
+      + '<td class="num">'+esc(String(l.count||0))+'</td>'
+      + '<td>'+esc(status)+'</td>'
+      + '<td>'+(l.active ? '<button class="btn-x" onclick="copyIntakeLink(\''+esc(l.id)+'\')">Copy</button> '
+      + '<button class="btn-x danger" onclick="closeIntakeLink(\''+esc(l.id)+'\')">Close</button>' : '')+'</td></tr>';
+  }).join('') : '<tr><td colspan="5" class="t-sub">No links yet. <b>New link</b> makes one.</td></tr>';
+}
+function copyIntakeLink(id){
+  var l = (S.intakeLinks||[]).filter(function(x){ return x.id===id; })[0]; if(!l) return;
+  var done = function(){ toast('Link copied'); };
+  if(navigator.clipboard && navigator.clipboard.writeText)
+    navigator.clipboard.writeText(l.url).then(done, function(){ toast('Copy it from the row: '+l.url); });
+  else toast('Copy it from the row: '+l.url);
+}
+function newIntakeLink(){
+  var pick = A.can('approve_any') || A.can('approve_scoped');
+  var fields = [
+    {key:'label',type:'text',label:'What is this link for',required:true,
+      value:'', placeholder:'e.g. Landowner outreach — West Texas'}
+  ];
+  if(pick) fields.push({key:'org',type:'orgpick',label:'Credit the sites to (email domain)',required:true,
+      options:optOrgs(), value:String((A.me&&A.me()&&A.me().orgId)||''),
+      validate:function(v){ return A.validateDomain(v); }});
+  else fields.push({type:'static',html:'Sites that come in through it are credited to your organisation.'});
+  Forms.open({ title:'New intake link', fields:fields, submitLabel:'Make the link' }).then(function(v){
+    if(!v) return;
+    var body = { action:'create', label:v.label };
+    if(v.org){ body.org = v.org; body.partnerName = A.orgName(v.org) || ''; }
+    apiPost('/api/site-intake', body).then(function(j){
+      S.intakeLinks = [j.link].concat(S.intakeLinks||[]); renderIntakeLinks();
+      copyIntakeLink(j.link.id);
+    })['catch'](function(e){ toast((e&&e.message)||'Could not make the link',true); });
+  });
+}
+function closeIntakeLink(id){
+  Forms.confirm({ title:'Close this link?',
+    fields:[{type:'static',html:'Anyone who opens it will be told it is closed. Sites already submitted stay in the pipeline.'}],
+    submitLabel:'Close the link'
+  }).then(function(ok){
+    if(!ok) return;
+    apiPost('/api/site-intake', { action:'revoke', id:id }).then(function(){ toast('Closed'); return loadIntakeLinks(); })
+     ['catch'](function(e){ toast((e&&e.message)||'Could not close the link',true); });
+  });
+}
 
 function doRevokeInvite(email){
   Forms.confirm({ title:'Withdraw the invitation?', intro:email,

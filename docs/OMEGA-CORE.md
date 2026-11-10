@@ -263,6 +263,97 @@ line, the lease, the compute economics, bankability, the five years and the
 assumptions) or the *full report* (everything, with every chipset, the
 sensitivity grid and, for staff, the build-up).
 
+## Contracted offtake (Lightsmith) — `api/_lib/compute-contract.js` (2026-10-25)
+
+For Solela Capital's compute-site diligence: *if Lightsmith Energy finds a
+buyer who contracts this site's compute for N years at $X a GPU-hour and takes
+10% of compute revenue, what do we earn?* The skid model above only sells at a
+market reference, 85% utilised and falling 8% a year. `contractCase(input,
+opts)` is the take-or-pay case. It builds a `deal` and runs the skid model's
+own `cashFlow(c, cap, capex, I, lease, deal)` for the whole site: one engine,
+one chipset library, the price read off `PRODUCT.systemCostUsd` and the rent
+card off `RATE_CARD`. It is its own file because `omega-core.js` already
+requires the model. Without a `deal` the model's answer is byte for byte what
+it was.
+
+| Input | Default | Rule |
+|---|---|---|
+| `chipset` | `h100` | a key of the model's library |
+| `units` or `availableKw` | one skid | `availableKw` ÷ the model's `capacity().facilityKw` a skid (73.44 kW for the H100), whole skids; both given, the fewer. `sizing.byChipset` sizes every chipset on the same power |
+| `unitCostUsd` | `PRODUCT.systemCostUsd`, $764,000 | the model's chipset-scaled estimate rides beside it (below) |
+| `contract.termMonths` | 72, Lightsmith's 6-year standard | the model's term; a loan maturity past it is set aside |
+| `contract.pricePerGpuHour` | — | needed for a priced answer; without it, the sizing and `priceFor` |
+| `contract.takeOrPayPct` | 100 | paid on the hours the skid is up (98%), used or not: no utilisation, ramp or price decline |
+| `contract.escalatorPct` | 0 | steps on each contract anniversary |
+| `contract.merchant` | false | sells the uncontracted hours at the public spot reference with the model's utilisation, ramp and decline |
+| `contract.partner` | Lightsmith Energy, 10% | of gross compute revenue, contracted and merchant; its own line, never in opex; `false` for none |
+| `site.route` | `lease` | `own`: nothing. `buy`: `purchasePriceUsd` in the capital and the loan; `landResidualPct` (default 0) counts it back. `lease` / `takeover`: `rentMonthly` for the whole site, else `rentPerKwMonth` × 75 kW a skid, else the card's floor ($11,250 a skid, a market reference); `rentEscalatorPct`, default the card's 2.5%; `revenueSharePct` of gross, with or without a rent |
+| `debt` | the model's: 70% LTC, 10%, 60 months, 6 interest-only, 10% balloon, 2% fee, 3-month reserve | Lightsmith's 80% (the cards as collateral, unconfirmed) only when typed |
+| `residualPct` | 10 | of the equipment, never the land |
+| `operating` | the model's | power price, PUE, uptime, the cost shares, fixed cost a skid, escalations; utilisation, ramp and decline for merchant hours |
+
+Every `…Pct` is a percent (10 means 10%); one typed under 1 is read as typed
+and the notes say so. A figure outside its range is set aside and named in
+`notes`, and so is every default used.
+
+It returns `sizing`, `capex`, `debt`, `returns`, `lines`, `totals`,
+`bankability` (the model's), `priceFor`, `priceForPayback`, `solved[]`,
+`ladder[]`, `ladderBasis`, `needs[]` and `notes[]`. `returns` is
+`projectIrrPct`, `equityIrrPct`, `roiPct`, `paybackMonths`,
+`equityPaybackMonths`, `projectMultiple`, `equityMultiple`,
+`irrWithoutFeePct` (the same case at a 0% fee), `revenuePerYear` and
+`partnerFeePerYear` (the term's totals over its years). **`roiPct` is the
+project cash multiple − 1 over the term**.
+`lines` is one row per contract year: revenue (contracted, merchant), partner
+fee, power, site cost (rent + revenue share), opex (everything else), EBITDA,
+debt service, residual and the project and equity cash flows. `priceFor`
+{ 25, 30, 55 } and `priceForPayback` { 24 } are the lowest contract price,
+rounded up to the next 0.01¢, that gives that project IRR or that payback on
+the same engine; `solved[]` says what each price does. The equity IRR dates
+the equity put in at month 0, as the project IRR dates the capital. The
+model's own figure dates month 1 at month 0 and reads higher (335.9% against
+260.9% on the pinned case).
+
+**The price ladder** is for the Solela portfolio's contract-price slider,
+which reads it and computes no return of its own. `ladder[]` gives, at each
+step, `{ price, projectIrrPct, paybackMonths, projectMultiple, roiPct,
+irrWithoutFeePct, revenuePerYear, partnerFeePerYear }`, each from the same
+function that gives `returns`, so the point at the contract price IS the
+answer. It runs ±40% around the contract price given. With no price, it runs
+around the chipset's reference price: its public spot price, else its
+on-demand price, which is site-model's precedence. An H100 is then $2.46 and
+the ladder $1.50–$3.40. A chipset with neither has no ladder until a price is
+given. The step is the finest of $0.05 and $0.10 that keeps it to 41 points,
+coarsening to $0.25 and up only for a price over about $5. The points are
+centred on the price, so the price given is always one of them.
+`ladderBasis` says the centre, its basis, the step and the range;
+`opts.ladder: false` skips it (about 5 of the 14 ms a call).
+
+**The pinned case** (H100, one skid, $2.00, 72 months, 10% fee, 80% LTC as
+typed, $11,250 a month rising 2.5%): **53.10% project IRR, payback month 26**.
+30% needs **$1.6884** and pays back in month 36; a 24-month payback needs
+**$2.0559** (57.33%). Lightsmith's 30% and its 2-year payback are not the same
+contract price. The first engine run's figures (54.17% at $2.00, 24.91% at
+$1.60, 30% at $1.67) reproduce exactly with the rent escalator typed as 0.025.
+The model's lease reads that as 0.025% a year, so the rent never rose. With
+the rent rising 2.5% the same prices give 53.10%, 23.47% and 28.64%. The
+ladder table sent with the slider request has the same reading: $1.40 / $2.00
+/ $2.60 at 10.13% / 54.17% / 102.19%. At 2.5% those prices give 8.32% /
+53.10% / 101.39%; both are pinned.
+
+⚠ **The recorded price against the cards.** The notes and `capex` set the
+recorded $764,000 beside the model's chipset-scaled estimate for 48 H100s:
+$1.60M–$2.27M a skid before the controller. On the estimate's midpoint the
+pinned case earns 3.31% (payback month 72, minimum DSCR 0.74), and 30% needs
+$2.977. Confirm what the recorded skid price includes before relying on any
+of these returns.
+
+Not built: taxes; the cards' value beyond the residual assumption; SLA credits
+beyond the uptime; the offtaker's credit; a merchant tail after the contract
+ends; an assignment fee to take over a host agreement. Held by
+`scripts/tests/tcomputecontract.js` (in `npm test`; `npm run
+test:computecontract`).
+
 ## The skid on a portfolio site — the compute model runs by itself (2026-10-13)
 
 Tommy, 13 October 2026, over a Topanga Terrace site whose Site Map carried one
@@ -483,6 +574,7 @@ the stamp at placement, the skid kept off the host's load (the real `derTotals`
 and `omegaDer` run against a drawing), the Output button and its owner, the
 client's `collect()` against a fake session, the project field, and the R60.
 `scripts/test-package-producers.js` holds the packaged door.
+`scripts/tests/tcomputecontract.js` holds the contracted offtake.
 
 ## Not built
 

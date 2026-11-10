@@ -1,0 +1,4 @@
+SPP complete projects, 2020 through 2022, had a mean interconnection cost of $57/kW in real 2022 dollars.
+PJM complete projects doubled on average (mean: $42 to $84/kW, median: $18 to $30/kW).
+MISO complete projects, average costs have nearly doubled (to $102/kW) for 2019 through 2021.
+Estimated network upgrade costs have grown since 2018, to $57/kW for complete projects in MISO.

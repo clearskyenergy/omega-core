@@ -19,7 +19,7 @@ module.exports = A.handler(function (req, res) {
   if (req.method !== 'GET') throw A.httpError(405, 'GET only');
   return A.authenticate(req).then(function(caller){
     if (!caller || !(caller.orgId || caller.staff)) throw A.httpError(403,'Workspace sign-in required');
-    return X.withCaller(caller,'lite',{produce:false}).then(function(){
+    return X.withModuleAnyPlan(caller,'maximus',{produce:false}).then(function(){return X.withCaller(caller,'lite',{produce:false});}).then(function(){
       res.setHeader('Cache-Control','private, no-store');return publicStatus(process.env);
     });
   });

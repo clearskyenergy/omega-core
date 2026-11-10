@@ -74,7 +74,8 @@ module.exports = function(req,res) {
   var A=require('./_lib/admin');
   return A.authenticate(req).then(function(caller){
     if(!caller || !(caller.orgId || caller.staff)) throw A.httpError(403,'Workspace sign-in required');
-    return require('./_lib/package-access').withCaller(caller,'lite',{produce:false});
+    var X = require('./_lib/package-access');
+    return X.withModuleAnyPlan(caller,'maximus',{produce:false}).then(function(){return X.withCaller(caller,'lite',{produce:false});});
   }).then(function(){serve(req,res);},function(e){fail(res,e.status||403,'Workspace access is required.');});
 };
 
