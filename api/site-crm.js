@@ -483,6 +483,8 @@ var handler = A.handler(async function (req, res) {
     return { org: org, sites: sites, archivedIncluded: withArchived, canEdit: reader.edit, canArchive: reader.admin,
       /* the funding list, where the workspace funds its own sites: the committee's names and whether this person decides (null elsewhere) */
       funding: await ASD.info({ root: root, caller: caller, by: by }),
+      /* the workspace's review board, where its settings name one (null elsewhere) */
+      review: await ASD.reviewInfo({ root: root, caller: caller, by: by }),
       next: snap.docs.length > LIST_CAP ? snap.docs[LIST_CAP - 1].id : null,
       limited: snap.docs.length > LIST_CAP,
       diligence: dj ? { pipeline: dj.pipeline, tally: dj.tally, counted: dj.counted, limited: dj.limited, clients: dj.clients, unassigned: dj.unassigned, schema: dj.schema, brand: dj.brand } : null };

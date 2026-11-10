@@ -1224,6 +1224,7 @@ function seed() {
     try {
       var asPm = await call('GET', {}, PM), asBoss = await call('GET', {}, BOSS);
       assert.deepEqual(asPm.funding, { mode: 'committee', name: 'Finance committee', members: ['The Boss'], canDecide: false }); assert.equal(asBoss.funding.canDecide, true);
+      assert.equal(asPm.review, null); assert.equal(asPm.sites.filter(function (x) { return x.id === made.id; })[0].assessment.gates, null);   /* no gates and no review in these settings */
       await rejects(call('POST', { action: 'send-to-finance', ids: [made.id] }, PM), 409, /funds its own sites/); assert.equal(stored(made.id).finProjectId, undefined);
       await rejects(call('POST', { action: 'assess-fund-submit', site: made.id, uses: ['compute'] }, PM), 409, /Screen the site first/);
       var cur = stored(made.id); db.seed(O + '/sites/' + made.id, Object.assign({}, cur, { assessment: Object.assign({}, cur.assessment, { screen: { complete: true, at: new Date().toISOString(), located: { usable: true }, errors: [] } }) }));

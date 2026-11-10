@@ -94,13 +94,21 @@ function stateOf(site) { var a = site.address && typeof site.address === 'object
 function configOf(billing) {
   var raw = obj(billing && billing[CONFIG_KEY]), c = obj(raw.compute), ref = obj(c.reference), fu = obj(raw.funding);
   function within(v, lo, hi) { var n = num(v); return n != null && n >= lo && n <= hi ? n : null; }
+  /* the people a workspace names: each by the address they sign in on, once */
+  function people(list) {
+    var out = [];
+    (Array.isArray(list) ? list : []).slice(0, 20).forEach(function (m) {
+      m = obj(m); var email = String(m.email || '').toLowerCase().trim();
+      if (!/^[^@\s<>"']+@[^@\s<>"']+\.[a-z]{2,}$/.test(email) || out.some(function (x) { return x.email === email; })) return;
+      out.push({ name: clean(m.name, 80) || email.split('@')[0], email: email });
+    });
+    return out;
+  }
   /* the funding list: a workspace that funds its own sites names who decides */
-  var members = [];
-  (Array.isArray(fu.members) ? fu.members : []).slice(0, 20).forEach(function (m) {
-    m = obj(m); var email = String(m.email || '').toLowerCase().trim();
-    if (!/^[^@\s<>"']+@[^@\s<>"']+\.[a-z]{2,}$/.test(email) || members.some(function (x) { return x.email === email; })) return;
-    members.push({ name: clean(m.name, 80) || email.split('@')[0], email: email });
-  });
+  var members = people(fu.members);
+  /* the workspace's own gates (its operating rules, never core's) and who sits on its review */
+  var ga = obj(raw.gates), rv = obj(raw.review), reviewers = people(rv.members);
+  var gates = { minKva: within(ga.minKva, 1, 1000000), minLeaseYears: within(ga.minLeaseYears, 0.1, 99), irrHurdlePct: within(ga.irrHurdlePct, 0, 500) };
   return { bess: obj(raw.bess), supercharger: { assumptions: obj(obj(raw.supercharger).assumptions), sizing: obj(obj(raw.supercharger).sizing) },
     compute: { chipset: typeof c.chipset === 'string' ? c.chipset : null, pue: num(c.pue) > 1 && num(c.pue) < 2.5 ? num(c.pue) : null,
       partnerName: typeof c.partnerName === 'string' ? c.partnerName.slice(0, 80) : null, partnerFeePct: num(c.partnerFeePct) >= 0 && num(c.partnerFeePct) <= 50 ? num(c.partnerFeePct) : null,
@@ -109,7 +117,9 @@ function configOf(billing) {
       basis: c.basis === 'partner' ? 'partner' : null,
       reference: { capexUsdPerMw: within(ref.capexUsdPerMw, 1e5, 5e8), revenueUsdPerMwYear: within(ref.revenueUsdPerMwYear, 1e4, 5e8), utilityUsdPerMwYear: within(ref.utilityUsdPerMwYear, 0, 5e8),
         gpusPerMw: within(ref.gpusPerMw, 1, 1e5), racksPerMw: within(ref.racksPerMw, 1, 1000), chipset: typeof ref.chipset === 'string' && CM.chipset(ref.chipset) ? ref.chipset : null } },
-    funding: fu.mode === 'committee' && members.length ? { mode: 'committee', name: clean(fu.name, 60) || 'Finance committee', members: members } : null };
+    funding: fu.mode === 'committee' && members.length ? { mode: 'committee', name: clean(fu.name, 60) || 'Finance committee', members: members } : null,
+    gates: gates.minKva != null || gates.minLeaseYears != null || gates.irrHurdlePct != null ? gates : null,
+    review: reviewers.length ? { name: clean(rv.name, 60) || 'Executive Review', members: reviewers } : null };
 }
 function clean(v, n) { return typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n) || null : null; }
 
@@ -609,6 +619,97 @@ function fundingInfo(cfg, email) {
   return f ? { mode: f.mode, name: f.name, members: f.members.map(function (m) { return m.name; }), canDecide: !!committeeMember(cfg, email) } : null;
 }
 
+/* ── THE GATES AND THE REVIEW (2026-11-09, Tommy, of his company's operating
+   system: "this is our company how we work see that this is supported by
+   what we are doing here"). A workspace's own pipeline, read off what is
+   already on the site, in its own order:
+     G0 intake and site control   G1 power (a transformer of at least the
+     size it prefers)   G2 lease (the years it wants left)   G3 the pathway
+     picked   G4 the return (its hurdle, and its committee's approval)
+     G5 shovel ready (the checklist)   G6 the review's decision
+   Each is pass, fail or OPEN: open means not known or not done yet, never
+   failed. The thresholds and the people are the workspace's settings
+   (portfolioAssessment.gates and .review); core carries none, and a
+   workspace with neither has no gates. DERIVED at read time from the
+   record: nothing here is stored but a reviewer's own vote. ── */
+var REVIEW_VOTES = ['own', 'flip'], VOTE_WORD = { own: 'Own and operate', flip: 'Portfolio / flip' };
+function reviewer(cfg, email) {
+  var r = cfg && cfg.review, e = String(email || '').toLowerCase().trim();
+  return r && e ? r.members.filter(function (m) { return m.email === e; })[0] || null : null;
+}
+/* the review as the pages read it: who has voted, who has not, and the decision when EVERY member has voted the same way */
+function reviewView(rv, cfg) {
+  var r = cfg && cfg.review; if (!r) return null;
+  var votes = rv && rv.votes && typeof rv.votes === 'object' ? rv.votes : {};
+  var rows = r.members.map(function (m) { var v = votes[m.email.replace(/\./g, '_')] || null; return { name: m.name, vote: v && REVIEW_VOTES.indexOf(v.vote) >= 0 ? v.vote : null, at: v ? v.at || null : null, note: v ? v.note || null : null }; });
+  var cast = rows.filter(function (x) { return x.vote; }), waiting = rows.filter(function (x) { return !x.vote; }).map(function (x) { return x.name; });
+  var same = cast.length > 0 && cast.every(function (x) { return x.vote === cast[0].vote; }), outcome = same && !waiting.length ? cast[0].vote : null, split = cast.length > 1 && !same;
+  var last = cast.map(function (x) { return x.at || ''; }).sort().pop() || null;
+  return { name: r.name, votes: rows, cast: cast.length, of: rows.length, waiting: waiting, split: split, outcome: outcome, outcomeLabel: outcome ? VOTE_WORD[outcome] : null, decidedAt: outcome ? last : null,
+    words: outcome ? r.name + ': ' + VOTE_WORD[outcome] + ', all ' + rows.length + ' agreed' : split ? r.name + ' is split: ' + cast.map(function (x) { return x.name + ' ' + VOTE_WORD[x.vote].toLowerCase(); }).join(', ') + (waiting.length ? '; waiting on ' + waiting.join(', ') : '')
+      : cast.length ? cast.length + ' of ' + rows.length + ' for ' + VOTE_WORD[cast[0].vote].toLowerCase() + '; waiting on ' + waiting.join(', ') : 'Not reviewed: waiting on ' + waiting.join(', ') };
+}
+/* one reviewer's vote, or its withdrawal. ctx: { by, now, config } */
+function reviewChange(cur, input, ctx) {
+  input = input || {}; ctx = ctx || {}; cur = cur && typeof cur === 'object' ? cur : {};
+  var cfg = ctx.config, r = cfg && cfg.review;
+  if (!r) throw fail(409, 'This workspace has no review board in its settings');
+  var m = reviewer(cfg, ctx.by);
+  if (!m) throw fail(403, r.name + ' is ' + r.members.map(function (x) { return x.name; }).join(', ') + '. Only they vote');
+  var vote = String(input.vote || '').toLowerCase().trim(), note = clean(input.note, 500);
+  if (vote !== 'clear' && REVIEW_VOTES.indexOf(vote) < 0) throw fail(400, 'A vote is own (own and operate) or flip (portfolio / flip); clear withdraws it');
+  var votes = Object.assign({}, cur.votes && typeof cur.votes === 'object' ? cur.votes : {}), key = m.email.replace(/\./g, '_');   /* a dot in a map key is a path to Firestore */
+  if (vote === 'clear') delete votes[key]; else votes[key] = { vote: vote, name: m.name, by: m.email, at: ctx.now || null, note: note };
+  return { votes: votes, history: (Array.isArray(cur.history) ? cur.history : []).concat([{ vote: vote, by: m.email, name: m.name, at: ctx.now || null, note: note }]).slice(-40) };
+}
+/* site: the flat record. res: the assessment's answer. a: the stored assessment (decision, funding, review) */
+function gatesOf(site, res, cfg, a) {
+  cfg = cfg || {}; var G = cfg.gates, R = cfg.review; if (!G && !R) return null;
+  site = site || {}; res = res || {}; a = a || {}; G = G || {};
+  var out = [], rd = res.readiness || {}, p = res.power || {};
+  function item(key) { var hit = null; (rd.sections || []).forEach(function (s) { (s.items || []).forEach(function (i) { if (i.key === key) hit = i; }); }); return hit; }
+  function add(key, label, state, words) { out.push({ key: key, label: label, state: state, words: words }); }
+  /* G0 */
+  var ctl = item('control-evidence'), ctlSec = (rd.sections || []).filter(function (s) { return s.key === 'control'; })[0];
+  var ctlDone = ctl ? ctl.state === 'done' : !!(ctlSec && ctlSec.done > 0);
+  add('G0', 'Intake & site control', ctlDone ? 'pass' : 'open', ctlDone ? 'On the register, with site-control evidence on file' : 'On the register; the site-control document is not on file');
+  /* G1: the transformer, else the service as its kVA at the continuous rating */
+  if (G.minKva != null) {
+    var kva = num(p.transformerKva), svc = num(p.serviceCapacityKw), eq = kva != null ? kva : svc != null ? svc / CONTINUOUS : null;
+    add('G1', 'Power', eq == null ? 'open' : eq >= G.minKva ? 'pass' : 'fail', eq == null ? 'No transformer or service size on file to judge against the ' + fmt(G.minKva) + ' kVA preferred'
+      : (kva != null ? fmt(kva) + ' kVA' : fmt(svc) + ' kW of service (about ' + fmt(eq) + ' kVA)') + (eq >= G.minKva ? ': at or over the ' + fmt(G.minKva) + ' kVA preferred' : ': under the ' + fmt(G.minKva) + ' kVA preferred'));
+  }
+  /* G2 */
+  if (G.minLeaseYears != null) {
+    var t = num(site.termYearsRemaining);
+    add('G2', 'Lease', t == null ? 'open' : t >= G.minLeaseYears ? 'pass' : 'fail', t == null ? 'No lease term on file to judge against the ' + G.minLeaseYears + ' years wanted' : t + ' years left: ' + (t >= G.minLeaseYears ? 'at or over' : 'under') + ' the ' + G.minLeaseYears + ' years wanted');
+  }
+  /* G3: the pathway a person picked */
+  var dec = a.decision && a.decision.status === 'approved' ? a.decision : null, fd = a.funding && FUND_STATES.indexOf(a.funding.status) >= 0 && a.funding.status !== 'withdrawn' ? a.funding : null;
+  var picked = dec ? dec.uses || [] : fd ? fd.uses || [] : [], pickLabel = dec ? dec.label : fd ? fd.label : null, rec = res.recommend || {};
+  add('G3', 'Pathway', picked.length ? 'pass' : 'open', picked.length ? pickLabel + (dec ? ', approved for pre-development' : ', submitted for funding') : rec.best ? 'No pathway picked yet; ' + (rec.fits.filter(function (f) { return f.use === rec.best; })[0] || {}).label + ' shows the highest screening return' : 'No pathway picked; nothing fits the power on file');
+  /* G4: the hurdle on the pathway (the best use until one is picked), and the committee's approval where there is one */
+  var irrOf = { compute: res.compute && res.compute.economics && res.compute.economics.ok ? res.compute.economics.irrPct : null, bess: res.bess && res.bess.ok ? res.bess.returns.irrPct : null, supercharger: res.supercharger && res.supercharger.ok ? res.supercharger.returns.irrPct : null };
+  var judged = picked.length ? picked : rec.best ? [rec.best] : [], irrs = judged.map(function (u) { return irrOf[u]; }), known = irrs.filter(function (x) { return x != null; });
+  var low = known.length ? Math.min.apply(null, known) : null, hasFund = !!cfg.funding, approved = fd && fd.status === 'approved', declined = fd && fd.status === 'declined';
+  if (G.irrHurdlePct != null || hasFund) {
+    var hs = G.irrHurdlePct == null ? null : low == null || known.length < irrs.length ? 'open' : low >= G.irrHurdlePct ? 'pass' : 'fail';
+    var hw = G.irrHurdlePct == null ? 'No hurdle rate is set' : low == null ? 'No return to judge against the ' + G.irrHurdlePct + '% hurdle' : (judged.length > 1 ? 'the lowest of the pathway’s returns, ' : '') + low + '% ' + (low >= G.irrHurdlePct ? 'clears' : 'is under') + ' the ' + G.irrHurdlePct + '% hurdle' + (picked.length ? '' : ' (on the highest-returning use; no pathway is picked)');
+    var st = declined || hs === 'fail' ? 'fail' : (hs === 'pass' || hs == null) && (!hasFund || approved) && (hs != null || hasFund) ? 'pass' : 'open';
+    add('G4', 'Return', st, hw.charAt(0).toUpperCase() + hw.slice(1) + (hasFund ? '; ' + (approved ? 'approved by ' + (fd.decision && fd.decision.name || cfg.funding.name) : declined ? 'declined by ' + (fd.decision && fd.decision.name || cfg.funding.name) : fd ? 'with ' + cfg.funding.name.toLowerCase() : 'not yet submitted to ' + cfg.funding.name.toLowerCase()) : '') + '. A screening return, not the investment model');
+  }
+  /* G5 */
+  add('G5', 'Shovel ready', rd.applicable && rd.done === rd.applicable ? 'pass' : 'open', (rd.done || 0) + ' of ' + (rd.applicable || 0) + ' checklist items with evidence on file');
+  /* G6 */
+  if (R) { var rv = reviewView(a.review, cfg); add('G6', R.name, rv.outcome ? 'pass' : 'open', rv.words); }
+  var screen = out.filter(function (g) { return g.key === 'G1' || g.key === 'G2'; });
+  return { list: out, passed: out.filter(function (g) { return g.state === 'pass'; }).length, failed: out.filter(function (g) { return g.state === 'fail'; }).map(function (g) { return g.key; }), of: out.length,
+    screen: !screen.length ? null : screen.some(function (g) { return g.state === 'fail'; }) ? 'fail' : screen.every(function (g) { return g.state === 'pass'; }) ? 'pass' : 'open',
+    rules: { minKva: G.minKva == null ? null : G.minKva, minLeaseYears: G.minLeaseYears == null ? null : G.minLeaseYears, irrHurdlePct: G.irrHurdlePct == null ? null : G.irrHurdlePct } };
+}
+/* what the pages may know of the review: its name, its members' names and whether this caller votes */
+function reviewInfo(cfg, email) { var r = cfg && cfg.review; return r ? { name: r.name, members: r.members.map(function (m) { return m.name; }), canVote: !!reviewer(cfg, email), me: (reviewer(cfg, email) || {}).name || null } : null; }
+
 /* the facts the answer rests on: a change in any of them makes it stale */
 function inputHashOf(site, screen, parcel, cfg, upgrade) {
   site = site || {};
@@ -650,6 +751,8 @@ function listView(a, site, ctx) {
   if (r.readiness) r.readiness.sections = r.readiness.sections.map(function (s) { return { key: s.key, label: s.label, done: s.done, of: s.of }; });
   r.stale = r.inputHash !== inputHashOf(site, a.screen || null, a.parcel || null, cfg, a.upgrade || null);
   r.funding = fundingView(a.funding);
+  /* the gates read the STORED answer whole (the checklist's items), not the thinned row */
+  r.gates = gatesOf(site, a.result, cfg, a); r.review = reviewView(a.review, cfg);
   r.decision = a.decision && a.decision.status === 'approved' ? { status: 'approved', uses: a.decision.uses || [], label: a.decision.label || null, by: a.decision.by || null, at: a.decision.at || null, note: a.decision.note || null } : null;
   r.screenAt = a.screen && a.screen.at || null; r.parcelAt = a.parcel && a.parcel.at || null; r.by = a.by || null;
   r.located = a.screen && a.screen.located ? { precision: a.screen.located.precision || null, approximate: a.screen.located.approximate === true } : null;
@@ -660,5 +763,6 @@ function listView(a, site, ctx) {
 module.exports = { VERSION: VERSION, CONFIG_KEY: CONFIG_KEY, CONTINUOUS: CONTINUOUS, MODULARS: MODULARS, CHECKLIST: CHECKLIST, ITEM_KEYS: ITEM_KEYS, CHECK_STATES: CHECK_STATES,
   USES: USES, PREDEV_STATUS: PREDEV_STATUS, recommendOf: recommendOf, decisionOf: decisionOf, klassOf: klassOf, rateOf: rateOf, referenceOf: referenceOf,
   PAIR_MIN_KW: PAIR_MIN_KW, pairingOf: pairingOf, UPGRADE_STATES: UPGRADE_STATES, upgradeOf: upgradeOf, upgradeView: upgradeView, upgradeAdviceOf: upgradeAdviceOf,
+  REVIEW_VOTES: REVIEW_VOTES, reviewer: reviewer, reviewView: reviewView, reviewChange: reviewChange, reviewInfo: reviewInfo, gatesOf: gatesOf,
   FUND_STATES: FUND_STATES, committeeMember: committeeMember, fundingRequest: fundingRequest, fundingChange: fundingChange, fundingView: fundingView, fundingInfo: fundingInfo,
   configOf: configOf, powerOf: powerOf, computeOf: computeOf, readinessOf: readinessOf, verificationsOf: verificationsOf, inputHashOf: inputHashOf, assess: assess, listView: listView, stateOf: stateOf };

@@ -40,6 +40,12 @@
           approved or declined by a member of the committee signed in on a
           VERIFIED address (403 for anybody else, staff included). Each
           site answers for itself: a refusal names the site and why.
+     POST assess-review-vote { ids[] | site, vote: own|flip|clear, note? }
+          THE REVIEW, for a workspace whose settings name one
+          (portfolioAssessment.review; 409 elsewhere): one member's vote on
+          a site, own and operate or portfolio / flip, on a VERIFIED
+          address (403 for anybody else, staff included). The decision is
+          DERIVED: it stands when every member has voted the same way.
      GET  (one site, &assessment=1)  fullView(): the whole answer, with the
           yearly tables and the checklist
      GET  (register)  listJoin(): the row a site, without the tables
@@ -57,7 +63,7 @@
 'use strict';
 var AS = require('./assess'), G = require('./grid-screen'), D = require('./diligence'), BR = require('./site-bridge');
 
-var ACTIONS = ['assess-run', 'assess-screen-start', 'assess-screen-step', 'assess-check', 'assess-approve', 'assess-upgrade', 'assess-fund-submit', 'assess-fund-withdraw', 'assess-fund-decide'];
+var ACTIONS = ['assess-run', 'assess-screen-start', 'assess-screen-step', 'assess-check', 'assess-approve', 'assess-upgrade', 'assess-fund-submit', 'assess-fund-withdraw', 'assess-fund-decide', 'assess-review-vote'];
 var RUN_CAP = 50, SCREEN_IDS_CAP = 200, APPROVE_CAP = 200, MARK_CAP = 200, SCREEN_FRESH_DAYS = 7, PARCEL_TIMEOUT = 12000;
 
 function owns(action) { return ACTIONS.indexOf(String(action || '')) >= 0; }
@@ -323,8 +329,29 @@ function make(deps) {
     return { ok: true, action: action, count: n, done: out.done, refused: out.refused, funding: ids.length === 1 ? last : undefined, note: words + refusedWords(out.refused, names) };
   }
 
+  /* ── the review: one member's vote; the decision is every member's, derived ── */
+  async function review(c) {
+    var ids = idsOf(c), cfg = AS.configOf(await billingOf(c.root)), names = {}, last = null;
+    if (!cfg.review) throw fail(409, 'This workspace has no review board in its settings');
+    if (!AS.reviewer(cfg, c.by)) throw fail(403, cfg.review.name + ' is ' + cfg.review.members.map(function (m) { return m.name; }).join(', ') + '. Only they vote');
+    if (!(c.caller && c.caller.claims && c.caller.claims.email_verified === true)) throw fail(403, 'Confirm your email address first: a vote is recorded against a verified address');
+    var out = await each(c, ids, function (tx, sref, data) {
+      names[sref.id] = data.name || sref.id;
+      var a = Object.assign({}, data.assessment || {});
+      a.review = AS.reviewChange(a.review || null, c.b, { by: c.by, now: deps.now(), config: cfg });
+      tx.update(sref, { assessment: plain(a) });
+      last = AS.reviewView(a.review, cfg);
+      tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-review-vote', orgId: c.org, siteId: sref.id, by: c.by, at: deps.now(), vote: String(c.b.vote || ''), outcome: last.outcome, note: typeof c.b.note === 'string' ? c.b.note.slice(0, 500) : null }));
+      return { outcome: last.outcome };
+    });
+    var n = out.done.length, v = String(c.b.vote || '').toLowerCase();
+    return { ok: true, count: n, done: out.done, refused: out.refused, review: ids.length === 1 ? last : undefined,
+      note: (v === 'clear' ? 'Your vote is withdrawn on ' : 'Your vote (' + (v === 'own' ? 'own and operate' : 'portfolio / flip') + ') is recorded on ') + n + ' site' + (n === 1 ? '' : 's') + '.' + (ids.length === 1 && last ? ' ' + last.words + '.' : '') + refusedWords(out.refused, names) };
+  }
+
   async function post(c) {
     var action = String(c.b.action || '');
+    if (action === 'assess-review-vote') return review(c);
     if (action === 'assess-upgrade') return upgrade(c);
     if (action === 'assess-fund-submit') return fund(c, 'submit');
     if (action === 'assess-fund-withdraw') return fund(c, 'withdraw');
@@ -342,8 +369,11 @@ function make(deps) {
     var result = compute(ref.id, data, cfg);
     return { result: result, ranAt: a.at || null, ranBy: a.by || null, stored: !!a.result, stale: !!a.result && a.result.inputHash !== result.inputHash,
       screen: screenOf(data), parcel: a.parcel || null, decision: a.decision && a.decision.status === 'approved' ? a.decision : null, uses: AS.USES,
-      funding: AS.fundingView(a.funding), fundingHistory: a.funding && Array.isArray(a.funding.history) ? a.funding.history : [], upgradeHistory: a.upgrade && Array.isArray(a.upgrade.history) ? a.upgrade.history : [] };
+      funding: AS.fundingView(a.funding), fundingHistory: a.funding && Array.isArray(a.funding.history) ? a.funding.history : [], upgradeHistory: a.upgrade && Array.isArray(a.upgrade.history) ? a.upgrade.history : [],
+      gates: AS.gatesOf(flat(ref.id, data), result, cfg, a), review: AS.reviewView(a.review, cfg) };
   }
+  /* the workspace's review board, as the pages may know it (null where there is none) */
+  async function reviewInfo(c) { return AS.reviewInfo(AS.configOf(await billingOf(c.root)), c.caller && c.caller.claims && c.caller.claims.email_verified === true ? c.by : null); }
   /* what the pages may know of the funding list: the committee's names and whether this caller decides; null where there is none */
   async function info(c) { return AS.fundingInfo(AS.configOf(await billingOf(c.root)), c.caller && c.caller.claims && c.caller.claims.email_verified === true ? c.by : null); }
   async function fundingMode(c) { return !!AS.configOf(await billingOf(c.root)).funding; }
@@ -353,7 +383,7 @@ function make(deps) {
     docs.forEach(function (d) { var data = typeof d.data === 'function' ? d.data() : d; rows[d.id] = AS.listView(data && data.assessment, flat(d.id, data), { config: cfg }); });
     return rows;
   }
-  return { post: post, fullView: fullView, listJoin: listJoin, parcelOf: parcelOf, info: info, fundingMode: fundingMode };
+  return { post: post, fullView: fullView, listJoin: listJoin, parcelOf: parcelOf, info: info, fundingMode: fundingMode, reviewInfo: reviewInfo };
 }
 
 function live() {
@@ -369,4 +399,4 @@ var instance = null;
 function get() { if (!instance) instance = live(); return instance; }
 module.exports = { ACTIONS: ACTIONS, RUN_CAP: RUN_CAP, owns: owns, make: make, parcelOf: parcelOf,
   post: function (c) { return get().post(c); }, fullView: function (c, ref, data) { return get().fullView(c, ref, data); }, listJoin: function (c, docs) { return get().listJoin(c, docs); },
-  info: function (c) { return get().info(c); }, fundingMode: function (c) { return get().fundingMode(c); } };
+  info: function (c) { return get().info(c); }, fundingMode: function (c) { return get().fundingMode(c); }, reviewInfo: function (c) { return get().reviewInfo(c); } };

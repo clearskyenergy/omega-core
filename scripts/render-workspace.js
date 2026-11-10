@@ -360,6 +360,11 @@ function asxPost(b, all) {
     ids.forEach(function (x) { var at = ASX.state[x] = ASX.state[x] || {}; at.decision = dec; ASX.over[x] = Object.assign({}, ASX.over[x], { status: dec.status === 'approved' ? ALIB.PREDEV_STATUS : '' }); });
     return { ok: true, status: dec.status, uses: dec.uses, label: dec.label, count: ids.length, ids: ids, missing: [], notFitting: [], note: dec.status === 'approved' ? ids.length + ' site(s) approved for pre-development: ' + dec.label + '.' : 'Approval withdrawn on ' + ids.length + ' site(s).' }; }
   if (b.action === 'site-set-partner') { ids.forEach(function (x) { ASX.over[x] = Object.assign({}, ASX.over[x], { portfolioPartner: b.partner || null }); }); return { ok: true, count: ids.length, ids: ids, note: ids.length + ' site(s) under ' + b.partner + '.' }; }
+  if (b.action === 'assess-review-vote') {
+    var vd = [], vl = null;
+    for (var vi = 0; vi < ids.length; vi++) { var vt = ASX.state[ids[vi]] = ASX.state[ids[vi]] || {}; try { vt.review = ALIB.reviewChange(vt.review || null, b, { by: b.__as || ASX.me, now: ASX.now, config: asxCfg() }); vl = ALIB.reviewView(vt.review, asxCfg()); vd.push({ siteId: ids[vi] }); } catch (e) { return { __status: e.status || 400, error: e.message }; } }
+    return { ok: true, count: vd.length, done: vd, refused: [], review: ids.length === 1 ? vl : undefined, note: 'Your vote is recorded on ' + vd.length + ' site(s).' };
+  }
   /* the upgrade mark and the funding list: the library's own rules, a site at a time (assess-door.js each()) */
   if (b.action === 'assess-upgrade' || /^assess-fund-/.test(b.action)) {
     var done = [], refused = [], last = null, act = b.action.replace('assess-fund-', '');
@@ -382,7 +387,8 @@ function siteCrmRoute(method, qs, body) {
   if (method === 'GET' && qs.site && qs.assessment === '1') { var as1 = all.filter(function (x) { return x.id === qs.site; })[0]; if (!as1) return { __status: 404, error: 'Site not found' };
     var ast = ASX.state[as1.id] || {}, full = ALIB.assess(as1, { screen: ast.screen || null, parcel: ast.parcel || null, marks: ast.checklist || null, upgrade: ast.upgrade || null, config: asxCfg(), now: ASX.now });
     return { site: { id: as1.id, name: as1.name }, assessment: { result: full, ranAt: ast.at || null, ranBy: ast.by || null, stored: !!ast.result, stale: false, screen: ast.screen || null, parcel: ast.parcel || null, decision: ast.decision && ast.decision.status === 'approved' ? ast.decision : null, uses: ALIB.USES,
-      funding: ALIB.fundingView(ast.funding), fundingHistory: ast.funding ? ast.funding.history || [] : [], upgradeHistory: ast.upgrade ? ast.upgrade.history || [] : [] } }; }
+      funding: ALIB.fundingView(ast.funding), fundingHistory: ast.funding ? ast.funding.history || [] : [], upgradeHistory: ast.upgrade ? ast.upgrade.history || [] : [],
+      gates: ALIB.gatesOf(as1, full, asxCfg(), ast), review: ALIB.reviewView(ast.review, asxCfg()) } }; }
   /* the register's reads (api/_lib/portfolio/register.js) the pages make: nothing on file */
   if (method === 'GET' && qs.packages) return { packages: [] };
   if (method === 'GET' && qs.bills) return { bills: [] };
@@ -399,7 +405,7 @@ function siteCrmRoute(method, qs, body) {
   if (method === 'GET') {
     var reg = { org: CURRENT_FX ? CURRENT_FX.org : 'northstar.example', sites: all.filter(function (x) { return qs.archived === '1' || !x.archived; }), archivedIncluded: qs.archived === '1', canEdit: true, canArchive: true, next: null, limited: false, diligence: null };
     reg.sites.forEach(function (x) { x.assessment = ALIB.listView(ASX.state[x.id], x, { config: asxCfg() }); });
-    reg.funding = ALIB.fundingInfo(asxCfg(), ASX.me);
+    reg.funding = ALIB.fundingInfo(asxCfg(), ASX.me); reg.review = ALIB.reviewInfo(asxCfg(), ASX.me);
     if (DLG.on) {
       var rows = all.filter(function (x) { return !x.archived; }).map(function (x) { return DLIB.row(dlgSite(x), { config: DLG.config, now: DLG.now, client: dlgClientOf(x) }); });
       reg.sites.forEach(function (x) { x.diligence = DLIB.row(dlgSite(x), { config: DLG.config, now: DLG.now, client: dlgClientOf(x) }); });
@@ -2155,12 +2161,34 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.waitForFunction(function () { var b = document.querySelector('#pa-funding'); return b && /Funding approved/.test(b.innerText); }, null, { timeout: 6000 }).catch(function () {});
     var decPost = SITES_FX.posts.filter(function (x) { return x.action === 'assess-fund-decide'; })[0] || {}, decRow = await row('s-maple'), decCard = await p.evaluate(function () { return document.getElementById('pa-funding').innerText; });
     ok(name + ': Approve funding is one post (the decision and its note); the card names who approved it and the row reads Approved', decPost.site === 's-maple' && decPost.decision === 'approved' && decPost.note === 'Power confirmed by the host' && /Approved by Ann Lee/.test(decCard) && /^Approved/.test(decRow[8]), { post: decPost, row: decRow[8], card: decCard });
+    /* THE GATES AND THE REVIEW (the workspace's own operating rules): a mark a gate on the row, each with its words in the card; a member's vote is one post, and the decision is every member's */
+    var gt = await p.evaluate(function () {
+      var row = document.querySelector('.pf-tr.body[data-id="s-maple"]'), marks = Array.prototype.map.call(row.querySelectorAll('.pa-gs .pa-g'), function (m) { return m.textContent + ':' + (m.classList.contains('pass') ? 'pass' : m.classList.contains('fail') ? 'fail' : 'open'); });
+      var box = document.getElementById('pa-gates'), lines = box ? Array.prototype.map.call(box.querySelectorAll('.pa-gl > div'), function (d) { return d.innerText.replace(/\s+/g, ' ').trim(); }) : [];
+      return { marks: marks, lines: lines, review: (document.getElementById('pa-review') || {}).innerText || '', vote: !!document.querySelector('[data-pa-vote="own"]'), sel: getComputedStyle(document.getElementById('f-gate')).display };
+    });
+    ok(name + ': the row wears one mark a gate (G0 to G6) and the card says each in words: 400 kW of service meets the 500 kVA preferred, the lease term not on file is open (never failed), the pathway and the return follow the funding just approved, and the review is waiting', gt.marks.length === 7 && gt.marks[1] === '1:pass' && gt.marks[2] === '2:open' && gt.marks[3] === '3:pass' && gt.marks[4] === '4:pass' && gt.marks[6] === '6:open' && gt.sel !== 'none' &&
+      /G1 Power passed 400 kW of service \(about 500 kVA\): at or over the 500 kVA preferred/.test(gt.lines[1]) && /G2 Lease open No lease term on file/.test(gt.lines[2]) && /G4 Return passed .*clears the 25% hurdle; approved by Ann Lee/.test(gt.lines[4]) && /Executive Review/.test(gt.review) && /0 of 2 voted/.test(gt.review) && gt.vote, gt);
+    await p.fill('#pa-review [data-pa-vote-note]', 'Keep it'); await p.click('#pa-review [data-pa-vote="own"]');
+    await p.waitForFunction(function () { var b = document.getElementById('pa-review'); return b && /1 of 2 voted/.test(b.innerText); }, null, { timeout: 6000 }).catch(function () {});
+    var votePost = SITES_FX.posts.filter(function (x) { return x.action === 'assess-review-vote'; })[0] || {};
+    /* the other member votes the same way (through the door, as they would): the decision stands */
+    asxPost({ action: 'assess-review-vote', site: 's-maple', vote: 'own', __as: 'barry@northstar.example' }, siteCrmSites().map(asxSite));
+    await p.keyboard.press('Escape'); await wait(150); await p.reload({ waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(function () { return document.querySelectorAll('.pf-tr.body .pa-gs').length > 0; }, null, { timeout: 8000 }).catch(function () {});
+    await p.selectOption('#f-gate', 'own'); await wait(150);
+    var owned = await p.evaluate(function () { return { ids: Array.prototype.map.call(document.querySelectorAll('.pf-tr.body'), function (r) { return r.getAttribute('data-id'); }), g6: (document.querySelector('.pf-tr.body[data-id="s-maple"] .pa-gs .pa-g:last-child') || {}).className || '' }; });
+    await p.selectOption('#f-gate', 'g2-open'); await wait(150);
+    var g1f = await p.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('.pf-tr.body'), function (r) { return r.getAttribute('data-id'); }); });
+    await p.selectOption('#f-gate', ''); await wait(100);
+    ok(name + ': a member’s vote is one post (own, with its note) and the card counts it; when every member has voted the same way the review gate passes, and the gate filter lists the decided sites, and apart from them the ones whose lease term is not on file (the site with eight years left is not among them)', votePost.site === 's-maple' && votePost.vote === 'own' && votePost.note === 'Keep it' && owned.ids.join() === 's-maple' && /pass/.test(owned.g6) && g1f.join() === 's-maple', { post: votePost, owned: owned, leaseOpen: g1f });
+    await p.click('.pf-tr.body[data-id="s-maple"] .t-name'); await p.waitForSelector('#pa-card [data-pa="report"]', { timeout: 5000 }).catch(function () {});
     /* the diligence report: drawn into a hidden frame and printed from there (no tab, no pop-up) */
     await p.evaluate(function () { window.__printed = 0; var d = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow'); Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', { get: function () { var w = d.get.call(this); if (this.id === 'pa-print' && w && !w.__stub) { w.__stub = true; w.print = function () { window.__printed++; }; } return w; } }); });
     await p.click('#pa-card [data-pa="report"]');
     await p.waitForFunction(function () { return window.__printed > 0; }, null, { timeout: 8000 }).catch(function () {});
-    var rep = await p.evaluate(function () { var f = document.getElementById('pa-print'), d = f && f.contentDocument, t = d ? d.body.innerText : ''; return { printed: window.__printed, frame: !!f, shown: f ? getComputedStyle(f).visibility : '', heads: d ? Array.prototype.map.call(d.querySelectorAll('h2'), function (h) { return h.textContent; }) : [], title: d ? (d.querySelector('h1') || {}).textContent : '', three: d ? d.querySelectorAll('.three .bx').length : 0, tables: d ? d.querySelectorAll('table').length : 0, stray: /undefined|NaN|\[object/.test(t), funding: /Funding · Finance committee/.test(t) && /Approved/.test(t), upgrade: /Utility-side upgrade/.test(t), stated: /stated, unverified/.test(t) }; });
-    ok(name + ': Diligence report prints one document from a hidden frame: the site, the three uses side by side (compute, the battery, Tesla fast charging), power and grid with the upgrade, each use’s figures and yearly tables, fiber and parcel, the readiness checklist, the funding decision, and what it does not read; no stray value', rep.printed === 1 && rep.frame && rep.shown === 'hidden' && rep.title === 'Maple Yard Chargers' && rep.three === 3 && ['What this site carries', 'Power and grid', 'Battery storage', 'Fast charging · Tesla Supercharger host', 'Fiber, parcel and zoning', 'Decisions', 'What this report does not read'].every(function (h) { return rep.heads.indexOf(h) >= 0; }) && rep.heads.some(function (h) { return /^Compute/.test(h); }) && rep.heads.some(function (h) { return /^Shovel ready/.test(h); }) && rep.tables >= 8 && !rep.stray && rep.funding && rep.upgrade && rep.stated, rep);
+    var rep = await p.evaluate(function () { var f = document.getElementById('pa-print'), d = f && f.contentDocument, t = d ? d.body.innerText : ''; return { printed: window.__printed, frame: !!f, shown: f ? getComputedStyle(f).visibility : '', heads: d ? Array.prototype.map.call(d.querySelectorAll('h2'), function (h) { return h.textContent; }) : [], title: d ? (d.querySelector('h1') || {}).textContent : '', three: d ? d.querySelectorAll('.three .bx').length : 0, tables: d ? d.querySelectorAll('table').length : 0, stray: /undefined|NaN|\[object/.test(t), gates: /Gates: \d of 7 passed/.test(t) && /Executive Review: Own and operate, all 2 agreed/.test(t), funding: /Funding · Finance committee/.test(t) && /Approved/.test(t), upgrade: /Utility-side upgrade/.test(t), stated: /stated, unverified/.test(t) }; });
+    ok(name + ': Diligence report prints one document from a hidden frame: the site, the three uses side by side (compute, the battery, Tesla fast charging), power and grid with the upgrade, each use’s figures and yearly tables, fiber and parcel, the readiness checklist, the funding decision, and what it does not read; no stray value', rep.printed === 1 && rep.frame && rep.shown === 'hidden' && rep.title === 'Maple Yard Chargers' && rep.three === 3 && ['What this site carries', 'Power and grid', 'Battery storage', 'Fast charging · Tesla Supercharger host', 'Fiber, parcel and zoning', 'Decisions', 'What this report does not read'].every(function (h) { return rep.heads.indexOf(h) >= 0; }) && rep.heads.some(function (h) { return /^Compute/.test(h); }) && rep.heads.some(function (h) { return /^Shovel ready/.test(h); }) && rep.tables >= 8 && !rep.stray && rep.funding && rep.upgrade && rep.stated && rep.gates, rep);
     await p.keyboard.press('Escape'); await wait(250);
     var closed = await p.evaluate(function () { return !document.getElementById('ows-overlay'); });
     ok(name + ': after the report prints the keyboard is back on the page: Escape closes the side panel', closed, closed);
@@ -2263,7 +2291,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     DLG.on = opts.diligence === true; DLG.state = {}; DLG.posts = []; DLG.portfolios = {}; DLG.assign = {}; DLG.pseq = 0;
     ASX.state = {}; ASX.over = {}; ASX.jobs = {}; ASX.jseq = 0;
     /* a workspace that funds its own sites: its committee named (the signed-in person sits on it) and compute on its offtake partner's figures */
-    ASX.cfg = opts.funding ? ALIB.configOf({ portfolioAssessment: { compute: { basis: 'partner' }, funding: { mode: 'committee', name: 'Finance committee', members: [{ name: 'Ann Lee', email: ASX.me }, { name: 'Barry D', email: 'barry@northstar.example' }] } } }) : null;
+    ASX.cfg = opts.funding ? ALIB.configOf({ portfolioAssessment: { compute: { basis: 'partner' }, funding: { mode: 'committee', name: 'Finance committee', members: [{ name: 'Ann Lee', email: ASX.me }, { name: 'Barry D', email: 'barry@northstar.example' }] },
+      gates: { minKva: 500, minLeaseYears: 5, irrHurdlePct: 25 }, review: { name: 'Executive Review', members: [{ name: 'Ann Lee', email: ASX.me }, { name: 'Barry D', email: 'barry@northstar.example' }] } } }) : null;
     if (page === '/marketplace.html') { CURRENT_FX = ns; PACKAGE_VIEW = null; STORE.posts = []; }
     var errs = [], ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) { var url = r.request().url(); if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); if (/Chart\.js/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: 'window.Chart=function(){};window.Chart.register=function(){};' }); return r.fulfill({ status: 200, contentType: 'text/css', body: '' }); });

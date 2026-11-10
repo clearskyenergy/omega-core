@@ -292,6 +292,46 @@ test('A13 the funding list: only where the workspace names a committee; screened
   assert.equal(A.listView({ result: res, funding: ok }, { address: { state: 'OK', zip: '74834' }, transformerKva: 1500 }, {}).funding.status, 'approved');
 });
 
+test('A14 the workspace’s own gates, read off the record in its order: power against the transformer it prefers, the lease against the years it wants, the pathway picked, its hurdle and its committee, the checklist, its review; OPEN is never failed; no settings, no gates', function () {
+  var cfg = A.configOf({ portfolioAssessment: { gates: { minKva: 500, minLeaseYears: 5, irrHurdlePct: 25 }, review: { members: [{ name: 'Barry', email: 'barry@x.co' }, { name: 'Eli', email: 'eli@x.co' }, { name: 'Tom', email: 'tom@x.co' }, { name: 'Seth', email: 'seth@x.co' }] },
+    funding: { mode: 'committee', members: [{ name: 'Barry', email: 'barry@x.co' }, { name: 'Eli', email: 'eli@x.co' }] } } });
+  assert.deepStrictEqual(cfg.gates, { minKva: 500, minLeaseYears: 5, irrHurdlePct: 25 }); assert.equal(cfg.review.name, 'Executive Review'); assert.equal(cfg.review.members.length, 4);
+  assert.equal(A.configOf({}).gates, null); assert.equal(A.configOf({}).review, null); assert.equal(A.configOf({ portfolioAssessment: { gates: { minKva: -1 } } }).gates, null);
+  function gate(g, k) { return g.list.filter(function (x) { return x.key === k; })[0]; }
+  var small = { address: { state: 'OK', zip: '74834' }, transformerKva: 300, termYearsRemaining: 2.6 }, rs = A.assess(small, { now: NOW, config: cfg }), g = A.gatesOf(small, rs, cfg, {});
+  assert.deepStrictEqual(g.list.map(function (x) { return x.key; }), ['G0', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6']);
+  assert.equal(gate(g, 'G1').state, 'fail'); assert.ok(/300 kVA: under the 500 kVA preferred/.test(gate(g, 'G1').words)); assert.equal(gate(g, 'G2').state, 'fail'); assert.ok(/2\.6 years left: under the 5 years wanted/.test(gate(g, 'G2').words));
+  assert.equal(g.screen, 'fail'); assert.deepStrictEqual(g.failed, ['G1', 'G2']); assert.equal(gate(g, 'G3').state, 'open'); assert.equal(gate(g, 'G5').state, 'open'); assert.equal(gate(g, 'G6').state, 'open'); assert.ok(/waiting on Barry, Eli, Tom, Seth/.test(gate(g, 'G6').words));
+  /* a site that passes the screen; nothing on file is OPEN, never failed */
+  var good = { address: { state: 'OK', zip: '74834' }, transformerKva: 1000, termYearsRemaining: 7.7 }, rg = A.assess(good, { now: NOW, config: cfg }), gg = A.gatesOf(good, rg, cfg, {});
+  assert.equal(gate(gg, 'G1').state, 'pass'); assert.equal(gate(gg, 'G2').state, 'pass'); assert.equal(gg.screen, 'pass');
+  var blank = { state: 'OK' }, gb = A.gatesOf(blank, A.assess(blank, { now: NOW, config: cfg }), cfg, {}); assert.equal(gate(gb, 'G1').state, 'open'); assert.equal(gate(gb, 'G2').state, 'open'); assert.equal(gb.screen, 'open'); assert.deepStrictEqual(gb.failed, []);
+  var svc = { state: 'OK', serviceCapacityKw: 400, termYearsRemaining: 6 }; assert.equal(gate(A.gatesOf(svc, A.assess(svc, { now: NOW, config: cfg }), cfg, {}), 'G1').state, 'pass');   /* 400 kW of service is 500 kVA at the continuous rating */
+  /* G3 and G4 follow the pathway and the committee */
+  var fd = A.fundingChange(null, 'submit', { uses: ['bess'] }, { by: 'pat@x.co', now: NOW, config: cfg, result: rg, screened: true }), g3 = A.gatesOf(good, rg, cfg, { funding: fd });
+  assert.equal(gate(g3, 'G3').state, 'pass'); assert.equal(gate(g3, 'G4').state, 'fail'); assert.ok(/is under the 25% hurdle; with finance committee/.test(gate(g3, 'G4').words));     /* the battery's screening return is under 25% */
+  var fc = A.fundingChange(null, 'submit', { uses: ['compute'] }, { by: 'pat@x.co', now: NOW, config: cfg, result: rg, screened: true });
+  assert.equal(gate(A.gatesOf(good, rg, cfg, { funding: fc }), 'G4').state, 'open');                                                                                               /* clears the hurdle, waiting on the committee */
+  var ok = A.fundingChange(fc, 'decide', { decision: 'approved' }, { by: 'eli@x.co', now: NOW, config: cfg }); assert.equal(gate(A.gatesOf(good, rg, cfg, { funding: ok }), 'G4').state, 'pass');
+  var no = A.fundingChange(fc, 'decide', { decision: 'declined', note: 'not this one' }, { by: 'eli@x.co', now: NOW, config: cfg }); assert.equal(gate(A.gatesOf(good, rg, cfg, { funding: no }), 'G4').state, 'fail');
+  var noHurdle = A.configOf({ portfolioAssessment: { gates: { minKva: 500 } } }), gn = A.gatesOf(good, rg, noHurdle, {}); assert.deepStrictEqual(gn.list.map(function (x) { return x.key; }), ['G0', 'G1', 'G3', 'G5']);
+  /* G5: every applicable item with evidence */
+  var marks = {}; A.ITEM_KEYS.forEach(function (k) { marks[k] = { state: 'done' }; }); assert.equal(gate(A.gatesOf(good, A.assess(good, { now: NOW, config: cfg, marks: marks }), cfg, {}), 'G5').state, 'pass');
+  /* THE REVIEW: a member's vote; the decision is EVERY member's, the same way; anybody else is refused */
+  var ctx = { now: NOW, config: cfg }, rv = A.reviewChange(null, { vote: 'own', note: 'keep it' }, Object.assign({ by: 'Tom@x.co' }, ctx));
+  var v1 = A.reviewView(rv, cfg); assert.equal(v1.outcome, null); assert.equal(v1.cast, 1); assert.deepStrictEqual(v1.waiting, ['Barry', 'Eli', 'Seth']);
+  ['barry@x.co', 'eli@x.co', 'seth@x.co'].forEach(function (e) { rv = A.reviewChange(rv, { vote: 'own' }, Object.assign({ by: e }, ctx)); });
+  var v4 = A.reviewView(rv, cfg); assert.equal(v4.outcome, 'own'); assert.equal(v4.outcomeLabel, 'Own and operate'); assert.ok(/all 4 agreed/.test(v4.words)); assert.equal(gate(A.gatesOf(good, rg, cfg, { review: rv }), 'G6').state, 'pass');
+  rv = A.reviewChange(rv, { vote: 'flip' }, Object.assign({ by: 'seth@x.co' }, ctx)); var vs = A.reviewView(rv, cfg); assert.equal(vs.outcome, null); assert.equal(vs.split, true); assert.ok(/split/.test(vs.words));
+  rv = A.reviewChange(rv, { vote: 'clear' }, Object.assign({ by: 'seth@x.co' }, ctx)); assert.deepStrictEqual(A.reviewView(rv, cfg).waiting, ['Seth']); assert.equal(rv.history.length, 6);
+  assert.throws(function () { A.reviewChange(rv, { vote: 'own' }, Object.assign({ by: 'pat@x.co' }, ctx)); }, function (e) { return e.status === 403 && /Executive Review is Barry, Eli, Tom, Seth\. Only they vote/.test(e.message); });
+  assert.throws(function () { A.reviewChange(rv, { vote: 'maybe' }, Object.assign({ by: 'tom@x.co' }, ctx)); }, /own .* or flip/); assert.throws(function () { A.reviewChange(null, { vote: 'own' }, { by: 'tom@x.co', config: A.configOf({}) }); }, /no review board/);
+  assert.deepStrictEqual(A.reviewInfo(cfg, 'seth@x.co'), { name: 'Executive Review', members: ['Barry', 'Eli', 'Tom', 'Seth'], canVote: true, me: 'Seth' }); assert.equal(A.reviewInfo(cfg, 'pat@x.co').canVote, false); assert.equal(A.reviewInfo(A.configOf({}), 'x'), null);
+  /* the row carries both; a workspace with neither setting carries neither */
+  var row = A.listView({ result: rg, review: rv }, good, { config: cfg }); assert.equal(row.gates.of, 7); assert.equal(row.review.cast, 3);
+  assert.equal(A.listView({ result: rg }, good, {}).gates, null); assert.equal(A.listView({ result: rg }, good, {}).review, null); assert.equal(A.gatesOf(good, rg, A.configOf({}), {}), null);
+});
+
 /* ── D: the door ────────────────────────────────────────────────────────── */
 function world(opts) {
   opts = opts || {};
@@ -439,6 +479,28 @@ test('D09 the funding list through the door: 409 where the workspace names no co
   await rejects(w.post({ action: 'assess-fund-withdraw', site: 's1' }), 409, /committee has decided/);
   var rows = await w.door.listJoin({ root: w.root }, [{ id: 's1', data: function () { return w.site('s1'); } }]); assert.equal(rows.s1.funding.status, 'approved'); assert.equal(rows.s1.confidence.screened, true);
   var full = await w.door.fullView({ root: w.root }, { id: 's1' }, w.site('s1')); assert.equal(full.funding.status, 'approved'); assert.equal(full.fundingHistory.length, 2);
+});
+
+test('D10 the review through the door: 409 with no board in the settings; a member’s vote on a verified address is stored and audited, nobody else’s is taken (an editor, staff, an unverified member); the decision appears when all have voted', async function () {
+  var plain = world(); await plain.post({ action: 'assess-run', ids: ['s1'] }); await rejects(plain.post({ action: 'assess-review-vote', site: 's1', vote: 'own' }), 409, /no review board/); assert.equal(await plain.door.reviewInfo(plain.ctx({})), null);
+  var SET = { portfolioAssessment: { gates: { minKva: 500, minLeaseYears: 5 }, review: { members: [{ name: 'Barry', email: 'barry@acme-sites.com' }, { name: 'Tom', email: 'tom@acme-sites.com' }] } } };
+  var w = world({ billing: SET }); await w.post({ action: 'assess-run', ids: ['s1', 's2'] });
+  function as(name, extra) { var who = { uid: 'u-' + name, email: name + '@acme-sites.com', orgId: ORG, staff: false, claims: { email_verified: true } }; return Object.assign({ caller: who, by: who.email }, extra || {}); }
+  await rejects(w.post({ action: 'assess-review-vote', site: 's1', vote: 'own' }), 403, /Executive Review is Barry, Tom\. Only they vote/);
+  await rejects(w.post({ action: 'assess-review-vote', site: 's1', vote: 'own' }, { caller: { uid: 'u-s', email: 'ops@clearsky-usa.com', staff: true, claims: { email_verified: true } }, by: 'ops@clearsky-usa.com' }), 403);
+  await rejects(w.post({ action: 'assess-review-vote', site: 's1', vote: 'own' }, { caller: { uid: 'u-b', email: 'barry@acme-sites.com', orgId: ORG, claims: {} }, by: 'barry@acme-sites.com' }), 403, /Confirm your email address/);
+  await rejects(w.post({ action: 'assess-review-vote', site: 's1', vote: 'later' }, as('tom')), 400);
+  var one = await w.post({ action: 'assess-review-vote', site: 's1', vote: 'own', note: 'the best of the batch' }, as('tom', { canEdit: false }));
+  assert.equal(one.review.outcome, null); assert.equal(one.review.cast, 1); assert.ok(/Your vote \(own and operate\) is recorded on 1 site/.test(one.note));
+  var both = await w.post({ action: 'assess-review-vote', ids: ['s1', 's2', 'gone'], vote: 'own' }, as('barry'));
+  assert.equal(both.count, 2); assert.equal(both.refused.length, 1);
+  var s1 = w.site('s1'), rows = await w.door.listJoin({ root: w.root }, [{ id: 's1', data: function () { return s1; } }, { id: 's2', data: function () { return w.site('s2'); } }]);
+  assert.equal(rows.s1.review.outcome, 'own'); assert.equal(rows.s2.review.outcome, null); assert.equal(rows.s1.gates.list.filter(function (x) { return x.key === 'G6'; })[0].state, 'pass');
+  assert.equal(rows.s1.gates.list.filter(function (x) { return x.key === 'G1'; })[0].state, 'pass'); assert.equal(rows.s2.gates.list.filter(function (x) { return x.key === 'G1'; })[0].state, 'fail');     /* 1,500 kW of service; a 150 kVA transformer */
+  assert.equal(rows.s1.gates.list.filter(function (x) { return x.key === 'G2'; })[0].state, 'pass'); assert.equal(rows.s2.gates.list.filter(function (x) { return x.key === 'G2'; })[0].state, 'open');
+  assert.equal(w.audits('sitecrm-assess-review-vote').length, 3); assert.equal(s1.revision, 2); assert.ok(s1.assessment.review.votes['tom@acme-sites_com']);
+  var full = await w.door.fullView({ root: w.root }, { id: 's1' }, s1); assert.equal(full.review.outcome, 'own'); assert.equal(full.gates.of, 6);   /* G0, G1, G2, G3, G5, G6: no hurdle and no committee here, so no G4 */
+  assert.deepStrictEqual(await w.door.reviewInfo(w.ctx({}, as('tom'))), { name: 'Executive Review', members: ['Barry', 'Tom'], canVote: true, me: 'Tom' }); assert.equal((await w.door.reviewInfo(w.ctx({}))).canVote, false);
 });
 
 (async function () {

@@ -1536,6 +1536,12 @@ the same day, each in Tommy's words in the doc:
   submitted (`assess-fund-submit`) and decided by a committee member on a
   VERIFIED address alone (`assess-fund-decide`; staff are refused too). Core
   names nobody.
+- **The gates and the review** are a workspace's own operating rules,
+  never core's (`portfolioAssessment.gates` and `.review`): G0 to G6 are
+  DERIVED from the record (`gatesOf`), OPEN is never failed, and the
+  review's decision (own and operate, or portfolio / flip) stands only
+  when every member has voted the same way (`assess-review-vote`, a member
+  on a verified address; staff are refused too).
 - **A withdrawn approval puts the site's status back** (`statusBefore`).
 - **The diligence report** is the page's print of `GET ?assessment=1`
   (`OmegaPortfolioAssess.report`), from a hidden frame.

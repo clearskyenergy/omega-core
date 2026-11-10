@@ -174,6 +174,7 @@
     <select class="pf-sel" id="f-kind" aria-label="Project type"><option value="">Any type</option></select>
     <select class="pf-sel" id="f-partner" aria-label="Portfolio partner"><option value="">Any partner</option></select>
     <select class="pf-sel" id="f-fund" aria-label="Funding list" style="display:none"><option value="">Any funding</option><option value="ready">Screened, not submitted</option><option value="submitted">Waiting on the committee</option><option value="approved">Funding approved</option><option value="declined">Declined</option></select>
+<select class="pf-sel" id="f-gate" aria-label="Gates" style="display:none"><option value="">Any gate</option><option value="screen-pass">Passes power and lease</option><option value="g1-fail">Power not met</option><option value="g2-fail">Lease not met</option><option value="g2-open">Lease term not on file</option><option value="review-wait">Waiting on the review</option><option value="own">Decided: own and operate</option><option value="flip">Decided: portfolio / flip</option></select>
     <select class="pf-sel" id="f-cap" aria-label="Free capacity"><option value="">Any capacity</option><option value="upgrade-todo">Under 1 MW · upgrade to request</option><option value="upgrade">Utility upgrade requested</option><option value="90">≥ 90 kW · a 75 kW Nano pod</option><option value="180">≥ 180 kW · a 150 kW Nano pod</option><option value="420">≥ 420 kW · a 350 kW Nano pod</option><option value="600">≥ 600 kW · a 500 kW Nano pod, four posts</option><option value="900">≥ 900 kW · a 750 kW Nano pod</option><option value="1200">≥ 1.2 MW · a 1 MW Micro pod</option><option value="none">No power on file</option></select>
     <label class="pf-toggle"><input type="checkbox" id="f-archived"> Show archived</label>
   </div>
@@ -254,6 +255,9 @@
   var PA = window.OmegaPortfolioAssess, AMODE = false, RUN = null;
   /* the funding list, where the workspace funds its own sites: the committee's names and whether this person decides (null: the finance marketplace) */
   var FUNDING = null;
+  /* the workspace's review board and whether any row carries its gates (both null where its settings have neither) */
+  var REVIEW = null, GATED = false;
+  function gateState(s, key) { var a = asOf(s), g = a && a.gates; if (!g) return null; var hit = g.list.filter(function (x) { return x.key === key; })[0]; return hit ? hit.state : null; }
   function fundOf(s) { var a = asOf(s); return a ? a.funding || null : null; }
   function fundKey(s) { var a = asOf(s), f = a && a.funding; return f ? f.status : a && a.confidence && a.confidence.screened ? 'ready' : 'none'; }
   var STATUSES = ['In editor', 'Pre-development', 'Funding', 'Development', 'Operating', 'On hold'];
@@ -347,8 +351,18 @@
   /* ── filters, sort, render ──────────────────────────────────────────── */
   function filtered() {
     var q = byId('q').value.trim().toLowerCase(), st = byId('f-state').value, mt = byId('f-meter').value, pf = byId('f-pf').value, ss = byId('f-status').value, kd = byId('f-kind').value;
-    var pn = byId('f-partner').value, cp = byId('f-cap').value, fu = FUNDING ? byId('f-fund').value : '';
+    var pn = byId('f-partner').value, cp = byId('f-cap').value, fu = FUNDING ? byId('f-fund').value : '', gt = GATED ? byId('f-gate').value : '';
     var rows = SITES.filter(function (s) {
+      if (gt) {
+        var ga = asOf(s), gg = ga && ga.gates, rvv = ga && ga.review;
+        if (!gg) return false;
+        if (gt === 'screen-pass' && gg.screen !== 'pass') return false;
+        if (gt === 'g1-fail' && gateState(s, 'G1') !== 'fail') return false;
+        if (gt === 'g2-fail' && gateState(s, 'G2') !== 'fail') return false;
+        if (gt === 'g2-open' && gateState(s, 'G2') !== 'open') return false;
+        if (gt === 'review-wait' && !(rvv && !rvv.outcome && rvv.cast > 0)) return false;
+        if ((gt === 'own' || gt === 'flip') && !(rvv && rvv.outcome === gt)) return false;
+      }
       if (fu && fundKey(s) !== fu) return false;
       if (cp === 'upgrade') { var ua = asOf(s); if (!(ua && ua.upgrade)) return false; }
       if (cp === 'upgrade-todo') { var ut = asOf(s); if (!(ut && ut.upgradeAdvice && !ut.upgrade)) return false; }
@@ -420,7 +434,7 @@
         var sub = [loc, partnerOf(s), idKey ? ids[idKey] : ''].filter(Boolean).join(' · ') || 'Location not provided';
         return '<div class="pf-tr body' + (SEL[s.id] ? ' sel' : '') + (s.archived ? ' archived' : '') + '" data-id="' + esc(s.id) + '" role="button" tabindex="0">' +
           '<div class="selrow"><input type="checkbox" class="sel-one" value="' + esc(s.id) + '"' + (SEL[s.id] ? ' checked' : '') + ' aria-label="Select ' + esc(s.name || 'site') + '"></div>' +
-          '<div><div class="t-name">' + esc(s.name || 'Unnamed site') + '</div><div class="t-sub">' + esc(sub) + '</div></div>' +
+          '<div><div class="t-name">' + esc(s.name || 'Unnamed site') + (GATED ? PA.gateStrip(s.assessment) : '') + '</div><div class="t-sub">' + esc(sub) + '</div></div>' +
           '<div>' + statusPill(s) + '</div>' +
           '<div class="t-num">' + (c.power || (av.kw != null ? esc(Math.round(av.kw).toLocaleString('en-US')) + ' kW' : '<span class="t-mut">–</span>')) + '</div>' +
           '<div class="t-num">' + (s.latestModel && s.latestModel.irr != null ? '<b title="The compute model on this site">' + esc(pct(Number(s.latestModel.irr), 1)) + '</b><div class="pa-sub">compute model</div>' : c.compute) + '</div>' +
@@ -650,8 +664,16 @@
     if (FUNDING.canDecide) items = items.concat([{ hd: FUNDING.name + ': decide' },
       { label: 'Approve funding', sub: 'On every selected site that is submitted', run: function () { act('assess-fund-decide', { decision: 'approved' }); } },
       { label: 'Decline…', sub: 'With the reason the submitter reads', run: function () { var why = window.prompt('Why is the funding declined? (the person who submitted it reads this)'); if (why && why.trim().length >= 3) act('assess-fund-decide', { decision: 'declined', note: why.trim().slice(0, 500) }); } }]);
-    menu(this, items);
+    menu(this, items.concat(voteItems()));
   });
+  /* the review: a member's own vote on the selection (the bar's Funding menu carries it where there is a board) */
+  function voteItems() {
+    if (!(REVIEW && REVIEW.canVote)) return [];
+    return [{ hd: REVIEW.name + ': my vote' },
+      { label: 'Own and operate', sub: 'On every selected site', run: function () { act('assess-review-vote', { vote: 'own' }); } },
+      { label: 'Portfolio / flip', run: function () { act('assess-review-vote', { vote: 'flip' }); } },
+      { label: 'Clear my vote', run: function () { act('assess-review-vote', { vote: 'clear' }); } }];
+  }
   /* a utility-side upgrade request, marked on the selection */
   byId('ba-upgrade').addEventListener('click', function () {
     function req(body) { return function () { act('assess-upgrade', Object.assign({ status: 'requested' }, body)); }; }
@@ -675,7 +697,7 @@
     msg('Preparing ' + list.length + ' diligence report' + (list.length === 1 ? '' : 's') + '…', true);
     var pages = [], p = Promise.resolve();
     list.forEach(function (s) { p = p.then(function () { return api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(s.id) + '&assessment=1').then(function (j) {
-      pages.push(PA.report(s, j, { brand: brandName(), funding: FUNDING, today: new Date().toISOString().slice(0, 10), attribution: window.OmegaWhiteLabel && OmegaWhiteLabel.attribution ? OmegaWhiteLabel.attribution() : '' })); }); }); });
+      pages.push(PA.report(s, j, { brand: brandName(), funding: FUNDING, review: REVIEW, today: new Date().toISOString().slice(0, 10), attribution: window.OmegaWhiteLabel && OmegaWhiteLabel.attribution ? OmegaWhiteLabel.attribution() : '' })); }); }); });
     return p.then(function () { PA.printReports(pages, { title: list.length === 1 ? 'Diligence report - ' + (list[0].name || 'site') : list.length + ' diligence reports', onError: function () { msg('The browser would not open the print dialog for the report.'); } }); msg(pages.length + ' diligence report' + (pages.length === 1 ? '' : 's') + ' ready: choose Save as PDF in the print dialog to keep ' + (pages.length === 1 ? 'it' : 'them') + '.', true); })
       .catch(function (e) { msg(e.message); });
   }
@@ -731,6 +753,11 @@
     ['Compute: class', function (s) { var a = asOf(s), c = a && a.compute; return c && c.fits && c.chosen ? c.chosen.klassLabel || '' : ''; }],
     ['Compute: basis', function (s) { var a = asOf(s), e = a && a.compute && a.compute.economics; return e && e.ok ? (e.basis === 'partner' ? 'the offtake partner\u2019s stated figures' : 'public ' + (e.priceBasis || 'reference') + ' price') : ''; }],
     ['Compute: electricity ($/kWh)', function (s) { var a = asOf(s), e = a && a.compute && a.compute.economics; return e && e.electricity && e.electricity.perKwh != null ? e.electricity.perKwh : ''; }],
+    ['Gate: power', function (s) { var a = asOf(s), g = a && a.gates && a.gates.list.filter(function (x) { return x.key === 'G1'; })[0]; return g ? g.state + ': ' + g.words : ''; }],
+    ['Gate: lease', function (s) { var a = asOf(s), g = a && a.gates && a.gates.list.filter(function (x) { return x.key === 'G2'; })[0]; return g ? g.state + ': ' + g.words : ''; }],
+    ['Gate: return', function (s) { var a = asOf(s), g = a && a.gates && a.gates.list.filter(function (x) { return x.key === 'G4'; })[0]; return g ? g.state + ': ' + g.words : ''; }],
+    ['Gates passed', function (s) { var a = asOf(s); return a && a.gates ? a.gates.passed + ' of ' + a.gates.of : ''; }],
+    ['Review', function (s) { var a = asOf(s); return a && a.review ? a.review.words : ''; }],
     ['Utility upgrade', function (s) { var a = asOf(s), u = a && a.upgrade; return u ? u.status + ' to ' + Math.round(u.targetKw) + ' kW' + (u.askedBy ? ' (' + u.askedBy + ')' : '') : ''; }],
     ['Funding', function (s) { var f = fundOf(s); return f ? f.status + (f.label ? ': ' + f.label : '') + (f.decision && f.decision.name ? ' (' + f.decision.name + ')' : '') : ''; }],
     ['Funding: amount ($)', function (s) { var f = fundOf(s); return f && f.amountUsd != null ? Math.round(f.amountUsd) : ''; }],
@@ -830,7 +857,7 @@
     function fact(k, v, n) { return '<div class="dr-fact"><div class="k">' + esc(k) + '</div><div class="v">' + (v == null || v === '' ? '<span class="t-mut">Not provided</span>' : v) + '</div>' + (n ? '<div class="n">' + esc(n) + '</div>' : '') + '</div>'; }
     var lm = s.latestModel, cap = s.capital, html = '';
     /* the assessment first: what the site's free power carries, each use's return, the approval and the shovel-ready score */
-    if (PA) html += '<div class="dr-sec">Assessment' + (partnerOf(s) ? ' \u00b7 ' + esc(partnerOf(s)) : '') + '</div>' + PA.card(s, s.assessment, { canEdit: CANEDIT, funding: FUNDING, partner: partnerOf(s) });
+    if (PA) html += '<div class="dr-sec">Assessment' + (partnerOf(s) ? ' \u00b7 ' + esc(partnerOf(s)) : '') + '</div>' + PA.card(s, s.assessment, { canEdit: CANEDIT, funding: FUNDING, review: REVIEW, partner: partnerOf(s) });
     if (lm) {
       var v = lm.verdict || {};
       var hst = lm.host || null;
@@ -907,6 +934,7 @@
           upgrade: function (id, body) { post('assess-upgrade', Object.assign({ site: id }, body)).then(function (j) { S.toast(j.note || 'Done.'); return load(true); }).then(function () { openDrawer(id); }).catch(function (e) { S.toast(e.message); msg(e.message); }); },
           fund: function (id, action, body) { post('assess-fund-' + action, Object.assign({ site: id }, body)).then(function (j) { S.toast(j.note || 'Done.'); return load(true); }).then(function () { openDrawer(id); }).catch(function (e) { S.toast(e.message); msg(e.message); }); },
           fundingOf: function () { return fundOf(s); },
+          vote: function (id, vote, note) { post('assess-review-vote', { site: id, vote: vote, note: note }).then(function (j) { S.toast(j.note || 'Done.'); return load(true); }).then(function () { openDrawer(id); }).catch(function (e) { S.toast(e.message); msg(e.message); }); },
           report: function () { printReports([s]); },
           full: function (id) { return api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(id) + '&assessment=1'); },
           check: function (id, item, state, note) { return post('assess-check', { site: id, item: item, state: state, note: note }).then(function (j) {
@@ -942,6 +970,7 @@
       SITES = more ? SITES.concat(rows) : rows; NEXT = j.next || null;
       CANEDIT = j.canEdit !== false; CANADMIN = j.canArchive === true;
       FUNDING = j.funding && j.funding.mode ? j.funding : null;
+      REVIEW = j.review || null; GATED = SITES.some(function (s) { return s.assessment && s.assessment.gates; }); byId('f-gate').style.display = GATED ? '' : 'none';
       byId('f-fund').style.display = FUNDING ? '' : 'none'; byId('ba-fund').style.display = FUNDING && CANEDIT ? '' : 'none'; byId('ba-finance').style.display = FUNDING ? 'none' : '';
       Object.keys(SEL).forEach(function (id) { if (!SITES.some(function (s) { return s.id === id; })) delete SEL[id]; });
       renderStats(); render(); LOADED = true;
@@ -982,7 +1011,7 @@
     }).catch(function (e) { box.innerHTML = '<div class="pf-msg err">' + esc(e.message) + '</div>'; });
   }
   byId('btn-more').addEventListener('click', function () { load(true, true); });
-  ['q', 'f-state', 'f-status', 'f-meter', 'f-pf', 'f-kind', 'f-partner', 'f-cap', 'f-fund'].forEach(function (id) { byId(id).addEventListener(id === 'q' ? 'input' : 'change', render); });
+  ['q', 'f-state', 'f-status', 'f-meter', 'f-pf', 'f-kind', 'f-partner', 'f-cap', 'f-fund', 'f-gate'].forEach(function (id) { byId(id).addEventListener(id === 'q' ? 'input' : 'change', render); });
   byId('f-archived').addEventListener('change', function () { load(); });
   byId('btn-add').addEventListener('click', openRegister);
 

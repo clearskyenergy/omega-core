@@ -259,6 +259,42 @@ On the site record (`site-crm.html`) the *Capital request* card becomes
 decided, with the way to the register. `GET ?site=` carries `funding` and
 the site's `assessment` row for it.
 
+### The gates and the review
+
+Tommy, 2026-11-09, of his company's operating system: "this is our company
+how we work see that this is supported by what we are doing here". A
+workspace's own pipeline is read off what is already on the site, in its
+own order. The thresholds and the people are its settings
+(`portfolioAssessment.gates { minKva, minLeaseYears, irrHurdlePct }` and
+`.review { name, members[] }`, staged by `set-portfolio-assessment.js`);
+core carries none, and a workspace with neither has no gates.
+
+| gate | passes when | fails when |
+|---|---|---|
+| G0 Intake & site control | the site-control item of the checklist has evidence | never (open until then) |
+| G1 Power | the transformer (else the service at its continuous rating) is at least `minKva` | it is under it |
+| G2 Lease | the term left is at least `minLeaseYears` | it is under it |
+| G3 Pathway | a pathway is picked: approved for pre-development, or submitted for funding | never |
+| G4 Return | the picked pathway clears `irrHurdlePct` (where one is set) and the committee approved (where there is one) | under the hurdle, or declined |
+| G5 Shovel ready | every applicable checklist item has evidence | never |
+| G6 Review | every member of the review voted the same way | never |
+
+**Open is never failed**: a gate with nothing on file to judge (no kVA, no
+lease term) is open, and says what is missing. The gates are DERIVED at
+read time (`gatesOf`); nothing is stored but a reviewer's own vote.
+
+**The review** (`assess-review-vote { vote: own | flip | clear }`): one
+member's vote on a site, own and operate or portfolio / flip, on a verified
+address; anybody else is refused, staff included. The decision is derived:
+it stands when **every** member has voted the same way, and a disagreement
+reads *split* with who voted what. It is not gated on the earlier gates,
+which are shown beside it.
+
+The row wears one mark a gate; the card says each in words, with the votes;
+the gate filter lists what passes power and lease, what does not, the sites
+whose lease term is not on file, and the decided ones; the CSV and the
+diligence report carry them.
+
 ### The diligence report
 
 Tommy, 2026-11-09: "i want to be able to export a dilligence report on each
@@ -353,6 +389,8 @@ is switched on for the workspace, the same screen also lands on
 | `compute.chipset`, `.pue`, `.termMonths`, `.partnerName`, `.partnerFeePct` | the compute case's chip, PUE, term and offtake fee |
 | `compute.basis: 'partner'`, `compute.reference` | compute on the offtake partner's stated per-megawatt figures; `reference` replaces any of them (`capexUsdPerMw`, `revenueUsdPerMwYear`, `utilityUsdPerMwYear`, `gpusPerMw`) |
 | `funding { mode: 'committee', name, members[] }` | the funding list in place of the finance marketplace |
+| `gates { minKva, minLeaseYears, irrHurdlePct }` | the workspace's screening gates |
+| `review { name, members[] }` | its review board: every member votes own or flip |
 
 `scripts/set-portfolio-assessment.js --org <org> --member "Name <address>"
 --compute-basis partner` stages both (a dry run offline unless `--apply
@@ -432,6 +470,13 @@ in how the three are read side by side, and it is on the honest list below.
   Open until a person marks them.
 
 **The workflow**
+- **The gates judge what is on file.** Seventy-seven sites of one 104-site
+  intake have no lease term, so their lease gate is open, not passed.
+- **No hurdle rate ships.** Until the workspace sets one, the return gate
+  follows the committee alone; and it judges a screening return, not the
+  investment model.
+- **A technical sign-off is not a gate**, an "energized land" pathway is
+  not a use, and nothing writes to a task tracker.
 - **An upgrade request is a mark.** Nothing is filed with a utility, no
   cost or schedule is carried, and granting it changes no fact.
 - **A funding decision funds nothing.** It is the committee's recorded

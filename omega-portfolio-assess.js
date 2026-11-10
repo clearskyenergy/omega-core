@@ -16,6 +16,9 @@
         hooks.upgrade(siteId, body)   a utility-side upgrade request, marked
         hooks.fund(siteId, action, body)   submit | withdraw | decide
         hooks.report(siteId)   the diligence report, printed
+     OmegaPortfolioAssess.gateStrip(a)   the workspace's gates as one row of marks
+        (pass, fail, open), where its settings carry them; hooks.vote(siteId,
+        vote, note) records a review member's vote
      OmegaPortfolioAssess.report(site, full, o)   the DILIGENCE REPORT of one
         site as a page of HTML (the three uses, the power, the screens, the
         checklist); printReports(pages, o) prints one or many.
@@ -49,6 +52,8 @@
     '.pa-box{border:1px solid var(--ows-line);border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.5}.pa-box.on{border-color:var(--ows-brand)}.pa-box .a{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}.pa-box select,.pa-box input[type=text],.pa-box input[type=number]{border:1px solid var(--ows-line2);border-radius:8px;padding:5px 8px;font:inherit;font-size:12px;background:var(--ows-paper);color:var(--ows-ink);min-width:0}' +
     '.pa-pf{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;font-variant-numeric:tabular-nums}.pa-pf td{padding:3px 0;border-top:1px solid var(--ows-line)}.pa-pf td:last-child{text-align:right;font-weight:600}.pa-pf tr.t td{border-top:1px solid var(--ows-line2);font-weight:700}' +
     '.pa-fund{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:20px;border:1px solid var(--ows-line2);white-space:nowrap}.pa-fund.sub{background:#EAF2FD;border-color:#BFD6F2;color:var(--ows-brand-ink)}.pa-fund.ok{background:#E7F6EC;border-color:#B9E2C6;color:var(--ows-green)}.pa-fund.no{background:#FCEDEA;border-color:#F0C4BB;color:#A43A26}' +
+    '.pa-gs{display:inline-flex;gap:3px;vertical-align:middle;margin-left:6px}.pa-g{display:inline-block;min-width:18px;padding:0 3px;border-radius:4px;font:700 9px/14px "DM Mono",monospace;text-align:center;border:1px solid var(--ows-line2);color:var(--ows-ink3);background:var(--ows-paper)}.pa-g.pass{background:#E7F6EC;border-color:#B9E2C6;color:var(--ows-green)}.pa-g.fail{background:#FCEDEA;border-color:#F0C4BB;color:#A43A26}' +
+    '.pa-gl{display:grid;gap:5px;margin-top:6px}.pa-gl>div{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start;font-size:12.5px;line-height:1.45}.pa-gl .w{color:var(--ows-ink2)}' +
     '.pa-tbl{width:100%;border-collapse:collapse;font-size:11.5px;font-variant-numeric:tabular-nums}.pa-tbl th,.pa-tbl td{text-align:right;padding:4px 6px;border-top:1px solid var(--ows-line)}.pa-tbl th{font-weight:600;color:var(--ows-ink3)}.pa-tbl td:first-child,.pa-tbl th:first-child{text-align:left}' +
     '';
   function style() { if (document.getElementById('pa-style')) return; var s = document.createElement('style'); s.id = 'pa-style'; s.textContent = CSS; document.head.appendChild(s); }
@@ -92,6 +97,28 @@
     return { power: power, compute: compute, bess: bess, charge: charge, ready: ready, fund: f ? fundCell(a, f) : null };
   }
 
+  /* ── the workspace's gates: one mark a gate, in its own order ─────────── */
+  var GATE_WORD = { pass: 'passed', fail: 'not met', open: 'open' };
+  function gateStrip(a) {
+    var g = a && a.gates; if (!g || !g.list) return '';
+    style();
+    return '<span class="pa-gs" aria-label="Gates: ' + esc(g.passed) + ' of ' + esc(g.of) + ' passed">' + g.list.map(function (x) { return '<span class="pa-g ' + esc(x.state) + '" title="' + esc(x.key + ' ' + x.label + ' — ' + (GATE_WORD[x.state] || x.state) + ': ' + x.words) + '">' + esc(x.key.replace('G', '')) + '</span>'; }).join('') + '</span>';
+  }
+  function gatesHtml(a, o) {
+    var g = a.gates; if (!g || !g.list) return '';
+    var h = '<div class="dr-sec" style="margin:2px 0 0">Gates \u00b7 ' + esc(g.passed) + ' of ' + esc(g.of) + ' passed' + (g.failed.length ? ' \u00b7 ' + esc(g.failed.join(', ')) + ' not met' : '') + '</div><div class="pa-box" id="pa-gates"><div class="pa-gl">' +
+      g.list.map(function (x) { return '<div><span class="pa-g ' + esc(x.state) + '" style="min-width:26px">' + esc(x.key) + '</span><div><b>' + esc(x.label) + '</b> <span class="' + (x.state === 'pass' ? 'pa-ok' : x.state === 'fail' ? 'pa-warn' : '') + '" style="font-size:11.5px">' + esc(GATE_WORD[x.state] || x.state) + '</span><div class="w">' + esc(x.words) + '</div></div></div>'; }).join('') + '</div>';
+    var rv = a.review, ri = o.review;
+    if (rv) {
+      h += '<div style="margin-top:10px;border-top:1px solid var(--ows-line);padding-top:8px" id="pa-review"><b>' + esc(rv.name) + '</b> <span class="pa-fund ' + (rv.outcome ? 'ok' : rv.split ? 'no' : 'sub') + '">' + esc(rv.outcome ? rv.outcomeLabel : rv.split ? 'Split' : rv.cast + ' of ' + rv.of + ' voted') + '</span>' +
+        '<div style="margin-top:4px">' + rv.votes.map(function (v) { return '<span style="display:inline-block;margin:0 10px 2px 0">' + esc(v.name) + ': <b>' + esc(v.vote === 'own' ? 'own' : v.vote === 'flip' ? 'flip' : '—') + '</b></span>'; }).join('') + '</div>' +
+        '<div class="w" style="color:var(--ows-ink2)">The decision stands when every member has voted the same way.</div>';
+      if (ri && ri.canVote) h += '<div class="a"><input type="text" maxlength="500" data-pa-vote-note placeholder="A note with your vote (optional)" aria-label="A note with your vote" style="flex:1;min-width:150px"><button type="button" class="pa-btn primary" data-pa-vote="own">Own &amp; operate</button><button type="button" class="pa-btn" data-pa-vote="flip">Portfolio / flip</button><button type="button" class="pa-btn" data-pa-vote="clear">Clear my vote</button></div>';
+      h += '</div>';
+    }
+    return h + '</div>';
+  }
+
   /* ── the side panel's card ────────────────────────────────────────────── */
   function useCard(key, title, best, body) { return '<div class="pa-use' + (best === key ? ' best' : '') + (body.off ? ' off' : '') + '"><div class="k">' + esc(title) + (best === key ? ' · highest' : '') + '</div>' + body.html + '</div>'; }
   function card(site, a, o) {
@@ -127,6 +154,7 @@
     if (o.canEdit) h += '<div class="pa-appr">' + [['compute', 'Compute'], ['bess', 'Battery'], ['supercharger', 'Fast charging']].map(function (u) { return '<label><input type="checkbox" data-pa-use="' + u[0] + '"' + (uses.indexOf(u[0]) >= 0 ? ' checked' : '') + '> ' + u[1] + '</label>'; }).join('') +
       '<button type="button" class="pa-btn primary" data-pa="approve">' + (d ? 'Change' : 'Approve') + '</button>' + (d ? '<button type="button" class="pa-btn" data-pa="withdraw">Withdraw</button>' : '') + '</div><div style="font-size:11.5px;color:var(--ows-ink2)">Tick more than one for a hybrid. The site moves to Pre-development and its Site Map project opens on what is approved.</div>';
     h += fundingHtml(a, o, best);
+    h += gatesHtml(a, o);
     /* shovel ready */
     var r = a.readiness || {};
     h += '<div class="dr-sec" style="margin:2px 0 0">Shovel ready</div><div id="pa-ready">' + readyHead(r) + '</div>';
@@ -236,6 +264,7 @@
     });
     on('[data-pa="withdraw"]', function () { if (hooks.approve) hooks.approve(site.id, []); });
     on('[data-pa="report"]', function () { if (hooks.report) hooks.report(site.id); });
+    on('[data-pa-vote]', function (b) { var n = el.querySelector('[data-pa-vote-note]'); if (hooks.vote) hooks.vote(site.id, b.getAttribute('data-pa-vote'), n ? n.value.trim() : ''); });
     /* the upgrade request */
     var upSel = el.querySelector('[data-pa-up-unit]'), upKw = el.querySelector('[data-pa-up-kw]');
     if (upSel && upKw) { var showKw = function () { upKw.style.display = upSel.value ? 'none' : ''; }; upSel.addEventListener('change', showKw); showKw(); }
@@ -352,6 +381,9 @@
     if ((res.verify || []).length) h += '<h2>Verify next</h2><ol>' + res.verify.map(function (v) { return '<li>' + esc(v.label) + '</li>'; }).join('') + '</ol>';
     /* decisions */
     var d = A.decision, fd = A.funding, fi = o.funding;
+    var gts = A.gates, rvw = A.review;
+    if (gts && gts.list) h += '<h2>Gates: ' + esc(gts.passed) + ' of ' + esc(gts.of) + ' passed</h2><table><tr><th>Gate</th><th style="text-align:left">Where it stands</th><th></th></tr>' + gts.list.map(function (x) { return '<tr><td>' + esc(x.key + ' ' + x.label) + '</td><td style="text-align:left">' + esc(x.words) + '</td><td><span class="st ' + (x.state === 'pass' ? 'done' : x.state === 'fail' ? 'na' : 'open') + '"' + (x.state === 'fail' ? ' style="color:#a43a26"' : '') + '>' + esc(GATE_WORD[x.state] || x.state) + '</span></td></tr>'; }).join('') + '</table>' +
+      (rvw ? '<div class="sub" style="margin-top:6px">' + esc(rvw.words) + '. ' + rvw.votes.map(function (v) { return esc(v.name) + ': ' + esc(v.vote ? (v.vote === 'own' ? 'own and operate' : 'portfolio / flip') + (v.at ? ' (' + String(v.at).slice(0, 10) + ')' : '') : 'not voted'); }).join(' · ') + '</div>' : '');
     if (d || fd || fi) h += '<h2>Decisions</h2>' + kv([['Pre-development', d ? 'Approved: ' + esc(d.label) + (d.by ? ' by ' + esc(d.by) : '') + (d.at ? ' on ' + esc(String(d.at).slice(0, 10)) : '') : 'Not approved'],
       fi || fd ? ['Funding' + (fi ? ' · ' + fi.name : ''), fd ? (fd.status === 'approved' ? 'Approved' : fd.status === 'declined' ? 'Declined' : 'Submitted, waiting on the committee') + (fd.label ? ' · ' + esc(fd.label) : '') + (fd.amountUsd != null ? ' · ' + esc(usd(fd.amountUsd)) : '') + (fd.decision ? ' · ' + esc(fd.decision.name || fd.decision.by || '') + (fd.decision.at ? ', ' + esc(String(fd.decision.at).slice(0, 10)) : '') + (fd.decision.note ? ': ' + esc(fd.decision.note) : '') : '') : 'Not submitted'] : null]);
     h += '<h2>What this report does not read</h2><ul><li>Flood, wetlands, protected species and contamination: no environmental source is read; those checklist items stay open until a person records the evidence.</li><li>The utility’s answer: a published hosting figure, where one exists, is not a will-serve letter.</li><li>Carrier names need the federal broadband data to answer; a quote from a carrier is the evidence.</li><li>Screened means public data or an imported fact speaks to an item. It is not evidence on file.</li></ul>' +
@@ -372,5 +404,5 @@
     return fr;
   }
 
-  window.OmegaPortfolioAssess = { cells: cells, card: card, wire: wire, report: report, printReports: printReports, kwWord: kwWord, kwhWord: kwhWord, money: money, pct: pct };
+  window.OmegaPortfolioAssess = { cells: cells, card: card, wire: wire, gateStrip: gateStrip, report: report, printReports: printReports, kwWord: kwWord, kwhWord: kwhWord, money: money, pct: pct };
 })();
