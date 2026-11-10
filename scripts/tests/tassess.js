@@ -288,6 +288,23 @@ test('A13 the funding list: only where the workspace names a committee; screened
   assert.throws(function () { A.fundingChange(ok, 'submit', { uses: ['compute'] }, base); }, /already approved/); assert.throws(function () { A.fundingChange(ok, 'withdraw', {}, base); }, /committee has decided/);
   var no = A.fundingChange(ok, 'decide', { decision: 'declined', note: 'power is a ceiling' }, eli); assert.equal(no.status, 'declined'); assert.equal(A.fundingChange(no, 'submit', { uses: ['compute'] }, base).status, 'submitted');
   assert.equal(A.fundingChange(f, 'withdraw', {}, base).status, 'withdrawn'); assert.equal(A.fundingView(A.fundingChange(f, 'withdraw', {}, base)), null);
+  /* an approval made in a connected app (2026-11-10): only where the settings name one; the linked record, marked after the link, by a committee member */
+  assert.throws(function () { A.fundingChange(f, 'link', { ref: 'card-77' }, base); }, function (e) { return e.status === 409 && /here only/.test(e.message); });
+  var H = 'a'.repeat(64), cfgA = A.configOf({ portfolioAssessment: { funding: { mode: 'committee', members: [{ name: 'Eli N', email: 'eli@acme-sites.com' }], attest: { source: 'Asana', keyHash: H } } } });
+  assert.deepStrictEqual(cfgA.funding.attest, { source: 'Asana', keyHash: H }); assert.equal(A.configOf({ portfolioAssessment: { funding: { mode: 'committee', members: [{ email: 'eli@acme-sites.com' }], attest: { keyHash: 'short' } } } }).funding.attest, undefined);
+  assert.equal(A.fundingInfo(cfgA, 'x').alsoIn, 'Asana'); assert.ok(JSON.stringify(A.fundingInfo(cfgA, 'x')).indexOf(H) < 0);
+  var bA = Object.assign({}, base, { config: cfgA }), T0 = Date.parse(NOW), iso = function (ms) { return new Date(ms).toISOString(); };
+  var lk = A.fundingChange(f, 'link', { ref: 'card-77' }, bA); assert.equal(lk.status, 'submitted'); assert.equal(lk.attest.ref, 'card-77'); assert.equal(A.fundingView(lk).attest.ref, 'card-77');
+  assert.throws(function () { A.fundingChange(f, 'link', { ref: 'no spaces allowed' }, bA); }, /linked by the id/);
+  assert.throws(function () { A.fundingChange(f, 'attest', { ref: 'card-77', email: 'eli@acme-sites.com', completedAt: iso(T0) }, bA); }, /not the record/);
+  assert.throws(function () { A.fundingChange(lk, 'attest', { ref: 'card-78', email: 'eli@acme-sites.com', completedAt: iso(T0) }, bA); }, /not the record/);
+  assert.throws(function () { A.fundingChange(lk, 'attest', { ref: 'card-77', email: 'pat@acme-sites.com', name: 'Pat', completedAt: iso(T0) }, bA); }, function (e) { return e.status === 403 && /Pat is not on the committee/.test(e.message); });
+  assert.throws(function () { A.fundingChange(lk, 'attest', { ref: 'card-77', email: 'eli@acme-sites.com', completedAt: iso(T0 - 1000) }, bA); }, /before this request was linked/);
+  assert.throws(function () { A.fundingChange(lk, 'attest', { ref: 'card-77', email: 'eli@acme-sites.com', completedAt: iso(T0 + 3600000) }, bA); }, /future/);
+  var at = A.fundingChange(lk, 'attest', { ref: 'card-77', email: 'ELI@acme-sites.com', completedAt: iso(T0 + 1000) }, bA);
+  assert.equal(at.status, 'approved'); assert.equal(at.decision.by, 'eli@acme-sites.com'); assert.equal(at.decision.via, 'Asana'); assert.equal(at.decision.attested.ref, 'card-77'); assert.equal(A.fundingView(at).decision.via, 'Asana'); assert.equal(A.fundingView(at).attest, undefined);
+  assert.throws(function () { A.fundingChange(at, 'attest', { ref: 'card-77', email: 'eli@acme-sites.com', completedAt: iso(T0 + 2000) }, bA); }, /has decided/);
+  assert.equal(A.fundingChange(at, 'decide', { decision: 'declined', note: 'on second thought' }, Object.assign({}, bA, { by: 'eli@acme-sites.com' })).decision.via, undefined);
   var v = A.fundingView(ok); assert.equal(v.status, 'approved'); assert.equal(v.decision.name, 'Eli N'); assert.ok(!('history' in v));
   assert.equal(A.listView({ result: res, funding: ok }, { address: { state: 'OK', zip: '74834' }, transformerKva: 1500 }, {}).funding.status, 'approved');
 });

@@ -15,6 +15,13 @@
                  the workspace funds its own sites: the finance marketplace
                  stands down and a screened site is submitted to, and decided
                  by, these people (each signs in on that address, verified)
+       .funding.attest  { source, keyHash }
+                 a connected app the committee may ALSO decide in (Asana):
+                 the request is linked to the one record that app's server
+                 made for it, and a committee member marking that record
+                 done there is the approval. Only the sha256 of the app
+                 server's key is stored; the key itself lives in that
+                 server's environment and is never given to this script
        .compute  { basis: 'partner', reference?: { revenueUsdPerMwYear, … } }
                  a Nano or Micro pod is priced on the offtake partner's stated
                  per-megawatt figures (compute-contract.js PARTNER.reference),
@@ -53,6 +60,8 @@
      … --closing-lease-years 15 --closing-agreement SHA    the closing steps
      … --review-member "Name <address>"     once a member of the review board
      … --review-name "Executive Review"
+     … --attest-source Asana --attest-key-hash <sha256 of the app server's key, 64 hex>
+     … --clear-attest                       decisions here only again
      … --clear-funding                      back to the finance marketplace
      … --compute-basis spot                 back to the public reference price
      add --apply --confirm-org chileasing.com to write
@@ -89,17 +98,27 @@ function asked() {
   if (has('--clear-funding')) { if (members.length) throw refuse(2, '--clear-funding and --member do not go together'); out.funding = null; }
   else if (members.length) out.funding = { mode: 'committee', name: (arg('--committee-name') || 'Finance committee').trim().slice(0, 60), members: members };
   else if (arg('--committee-name')) throw refuse(2, '--committee-name needs the committee: name each member with --member "Name <address>"');
+  var ah = arg('--attest-key-hash'), asrc = arg('--attest-source');
+  if (has('--clear-attest')) { if (ah || asrc) throw refuse(2, '--clear-attest and --attest-key-hash do not go together'); out.attest = null; }
+  else if (ah != null || asrc != null) {
+    if (!/^[0-9a-f]{64}$/.test(String(ah || ''))) throw refuse(2, '--attest-key-hash is the sha256 of the connected app server’s key: 64 lowercase hex characters. Never the key itself.');
+    if (!String(asrc || '').trim()) throw refuse(2, '--attest-key-hash needs --attest-source: the name of the app the committee decides in (Asana)');
+    out.attest = { source: String(asrc).trim().slice(0, 30), keyHash: String(ah) };
+  }
   if (basis != null) { if (basis !== 'partner' && basis !== 'spot') throw refuse(2, '--compute-basis is partner (the offtake partner’s stated figures) or spot (the public reference price)'); out.compute.basis = basis === 'partner' ? 'partner' : null; }
   var ref = { revenueUsdPerMwYear: money('--revenue-per-mw-year'), capexUsdPerMw: money('--capex-per-mw'), utilityUsdPerMwYear: money('--utility-per-mw-year') };
   Object.keys(ref).forEach(function (k) { if (ref[k] === undefined) delete ref[k]; });
   if (Object.keys(ref).length) out.compute.reference = ref;
-  if (out.funding === undefined && out.review === undefined && out.closing === undefined && !Object.keys(out.compute).length && !Object.keys(out.gates).length) throw refuse(2, 'Nothing to set. Name the committee (--member "Name <address>"), the review board (--review-member), a gate (--min-kva, --min-lease-years, --irr-hurdle), the compute basis (--compute-basis partner), or a figure (--revenue-per-mw-year).');
+  if (out.funding === undefined && out.attest === undefined && out.review === undefined && out.closing === undefined && !Object.keys(out.compute).length && !Object.keys(out.gates).length) throw refuse(2, 'Nothing to set. Name the committee (--member "Name <address>"), the review board (--review-member), a gate (--min-kva, --min-lease-years, --irr-hurdle), the compute basis (--compute-basis partner), or a figure (--revenue-per-mw-year).');
   return out;
 }
 /* the stored block with the change folded in; every other key kept */
 function patch(current, ask) {
   var cur = current && typeof current === 'object' ? JSON.parse(JSON.stringify(current)) : {}, was = JSON.stringify(cur);
-  if (ask.funding === null) delete cur.funding; else if (ask.funding) cur.funding = ask.funding;
+  /* naming the committee again keeps the app it also decides in */
+  if (ask.funding === null) delete cur.funding; else if (ask.funding) { var kept = cur.funding && cur.funding.attest; cur.funding = ask.funding; if (kept) cur.funding.attest = kept; }
+  if (ask.attest === null) { if (cur.funding) delete cur.funding.attest; }
+  else if (ask.attest) { if (!cur.funding || cur.funding.mode !== 'committee') throw refuse(2, 'Refusing: a connected app decides for a committee, and this workspace names none. Name it first (--member "Name <address>").'); cur.funding.attest = ask.attest; }
   if (Object.keys(ask.compute).length) {
     cur.compute = cur.compute && typeof cur.compute === 'object' ? cur.compute : {};
     if ('basis' in ask.compute) { if (ask.compute.basis) cur.compute.basis = ask.compute.basis; else delete cur.compute.basis; }
@@ -114,6 +133,7 @@ function patch(current, ask) {
   if (ask.closing && (!read.closing || read.closing.minLeaseYears !== ask.closing.minLeaseYears)) throw refuse(2, 'Refusing: the assessment would not read those closing steps back.');
   Object.keys(ask.gates).forEach(function (k) { if (!read.gates || read.gates[k] !== ask.gates[k]) throw refuse(2, 'Refusing: ' + k + ' = ' + ask.gates[k] + ' is outside the range the assessment accepts.'); });
   if (ask.funding && (!read.funding || read.funding.members.length !== ask.funding.members.length)) throw refuse(2, 'Refusing: the assessment would not read that committee back (a repeated or malformed address?).');
+  if (ask.attest && !(read.funding && read.funding.attest && read.funding.attest.keyHash === ask.attest.keyHash)) throw refuse(2, 'Refusing: the assessment would not read that connected app back.');
   if (ask.compute.reference) Object.keys(ask.compute.reference).forEach(function (k) { if (read.compute.reference[k] !== ask.compute.reference[k]) throw refuse(2, 'Refusing: ' + k + ' = ' + ask.compute.reference[k] + ' is outside the range the assessment accepts.'); });
   return { changed: JSON.stringify(cur) !== was, config: cur, read: read };
 }
@@ -129,13 +149,15 @@ async function write(db, org, ask, now) {
       /* the whole record as just read, with the one block replaced: a merge would keep a key this run removes */
       tx.set(bref, Object.assign({}, b.data() || {}, { portfolioAssessment: p.config }));
       tx.set(auditRef, { action: 'portfolio-assessment-settings', orgId: org, by: WHO, at: now, funding: p.read.funding ? { name: p.read.funding.name, members: p.read.funding.members.map(function (m) { return m.email; }) } : null, computeBasis: p.read.compute.basis || 'spot', reference: p.config.compute && p.config.compute.reference || null,
+        alsoDecidedIn: p.read.funding && p.read.funding.attest ? p.read.funding.attest.source : null,
         gates: p.read.gates || null, review: p.read.review ? { name: p.read.review.name, members: p.read.review.members.map(function (m) { return m.email; }) } : null });
     }
     return p;
   });
 }
 function summary(p) {
-  return { changed: p.changed, funding: p.read.funding ? { name: p.read.funding.name, members: p.read.funding.members } : 'none: the finance marketplace', computeBasis: p.read.compute.basis || 'spot (the public reference price)',
+  return { changed: p.changed, funding: p.read.funding ? { name: p.read.funding.name, members: p.read.funding.members } : 'none: the finance marketplace',
+    alsoDecidedIn: p.read.funding && p.read.funding.attest ? p.read.funding.attest.source : 'nowhere else: decisions are made here', computeBasis: p.read.compute.basis || 'spot (the public reference price)',
     reference: p.read.compute.basis === 'partner' ? AS.referenceOf(p.read) : null,
     gates: p.read.gates || 'none', closing: p.read.closing || 'none', review: p.read.review ? { name: p.read.review.name, members: p.read.review.members } : 'none' };
 }
