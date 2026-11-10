@@ -21,7 +21,8 @@
      site-import     { rows: [ site-save-shaped, … ] }  bulk register,
                        at most 500 rows; all-or-nothing validation; a row
                        whose externalSiteIds.import names a site already
-                       here UPDATES it (the non-blank cells only)
+                       here UPDATES it (the non-blank cells only; the
+                       word "clear" in a cell empties that fact)
      contact-save    { id?, name, title, email, phone, notes, primary }
      contact-archive { id }                               workspace admin
      log             { type, subject, body, at?, contactId?, followUpAt? }
@@ -177,6 +178,8 @@ var LIST_CAP = 200, FOLLOW_SCAN = 2000, FOLLOW_CAP = 200, SCAN = 500;
 var PROFORMA_CAP = 25, BULK_CAP = 200;
 var BULK_ACTIONS = ['site-archive', 'site-restore', 'site-delete', 'site-set-status', 'site-set-partner', 'site-tag', 'send-to-editor', 'send-to-finance', 'send-to-partner', 'proforma-bulk', 'site-model-bulk', 'design-sync'];
 var MODEL_BULK_CAP = 10, PLATFORM = 'ClearSky-OMEGA';
+/* the facts a CSV update may empty with the word "clear" */
+var IMPORT_CLEARABLE = ['installedKw', 'reportedPeakKw', 'termYearsRemaining', 'availablePowerMw', 'serviceCapacityKw', 'transformerKva', 'existingPeakKw', 'powerPricePerKwh', 'annualUsageKwh', 'portfolioPartner', 'status'];
 
 /* level: 'read' | 'write' | 'admin'. The caller's org comes from the verified
    identity; staff pass everywhere. */
@@ -635,10 +638,18 @@ var handler = A.handler(async function (req, res) {
     var rows = b.rows;
     if (!Array.isArray(rows) || !rows.length) throw A.httpError(400, 'No rows to import');
     if (rows.length > 500) throw A.httpError(400, 'At most 500 rows per import; split the file and retry');
-    var prepared = [], importErrors = [];
+    /* THE WORD "clear" IN A CELL EMPTIES THAT FACT on a site the row
+       updates (a blank cell is "no change", so a wrong figure could never
+       be taken off in bulk: a sheet that put the transformer's kVA in the
+       service column, 2026-11-09). Only the facts named in CLEARABLE, never
+       the name; on a row that creates a site it is simply a blank. */
+    var prepared = [], importErrors = [], clears = [];
     rows.forEach(function (r, i) {
-      try { prepared.push(sentFields(siteInput(r || {}))); }
-      catch (e) { importErrors.push({ row: i + 1, error: e.message }); }
+      var row = Object.assign({}, r || {}), gone = [];
+      Object.keys(row).forEach(function (k) { if (typeof row[k] === 'string' && /^\(?clear\)?$/i.test(row[k].trim())) { if (IMPORT_CLEARABLE.indexOf(k) >= 0) gone.push(k); delete row[k]; } });
+      clears.push(gone);
+      try { prepared.push(sentFields(siteInput(row))); }
+      catch (e) { importErrors.push({ row: i + 1, error: e.message }); prepared.push(null); }
     });
     if (importErrors.length)
       return { ok: false, imported: 0, errorCount: importErrors.length, errors: importErrors.slice(0, 25),
@@ -654,7 +665,7 @@ var handler = A.handler(async function (req, res) {
        one file. Still all-or-nothing. */
     var wanted = {}, known = {};
     prepared.forEach(function (r, i) {
-      var k = r.externalSiteIds && r.externalSiteIds.import; if (!k) return;
+      var k = r && r.externalSiteIds && r.externalSiteIds.import; if (!k) return;
       if (wanted[k] != null) importErrors.push({ row: i + 1, error: 'External ID "' + k + '" is on row ' + (wanted[k] + 1) + ' too: one row a site' });
       else wanted[k] = i;
     });
@@ -675,9 +686,11 @@ var handler = A.handler(async function (req, res) {
         Object.keys(prepared[bi]).forEach(function (k) {
           if (k === 'externalSiteIds' || k === 'tags' || k === 'siteScopes' || k === 'meters' || k === 'commercial') return;
           if (raw[k] === undefined || raw[k] === null || raw[k] === '') return;
+          if (typeof raw[k] === 'string' && /^\(?clear\)?$/i.test(raw[k].trim())) return;   /* the clears below, and only the clearable */
           patchI[k] = prepared[bi][k];
         });
         if (Array.isArray(raw.tags) && raw.tags.length) patchI.tags = prepared[bi].tags;
+        clears[bi].forEach(function (k) { patchI[k] = null; });
         patchI.externalSiteIds = Object.assign({}, cur.externalSiteIds || {}, prepared[bi].externalSiteIds);
         batch.update(hit.ref, Object.assign(patchI, { updatedAt: now, updatedBy: by }));
         batch.create(db.collection('omega_audit').doc(),

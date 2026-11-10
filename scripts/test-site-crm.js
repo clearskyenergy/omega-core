@@ -1153,6 +1153,16 @@ function seed() {
     assert.equal(s1.city, 'Enid', 'a blank cell is no change'); assert.equal(s1.serviceCapacityKw, 500, 'a blank cell never clears'); assert.equal(s1.termYearsRemaining, 7.3);
     assert.deepEqual(s1.tags, ['priority'], 'the sheet carries no tags: they stay'); assert.equal(s1.createdBy, PM.email); assert.equal(s1.updatedBy, PM.email);
     assert.ok(audits('sitecrm-import').some(function (x) { return x.siteId === id1 && x.updated === true && x.fields.indexOf('transformerKva') >= 0; }));
+    /* the word "clear" empties a fact on the site a row updates; never the name or a field outside the list; on a new site it is a blank */
+    var cleared = await call('POST', { action: 'site-import', rows: [
+      { name: 'Godfather Pizza', city: 'clear', serviceCapacityKw: 'clear', transformerKva: '750', termYearsRemaining: '(Clear)', externalSiteIds: { import: 'FE-001' } },
+      { name: 'Brand New', serviceCapacityKw: 'clear', externalSiteIds: { import: 'FE-901' } }] }, PM);
+    assert.equal(cleared.updated, 1); assert.equal(cleared.created, 1);
+    var c1 = stored(id1);
+    assert.equal(c1.serviceCapacityKw, null, 'cleared'); assert.equal(c1.termYearsRemaining, null); assert.equal(c1.transformerKva, 750); assert.equal(c1.existingPeakKw, 120, 'untouched');
+    assert.equal(c1.city, 'Enid', 'the city is not a clearable fact'); assert.equal(c1.name, 'Godfather Pizza');
+    assert.equal(stored(cleared.ids[1]).serviceCapacityKw, undefined, 'a new site: the word is a blank');
+    await call('POST', { action: 'site-import', rows: [{ name: 'Godfather Pizza', transformerKva: '500', externalSiteIds: { import: 'FE-001' } }] }, PM);
     var twice = await call('POST', { action: 'site-import', rows: [{ name: 'X', externalSiteIds: { import: 'FE-7' } }, { name: 'Y', externalSiteIds: { import: 'FE-7' } }] }, PM);
     assert.equal(twice.ok, false); assert.match(twice.errors[0].error, /on row 1 too/);
     db.data.get(O + '/sites/' + id1).facts = { utility: { value: 'OG&E' } };

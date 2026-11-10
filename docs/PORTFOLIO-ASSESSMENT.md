@@ -239,8 +239,8 @@ workbook.
   kinds; *Open in Site Map* makes the project.
 - **A CSV row updates a site only by its External ID.** A row whose
   External ID names a site already here updates it (the cells that carry
-  something; a blank cell is no change), so a corrected sheet does not
-  duplicate. A row with no External ID always creates a site, and a site
+  something; a blank cell is no change, and the word `clear` empties a
+  fact), so a corrected sheet does not duplicate. A row with no External ID always creates a site, and a site
   the workbook import keeps as facts is refused by name. The dialog's
   partner is applied to a CSV only.
 - **In a diligence workspace the pipeline is the register**, so the
