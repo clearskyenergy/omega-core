@@ -1542,6 +1542,12 @@ the same day, each in Tommy's words in the doc:
   review's decision (own and operate, or portfolio / flip) stands only
   when every member has voted the same way (`assess-review-vote`, a member
   on a verified address; staff are refused too).
+- **Closing a site** (`portfolioAssessment.closing`, `assess-closing`):
+  purchased from the partner, the host agreement assigned to the workspace,
+  a lease of the years it needs, each recorded by a person; site control
+  (G0) passes when all three stand and the lease gate reads the new lease.
+  The screen's lease years and the closing lease are two questions, never
+  one number.
 - **A withdrawn approval puts the site's status back** (`statusBefore`).
 - **The diligence report** is the page's print of `GET ?assessment=1`
   (`OmegaPortfolioAssess.report`), from a hidden frame.

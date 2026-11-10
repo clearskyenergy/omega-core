@@ -109,6 +109,8 @@ function configOf(billing) {
   /* the workspace's own gates (its operating rules, never core's) and who sits on its review */
   var ga = obj(raw.gates), rv = obj(raw.review), reviewers = people(rv.members);
   var gates = { minKva: within(ga.minKva, 1, 1000000), minLeaseYears: within(ga.minLeaseYears, 0.1, 99), irrHurdlePct: within(ga.irrHurdlePct, 0, 500) };
+  /* what must be true before a site is the workspace's own: bought, the host agreement assigned, a lease of the length it needs */
+  var cl = obj(raw.closing), closeYears = within(cl.minLeaseYears, 1, 99);
   return { bess: obj(raw.bess), supercharger: { assumptions: obj(obj(raw.supercharger).assumptions), sizing: obj(obj(raw.supercharger).sizing) },
     compute: { chipset: typeof c.chipset === 'string' ? c.chipset : null, pue: num(c.pue) > 1 && num(c.pue) < 2.5 ? num(c.pue) : null,
       partnerName: typeof c.partnerName === 'string' ? c.partnerName.slice(0, 80) : null, partnerFeePct: num(c.partnerFeePct) >= 0 && num(c.partnerFeePct) <= 50 ? num(c.partnerFeePct) : null,
@@ -119,7 +121,8 @@ function configOf(billing) {
         gpusPerMw: within(ref.gpusPerMw, 1, 1e5), racksPerMw: within(ref.racksPerMw, 1, 1000), chipset: typeof ref.chipset === 'string' && CM.chipset(ref.chipset) ? ref.chipset : null } },
     funding: fu.mode === 'committee' && members.length ? { mode: 'committee', name: clean(fu.name, 60) || 'Finance committee', members: members } : null,
     gates: gates.minKva != null || gates.minLeaseYears != null || gates.irrHurdlePct != null ? gates : null,
-    review: reviewers.length ? { name: clean(rv.name, 60) || 'Executive Review', members: reviewers } : null };
+    review: reviewers.length ? { name: clean(rv.name, 60) || 'Executive Review', members: reviewers } : null,
+    closing: closeYears != null ? { minLeaseYears: closeYears, agreement: clean(cl.agreement, 60) || 'site host agreement' } : null };
 }
 function clean(v, n) { return typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n) || null : null; }
 
@@ -619,6 +622,50 @@ function fundingInfo(cfg, email) {
   return f ? { mode: f.mode, name: f.name, members: f.members.map(function (m) { return m.name; }), canDecide: !!committeeMember(cfg, email) } : null;
 }
 
+/* ── CLOSING A SITE (2026-11-09, Tommy: "we buy the sites from francis and
+   they have to then go get the SHA signed over to us and there needs to be
+   a 15 or 20 year lease on the site"). Three things a person records on a
+   site, each with who and when: it is PURCHASED from the partner, its host
+   agreement is ASSIGNED to the workspace, and a LEASE of the length the
+   workspace needs is in place (the years typed; shorter is recorded and
+   said, never rounded up). Only where the workspace's settings carry the
+   length (portfolioAssessment.closing.minLeaseYears). Site control is
+   closed when all three stand. Nothing here buys, assigns or signs
+   anything: it is the record of what was done. ── */
+var CLOSING_STEPS = ['purchase', 'assignment', 'lease'];
+/* input: { step, done: true|false, years?, note? }. ctx: { by, now, config, canEdit } */
+function closingChange(cur, input, ctx) {
+  input = input || {}; ctx = ctx || {}; cur = cur && typeof cur === 'object' ? cur : {};
+  var cfg = ctx.config, C = cfg && cfg.closing;
+  if (!C) throw fail(409, 'This workspace has no closing steps in its settings');
+  if (ctx.canEdit === false) throw fail(403, 'Your role in this workspace can read the closing steps but not mark them');
+  var step = String(input.step || '').toLowerCase().trim(), done = input.done !== false && input.done !== 'false', note = clean(input.note, 500);
+  if (CLOSING_STEPS.indexOf(step) < 0) throw fail(400, 'A closing step is purchase, assignment or lease');
+  var out = { purchase: cur.purchase || null, assignment: cur.assignment || null, lease: cur.lease || null, history: Array.isArray(cur.history) ? cur.history.slice() : [] }, years = null;
+  if (!done) out[step] = null;
+  else {
+    if (step === 'lease') { years = num(input.years); if (!(years >= 1 && years <= 99)) throw fail(400, 'Say how many years the lease runs (the workspace needs ' + C.minLeaseYears + ' or more)'); }
+    out[step] = step === 'lease' ? { years: years, by: ctx.by || null, at: ctx.now || null, note: note } : { by: ctx.by || null, at: ctx.now || null, note: note };
+  }
+  out.history = out.history.concat([{ step: step, done: done, years: years, by: ctx.by || null, at: ctx.now || null, note: note }]).slice(-40);
+  return out;
+}
+function closingView(cl, cfg, site) {
+  var C = cfg && cfg.closing; if (!C) return null;
+  cl = cl && typeof cl === 'object' ? cl : {};
+  var partner = clean(site && site.portfolioPartner, 80), le = cl.lease && num(cl.lease.years) != null ? cl.lease : null, leaseOk = !!le && le.years >= C.minLeaseYears, cur = num(site && site.termYearsRemaining);
+  function st(x) { return x ? { done: true, by: x.by || null, at: x.at || null, note: x.note || null } : { done: false }; }
+  var steps = [
+    Object.assign({ key: 'purchase', label: 'Purchased' + (partner ? ' from ' + partner : ''), words: cl.purchase ? 'Recorded' : 'Not recorded' }, st(cl.purchase)),
+    Object.assign({ key: 'assignment', label: 'The ' + C.agreement + ' assigned to us', words: cl.assignment ? 'Recorded' : 'Not on file' + (partner ? ': ' + partner + ' has to get it signed over' : '') }, st(cl.assignment)),
+    Object.assign({ key: 'lease', label: 'A lease of ' + C.minLeaseYears + ' years or more', years: le ? le.years : null, short: !!le && !leaseOk,
+      words: le ? le.years + ' years' + (leaseOk ? '' : ': under the ' + C.minLeaseYears + ' needed') : 'Not in place' + (cur != null ? ' (' + cur + ' years are left on the agreement on file)' : '') }, st(le), { done: leaseOk })
+  ];
+  var open = steps.filter(function (x) { return !x.done; }).map(function (x) { return x.key; });
+  return { steps: steps, done: steps.length - open.length, of: steps.length, complete: !open.length, waiting: open, minLeaseYears: C.minLeaseYears, leaseYears: le ? le.years : null,
+    words: !open.length ? 'Closed: purchased, the ' + C.agreement + ' assigned, a ' + le.years + '-year lease in place' : (steps.length - open.length) + ' of ' + steps.length + ' closing steps done; waiting on ' + open.map(function (k) { return { purchase: 'the purchase', assignment: 'the ' + C.agreement + ' being assigned', lease: le ? 'a longer lease (' + le.years + ' of ' + C.minLeaseYears + ' years)' : 'the ' + C.minLeaseYears + '-year lease' }[k]; }).join(', ') };
+}
+
 /* ── THE GATES AND THE REVIEW (2026-11-09, Tommy, of his company's operating
    system: "this is our company how we work see that this is supported by
    what we are doing here"). A workspace's own pipeline, read off what is
@@ -664,7 +711,7 @@ function reviewChange(cur, input, ctx) {
 }
 /* site: the flat record. res: the assessment's answer. a: the stored assessment (decision, funding, review) */
 function gatesOf(site, res, cfg, a) {
-  cfg = cfg || {}; var G = cfg.gates, R = cfg.review; if (!G && !R) return null;
+  cfg = cfg || {}; var G = cfg.gates, R = cfg.review; if (!G && !R && !cfg.closing) return null;
   site = site || {}; res = res || {}; a = a || {}; G = G || {};
   var out = [], rd = res.readiness || {}, p = res.power || {};
   function item(key) { var hit = null; (rd.sections || []).forEach(function (s) { (s.items || []).forEach(function (i) { if (i.key === key) hit = i; }); }); return hit; }
@@ -672,7 +719,9 @@ function gatesOf(site, res, cfg, a) {
   /* G0 */
   var ctl = item('control-evidence'), ctlSec = (rd.sections || []).filter(function (s) { return s.key === 'control'; })[0];
   var ctlDone = ctl ? ctl.state === 'done' : !!(ctlSec && ctlSec.done > 0);
-  add('G0', 'Intake & site control', ctlDone ? 'pass' : 'open', ctlDone ? 'On the register, with site-control evidence on file' : 'On the register; the site-control document is not on file');
+  var clv = closingView(a.closing, cfg, site);
+  if (clv) add('G0', 'Intake & site control', clv.complete ? 'pass' : 'open', clv.words);
+  else add('G0', 'Intake & site control', ctlDone ? 'pass' : 'open', ctlDone ? 'On the register, with site-control evidence on file' : 'On the register; the site-control document is not on file');
   /* G1: the transformer, else the service as its kVA at the continuous rating */
   if (G.minKva != null) {
     var kva = num(p.transformerKva), svc = num(p.serviceCapacityKw), eq = kva != null ? kva : svc != null ? svc / CONTINUOUS : null;
@@ -681,8 +730,9 @@ function gatesOf(site, res, cfg, a) {
   }
   /* G2 */
   if (G.minLeaseYears != null) {
-    var t = num(site.termYearsRemaining);
-    add('G2', 'Lease', t == null ? 'open' : t >= G.minLeaseYears ? 'pass' : 'fail', t == null ? 'No lease term on file to judge against the ' + G.minLeaseYears + ' years wanted' : t + ' years left: ' + (t >= G.minLeaseYears ? 'at or over' : 'under') + ' the ' + G.minLeaseYears + ' years wanted');
+    /* the new lease, once one is recorded at closing, is the lease; until then the term left on the agreement on file */
+    var nl = clv && clv.leaseYears != null ? clv.leaseYears : null, t = nl != null ? nl : num(site.termYearsRemaining);
+    add('G2', 'Lease', t == null ? 'open' : t >= G.minLeaseYears ? 'pass' : 'fail', t == null ? 'No lease term on file to judge against the ' + G.minLeaseYears + ' years wanted' : t + (nl != null ? '-year lease recorded at closing: ' : ' years left: ') + (t >= G.minLeaseYears ? 'at or over' : 'under') + ' the ' + G.minLeaseYears + ' years wanted');
   }
   /* G3: the pathway a person picked */
   var dec = a.decision && a.decision.status === 'approved' ? a.decision : null, fd = a.funding && FUND_STATES.indexOf(a.funding.status) >= 0 && a.funding.status !== 'withdrawn' ? a.funding : null;
@@ -752,7 +802,7 @@ function listView(a, site, ctx) {
   r.stale = r.inputHash !== inputHashOf(site, a.screen || null, a.parcel || null, cfg, a.upgrade || null);
   r.funding = fundingView(a.funding);
   /* the gates read the STORED answer whole (the checklist's items), not the thinned row */
-  r.gates = gatesOf(site, a.result, cfg, a); r.review = reviewView(a.review, cfg);
+  r.gates = gatesOf(site, a.result, cfg, a); r.review = reviewView(a.review, cfg); r.closing = closingView(a.closing, cfg, site);
   r.decision = a.decision && a.decision.status === 'approved' ? { status: 'approved', uses: a.decision.uses || [], label: a.decision.label || null, by: a.decision.by || null, at: a.decision.at || null, note: a.decision.note || null } : null;
   r.screenAt = a.screen && a.screen.at || null; r.parcelAt = a.parcel && a.parcel.at || null; r.by = a.by || null;
   r.located = a.screen && a.screen.located ? { precision: a.screen.located.precision || null, approximate: a.screen.located.approximate === true } : null;
@@ -763,6 +813,7 @@ function listView(a, site, ctx) {
 module.exports = { VERSION: VERSION, CONFIG_KEY: CONFIG_KEY, CONTINUOUS: CONTINUOUS, MODULARS: MODULARS, CHECKLIST: CHECKLIST, ITEM_KEYS: ITEM_KEYS, CHECK_STATES: CHECK_STATES,
   USES: USES, PREDEV_STATUS: PREDEV_STATUS, recommendOf: recommendOf, decisionOf: decisionOf, klassOf: klassOf, rateOf: rateOf, referenceOf: referenceOf,
   PAIR_MIN_KW: PAIR_MIN_KW, pairingOf: pairingOf, UPGRADE_STATES: UPGRADE_STATES, upgradeOf: upgradeOf, upgradeView: upgradeView, upgradeAdviceOf: upgradeAdviceOf,
+  CLOSING_STEPS: CLOSING_STEPS, closingChange: closingChange, closingView: closingView,
   REVIEW_VOTES: REVIEW_VOTES, reviewer: reviewer, reviewView: reviewView, reviewChange: reviewChange, reviewInfo: reviewInfo, gatesOf: gatesOf,
   FUND_STATES: FUND_STATES, committeeMember: committeeMember, fundingRequest: fundingRequest, fundingChange: fundingChange, fundingView: fundingView, fundingInfo: fundingInfo,
   configOf: configOf, powerOf: powerOf, computeOf: computeOf, readinessOf: readinessOf, verificationsOf: verificationsOf, inputHashOf: inputHashOf, assess: assess, listView: listView, stateOf: stateOf };

@@ -332,6 +332,27 @@ test('A14 the workspace’s own gates, read off the record in its order: power a
   assert.equal(A.listView({ result: rg }, good, {}).gates, null); assert.equal(A.listView({ result: rg }, good, {}).review, null); assert.equal(A.gatesOf(good, rg, A.configOf({}), {}), null);
 });
 
+test('A15 closing a site: purchased from the partner, the host agreement assigned to us, a lease of the length the workspace needs; a shorter lease is recorded and said, never rounded up; site control closes when all three stand, and the lease gate reads the new lease', function () {
+  var cfg = A.configOf({ portfolioAssessment: { gates: { minKva: 500, minLeaseYears: 5 }, closing: { minLeaseYears: 15, agreement: 'SHA' } } }), ctx = { by: 'pat', now: NOW, config: cfg };
+  assert.deepStrictEqual(cfg.closing, { minLeaseYears: 15, agreement: 'SHA' }); assert.equal(A.configOf({}).closing, null); assert.equal(A.configOf({ portfolioAssessment: { closing: { minLeaseYears: 0 } } }).closing, null);
+  var site = { address: { state: 'OK', zip: '74834' }, transformerKva: 500, termYearsRemaining: 7.3, portfolioPartner: 'Francis Energy' }, res = A.assess(site, { now: NOW, config: cfg });
+  var v0 = A.closingView(null, cfg, site); assert.equal(v0.done, 0); assert.equal(v0.complete, false); assert.deepStrictEqual(v0.waiting, ['purchase', 'assignment', 'lease']);
+  assert.equal(v0.steps[0].label, 'Purchased from Francis Energy'); assert.ok(/Francis Energy has to get it signed over/.test(v0.steps[1].words)); assert.ok(/7\.3 years are left on the agreement on file/.test(v0.steps[2].words));
+  function gate(g, k) { return g.list.filter(function (x) { return x.key === k; })[0]; }
+  var g0 = A.gatesOf(site, res, cfg, {}); assert.equal(gate(g0, 'G0').state, 'open'); assert.ok(/0 of 3 closing steps done/.test(gate(g0, 'G0').words)); assert.equal(gate(g0, 'G2').state, 'pass');      /* 7.3 years clears the 5-year screen */
+  var c = A.closingChange(null, { step: 'purchase', note: 'batch one' }, ctx); c = A.closingChange(c, { step: 'assignment' }, ctx);
+  assert.throws(function () { A.closingChange(c, { step: 'lease' }, ctx); }, /how many years the lease runs \(the workspace needs 15 or more\)/); assert.throws(function () { A.closingChange(c, { step: 'deed' }, ctx); }, /purchase, assignment or lease/);
+  assert.throws(function () { A.closingChange(c, { step: 'purchase' }, Object.assign({}, ctx, { canEdit: false })); }, /not mark them/); assert.throws(function () { A.closingChange(null, { step: 'purchase' }, { config: A.configOf({}) }); }, /no closing steps/);
+  c = A.closingChange(c, { step: 'lease', years: 10 }, ctx); var v10 = A.closingView(c, cfg, site);
+  assert.equal(v10.done, 2); assert.equal(v10.complete, false); assert.equal(v10.steps[2].short, true); assert.ok(/a longer lease \(10 of 15 years\)/.test(v10.words)); assert.equal(gate(A.gatesOf(site, res, cfg, { closing: c }), 'G0').state, 'open');
+  c = A.closingChange(c, { step: 'lease', years: 20 }, ctx); var v20 = A.closingView(c, cfg, site), g20 = A.gatesOf(site, res, cfg, { closing: c });
+  assert.equal(v20.complete, true); assert.equal(v20.leaseYears, 20); assert.ok(/Closed: purchased, the SHA assigned, a 20-year lease in place/.test(v20.words)); assert.equal(gate(g20, 'G0').state, 'pass'); assert.ok(/20-year lease recorded at closing/.test(gate(g20, 'G2').words));
+  var back = A.closingChange(c, { step: 'assignment', done: false }, ctx); assert.equal(A.closingView(back, cfg, site).complete, false); assert.equal(back.history.length, 5); assert.equal(back.purchase.note, 'batch one');
+  assert.equal(A.listView({ result: res, closing: c }, site, { config: cfg }).closing.complete, true); assert.equal(A.listView({ result: res }, site, {}).closing, null);
+  /* a workspace with only closing steps still has a site-control gate */
+  var only = A.configOf({ portfolioAssessment: { closing: { minLeaseYears: 20 } } }); assert.deepStrictEqual(A.gatesOf(site, res, only, {}).list.map(function (x) { return x.key; }), ['G0', 'G3', 'G5']); assert.equal(only.closing.agreement, 'site host agreement');
+});
+
 /* ── D: the door ────────────────────────────────────────────────────────── */
 function world(opts) {
   opts = opts || {};
@@ -501,6 +522,21 @@ test('D10 the review through the door: 409 with no board in the settings; a memb
   assert.equal(w.audits('sitecrm-assess-review-vote').length, 3); assert.equal(s1.revision, 2); assert.ok(s1.assessment.review.votes['tom@acme-sites_com']);
   var full = await w.door.fullView({ root: w.root }, { id: 's1' }, s1); assert.equal(full.review.outcome, 'own'); assert.equal(full.gates.of, 6);   /* G0, G1, G2, G3, G5, G6: no hurdle and no committee here, so no G4 */
   assert.deepStrictEqual(await w.door.reviewInfo(w.ctx({}, as('tom'))), { name: 'Executive Review', members: ['Barry', 'Tom'], canVote: true, me: 'Tom' }); assert.equal((await w.door.reviewInfo(w.ctx({}))).canVote, false);
+});
+
+test('D11 a closing step through the door: 409 with none in the settings; an editor records a step on one site or many, stored with who and when and audited; a lease needs its years; a viewer is refused', async function () {
+  var plain = world(); await plain.post({ action: 'assess-run', ids: ['s1'] }); await rejects(plain.post({ action: 'assess-closing', site: 's1', step: 'purchase' }), 409, /no closing steps/);
+  var w = world({ billing: { portfolioAssessment: { gates: { minLeaseYears: 5 }, closing: { minLeaseYears: 15, agreement: 'SHA' } } } }); await w.post({ action: 'assess-run', ids: ['s1', 's2'] });
+  var many = await w.post({ action: 'assess-closing', ids: ['s1', 's2', 'gone'], step: 'purchase' }); assert.equal(many.count, 2); assert.equal(many.refused.length, 1); assert.ok(/Recorded the purchase on 2 sites/.test(many.note));
+  var as = await w.post({ action: 'assess-closing', site: 's1', step: 'assignment', note: 'signed 11/9' }); assert.equal(as.closing.done, 2); assert.ok(/Recorded the SHA assignment on 1 site/.test(as.note));
+  await rejects(w.post({ action: 'assess-closing', site: 's1', step: 'lease' }), 400, /how many years/);
+  var le = await w.post({ action: 'assess-closing', site: 's1', step: 'lease', years: 20 }); assert.equal(le.closing.complete, true); assert.ok(/the lease \(20 years\)/.test(le.note));
+  var s1 = w.site('s1'); assert.equal(s1.assessment.closing.lease.years, 20); assert.equal(s1.assessment.closing.assignment.by, PAT.email); assert.equal(s1.revision, 2); assert.equal(s1.termYearsRemaining, 7.3);      /* the site's own fact is not rewritten */
+  var rows = await w.door.listJoin({ root: w.root }, [{ id: 's1', data: function () { return w.site('s1'); } }, { id: 's2', data: function () { return w.site('s2'); } }]);
+  assert.equal(rows.s1.closing.complete, true); assert.equal(rows.s2.closing.done, 1); assert.equal(rows.s1.gates.list[0].state, 'pass'); assert.equal(rows.s2.gates.list[0].state, 'open');
+  var undo = await w.post({ action: 'assess-closing', site: 's1', step: 'lease', done: false }); assert.equal(undo.closing.complete, false); assert.ok(/Took back the lease/.test(undo.note));
+  assert.equal(w.audits('sitecrm-assess-closing').length, 5); assert.equal((await w.door.fullView({ root: w.root }, { id: 's1' }, w.site('s1'))).closingHistory.length, 4);
+  await rejects(w.post({ action: 'assess-closing', site: 's1', step: 'purchase' }, { canEdit: false }), 403);
 });
 
 (async function () {

@@ -40,6 +40,12 @@
           approved or declined by a member of the committee signed in on a
           VERIFIED address (403 for anybody else, staff included). Each
           site answers for itself: a refusal names the site and why.
+     POST assess-closing { ids[] | site, step: purchase|assignment|lease, done?, years?, note? }
+          A CLOSING STEP recorded on a site (409 where the workspace's
+          settings carry none): it is purchased, its host agreement is
+          assigned to the workspace, a lease of the years typed is in
+          place. An editor's; done: false takes a step back. A record of
+          what was done, never the doing of it.
      POST assess-review-vote { ids[] | site, vote: own|flip|clear, note? }
           THE REVIEW, for a workspace whose settings name one
           (portfolioAssessment.review; 409 elsewhere): one member's vote on
@@ -63,7 +69,7 @@
 'use strict';
 var AS = require('./assess'), G = require('./grid-screen'), D = require('./diligence'), BR = require('./site-bridge');
 
-var ACTIONS = ['assess-run', 'assess-screen-start', 'assess-screen-step', 'assess-check', 'assess-approve', 'assess-upgrade', 'assess-fund-submit', 'assess-fund-withdraw', 'assess-fund-decide', 'assess-review-vote'];
+var ACTIONS = ['assess-run', 'assess-screen-start', 'assess-screen-step', 'assess-check', 'assess-approve', 'assess-upgrade', 'assess-fund-submit', 'assess-fund-withdraw', 'assess-fund-decide', 'assess-review-vote', 'assess-closing'];
 var RUN_CAP = 50, SCREEN_IDS_CAP = 200, APPROVE_CAP = 200, MARK_CAP = 200, SCREEN_FRESH_DAYS = 7, PARCEL_TIMEOUT = 12000;
 
 function owns(action) { return ACTIONS.indexOf(String(action || '')) >= 0; }
@@ -329,6 +335,26 @@ function make(deps) {
     return { ok: true, action: action, count: n, done: out.done, refused: out.refused, funding: ids.length === 1 ? last : undefined, note: words + refusedWords(out.refused, names) };
   }
 
+  /* ── a closing step, recorded ────────────────────────────────────────── */
+  async function closing(c) {
+    mustEdit(c);
+    var ids = idsOf(c), cfg = AS.configOf(await billingOf(c.root)), names = {}, last = null;
+    if (!cfg.closing) throw fail(409, 'This workspace has no closing steps in its settings');
+    var out = await each(c, ids, function (tx, sref, data) {
+      names[sref.id] = data.name || sref.id;
+      var a = Object.assign({}, data.assessment || {});
+      a.closing = AS.closingChange(a.closing || null, c.b, { by: c.by, now: deps.now(), config: cfg, canEdit: c.canEdit });
+      tx.update(sref, { assessment: plain(a) });
+      last = AS.closingView(a.closing, cfg, flat(sref.id, data));
+      tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-closing', orgId: c.org, siteId: sref.id, by: c.by, at: deps.now(), step: String(c.b.step || ''), done: c.b.done !== false && c.b.done !== 'false', years: c.b.years == null ? null : Number(c.b.years), complete: last.complete, note: typeof c.b.note === 'string' ? c.b.note.slice(0, 500) : null }));
+      return { complete: last.complete };
+    });
+    var n = out.done.length, step = String(c.b.step || ''), undo = c.b.done === false || c.b.done === 'false';
+    var word = { purchase: 'the purchase', assignment: 'the ' + cfg.closing.agreement + ' assignment', lease: 'the lease' + (c.b.years != null && !undo ? ' (' + Number(c.b.years) + ' years)' : '') }[step] || 'the step';
+    return { ok: true, count: n, done: out.done, refused: out.refused, closing: ids.length === 1 ? last : undefined,
+      note: (undo ? 'Took back ' : 'Recorded ') + word + ' on ' + n + ' site' + (n === 1 ? '' : 's') + '.' + (ids.length === 1 && last ? ' ' + last.words + '.' : '') + refusedWords(out.refused, names) };
+  }
+
   /* ── the review: one member's vote; the decision is every member's, derived ── */
   async function review(c) {
     var ids = idsOf(c), cfg = AS.configOf(await billingOf(c.root)), names = {}, last = null;
@@ -352,6 +378,7 @@ function make(deps) {
   async function post(c) {
     var action = String(c.b.action || '');
     if (action === 'assess-review-vote') return review(c);
+    if (action === 'assess-closing') return closing(c);
     if (action === 'assess-upgrade') return upgrade(c);
     if (action === 'assess-fund-submit') return fund(c, 'submit');
     if (action === 'assess-fund-withdraw') return fund(c, 'withdraw');
@@ -370,7 +397,7 @@ function make(deps) {
     return { result: result, ranAt: a.at || null, ranBy: a.by || null, stored: !!a.result, stale: !!a.result && a.result.inputHash !== result.inputHash,
       screen: screenOf(data), parcel: a.parcel || null, decision: a.decision && a.decision.status === 'approved' ? a.decision : null, uses: AS.USES,
       funding: AS.fundingView(a.funding), fundingHistory: a.funding && Array.isArray(a.funding.history) ? a.funding.history : [], upgradeHistory: a.upgrade && Array.isArray(a.upgrade.history) ? a.upgrade.history : [],
-      gates: AS.gatesOf(flat(ref.id, data), result, cfg, a), review: AS.reviewView(a.review, cfg) };
+      gates: AS.gatesOf(flat(ref.id, data), result, cfg, a), review: AS.reviewView(a.review, cfg), closing: AS.closingView(a.closing, cfg, flat(ref.id, data)), closingHistory: a.closing && Array.isArray(a.closing.history) ? a.closing.history : [] };
   }
   /* the workspace's review board, as the pages may know it (null where there is none) */
   async function reviewInfo(c) { return AS.reviewInfo(AS.configOf(await billingOf(c.root)), c.caller && c.caller.claims && c.caller.claims.email_verified === true ? c.by : null); }

@@ -259,6 +259,31 @@ On the site record (`site-crm.html`) the *Capital request* card becomes
 decided, with the way to the register. `GET ?site=` carries `funding` and
 the site's `assessment` row for it.
 
+### Closing a site
+
+Tommy, 2026-11-09: "we buy the sites from francis and they have to then go
+get the SHA signed over to us and there needs to be a 15 or 20 year lease
+on the site". Where the workspace's settings carry the lease it needs
+(`portfolioAssessment.closing { minLeaseYears, agreement }`), each site has
+three closing steps a person records, with who and when
+(`assess-closing { step: purchase | assignment | lease, years?, done? }`):
+it is **purchased** from the partner, its host agreement is **assigned** to
+the workspace, and a **lease** of the years typed is in place. A lease
+shorter than the workspace needs is recorded and said ("10 years: under the
+15 needed"), never rounded up. Site control (G0) passes only when all three
+stand, and the lease gate (G2) reads the new lease once it is recorded. The
+site's own lease-term fact is not rewritten. The selection bar's *Closing ▾*
+records a step on many sites at once, and the gate filter lists the sites
+waiting on a step and the closed ones.
+
+The two lease figures are different questions: the screen (G2,
+`gates.minLeaseYears`) asks whether the agreement on file is worth
+pursuing; closing asks whether the lease the workspace needs is in place.
+No site of a 104-site intake had fifteen years left, so a 15-year screen
+would have failed every site before anything was bought.
+
+A record of what was done. Marking a step buys, assigns and signs nothing.
+
 ### The gates and the review
 
 Tommy, 2026-11-09, of his company's operating system: "this is our company
@@ -271,7 +296,7 @@ core carries none, and a workspace with neither has no gates.
 
 | gate | passes when | fails when |
 |---|---|---|
-| G0 Intake & site control | the site-control item of the checklist has evidence | never (open until then) |
+| G0 Intake & site control | the three closing steps stand, where the workspace has them; else the site-control item of the checklist has evidence | never (open until then) |
 | G1 Power | the transformer (else the service at its continuous rating) is at least `minKva` | it is under it |
 | G2 Lease | the term left is at least `minLeaseYears` | it is under it |
 | G3 Pathway | a pathway is picked: approved for pre-development, or submitted for funding | never |
@@ -391,6 +416,7 @@ is switched on for the workspace, the same screen also lands on
 | `funding { mode: 'committee', name, members[] }` | the funding list in place of the finance marketplace |
 | `gates { minKva, minLeaseYears, irrHurdlePct }` | the workspace's screening gates |
 | `review { name, members[] }` | its review board: every member votes own or flip |
+| `closing { minLeaseYears, agreement }` | the closing steps: purchased, the host agreement assigned, a lease that long |
 
 `scripts/set-portfolio-assessment.js --org <org> --member "Name <address>"
 --compute-basis partner` stages both (a dry run offline unless `--apply

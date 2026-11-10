@@ -80,7 +80,9 @@
     var up = a.upgrade || null;
     if (up && p.availableKw != null) power += '<div class="pa-sub ' + (up.status === 'declined' ? 'pa-warn' : 'pa-blue') + '" title="' + esc(up.words || '') + '">↑ ' + esc(kwWord(up.targetKw)) + ' upgrade ' + esc(UP_WORD[up.status] || up.status) + '</div>';
     var adv = !up ? a.upgradeAdvice || null : null;
-    if (adv) power += '<div class="pa-sub pa-warn" title="' + esc(adv.words || '') + '">↑ ask +' + esc(kwWord(adv.shortKw)) + ' for 1 MW</div>';
+    /* a near miss leads: where the next pod up is within a tenth of what it needs, that is the ask to make first */
+    var near = adv && adv.next && adv.next.shortKw <= adv.next.needKw * 0.1 ? adv.next : null;
+    if (adv) power += '<div class="pa-sub pa-warn" title="' + esc(adv.words || '') + '">' + (near ? '↑ ' + esc(kwWord(near.shortKw)) + ' short of a ' + esc(near.label.replace(/ (Nano|Micro) pod$/, '')) + ' pod' : '↑ ask +' + esc(kwWord(adv.shortKw)) + ' for 1 MW') + '</div>';
     var c = a.compute || {}, ce = c.economics || {}, pf = ce.proforma || null, compute = c.fits && c.chosen
       ? '<b title="' + esc(c.words || '') + '">' + esc((c.chosen.units > 1 ? c.chosen.units + ' × ' : '') + c.chosen.label) + '</b>' + (c.chosen.klassLabel ? '<span class="pa-k" title="' + esc(c.chosen.klassLabel) + ': ' + (c.chosen.klass === 'micro' ? '1 MW of IT and up' : 'under 1 MW of IT') + '">' + esc(c.chosen.klass === 'micro' ? 'Micro' : 'Nano') + '</span>' : '') +
         '<div class="pa-sub" title="' + esc((ce.irrBasis || '') + (pf && pf.asStated ? '. On ' + pf.partner + '’s own utility figure: ' + pct(pf.asStated.irrPct) : '')) + '">' + (ce.irrPct != null ? esc(pct(ce.irrPct)) + (ce.basis === 'partner' ? ' · partner ref' : ' at ' + esc(ce.priceBasis || 'reference')) : 'no reference price') + '</div>'
@@ -97,6 +99,19 @@
     return { power: power, compute: compute, bess: bess, charge: charge, ready: ready, fund: f ? fundCell(a, f) : null };
   }
 
+  /* ── closing a site: purchased, the host agreement assigned, the lease in place ── */
+  function closingHtml(a, o) {
+    var c = a.closing; if (!c || !c.steps) return '';
+    var h = '<div class="dr-sec" style="margin:2px 0 0">Closing \u00b7 ' + esc(c.done) + ' of ' + esc(c.of) + '</div><div class="pa-box' + (c.complete ? ' on' : '') + '" id="pa-closing"><div class="pa-gl">' +
+      c.steps.map(function (x) {
+        var act = '';
+        if (o.canEdit) act = x.key === 'lease'
+          ? '<div class="a"><input type="number" min="1" max="99" step="1" data-pa-close-years placeholder="years" aria-label="Lease term in years" value="' + esc(x.years != null ? x.years : '') + '" style="width:80px"><button type="button" class="pa-btn' + (x.done ? '' : ' primary') + '" data-pa-close="lease">' + (x.years != null ? 'Change' : 'Record the lease') + '</button>' + (x.years != null ? '<button type="button" class="pa-btn" data-pa-close-undo="lease">Undo</button>' : '') + '</div>'
+          : '<div class="a">' + (x.done ? '<button type="button" class="pa-btn" data-pa-close-undo="' + esc(x.key) + '">Undo</button>' : '<button type="button" class="pa-btn primary" data-pa-close="' + esc(x.key) + '">Mark done</button>') + '</div>';
+        return '<div><span class="pa-g ' + (x.done ? 'pass' : x.short ? 'fail' : 'open') + '" style="min-width:26px">' + (x.done ? '✓' : '·') + '</span><div><b>' + esc(x.label) + '</b><div class="w">' + esc(x.words) + (x.by ? ' \u00b7 ' + esc(x.by) + (x.at ? ', ' + esc(String(x.at).slice(0, 10)) : '') : '') + '</div>' + act + '</div></div>';
+      }).join('') + '</div><div style="color:var(--ows-ink2);margin-top:6px;font-size:11.5px">A record of what was done. Marking a step buys, assigns and signs nothing.</div></div>';
+    return h;
+  }
   /* ── the workspace's gates: one mark a gate, in its own order ─────────── */
   var GATE_WORD = { pass: 'passed', fail: 'not met', open: 'open' };
   function gateStrip(a) {
@@ -153,6 +168,7 @@
     if (d) h += '<div style="font-size:13px"><span class="pill pill-teal">✓ ' + esc(d.label) + '</span> <span style="color:var(--ows-ink2);font-size:12px">' + esc((d.by || '') + (d.at ? ' · ' + String(d.at).slice(0, 10) : '')) + '</span></div>';
     if (o.canEdit) h += '<div class="pa-appr">' + [['compute', 'Compute'], ['bess', 'Battery'], ['supercharger', 'Fast charging']].map(function (u) { return '<label><input type="checkbox" data-pa-use="' + u[0] + '"' + (uses.indexOf(u[0]) >= 0 ? ' checked' : '') + '> ' + u[1] + '</label>'; }).join('') +
       '<button type="button" class="pa-btn primary" data-pa="approve">' + (d ? 'Change' : 'Approve') + '</button>' + (d ? '<button type="button" class="pa-btn" data-pa="withdraw">Withdraw</button>' : '') + '</div><div style="font-size:11.5px;color:var(--ows-ink2)">Tick more than one for a hybrid. The site moves to Pre-development and its Site Map project opens on what is approved.</div>';
+    h += closingHtml(a, o);
     h += fundingHtml(a, o, best);
     h += gatesHtml(a, o);
     /* shovel ready */
@@ -264,6 +280,13 @@
     });
     on('[data-pa="withdraw"]', function () { if (hooks.approve) hooks.approve(site.id, []); });
     on('[data-pa="report"]', function () { if (hooks.report) hooks.report(site.id); });
+    on('[data-pa-close]', function (b) {
+      if (!hooks.closing) return;
+      var step = b.getAttribute('data-pa-close'), body = { step: step, done: true };
+      if (step === 'lease') { var y = el.querySelector('[data-pa-close-years]'); body.years = y && y.value ? Number(y.value) : null; }
+      hooks.closing(site.id, body);
+    });
+    on('[data-pa-close-undo]', function (b) { if (hooks.closing) hooks.closing(site.id, { step: b.getAttribute('data-pa-close-undo'), done: false }); });
     on('[data-pa-vote]', function (b) { var n = el.querySelector('[data-pa-vote-note]'); if (hooks.vote) hooks.vote(site.id, b.getAttribute('data-pa-vote'), n ? n.value.trim() : ''); });
     /* the upgrade request */
     var upSel = el.querySelector('[data-pa-up-unit]'), upKw = el.querySelector('[data-pa-up-kw]');
@@ -382,6 +405,8 @@
     /* decisions */
     var d = A.decision, fd = A.funding, fi = o.funding;
     var gts = A.gates, rvw = A.review;
+    var cls = A.closing;
+    if (cls && cls.steps) h += '<h2>Closing: ' + esc(cls.done) + ' of ' + esc(cls.of) + '</h2><table>' + cls.steps.map(function (x) { return '<tr><td>' + esc(x.label) + '</td><td style="text-align:left">' + esc(x.words) + (x.by ? ' · ' + esc(x.by) + (x.at ? ', ' + esc(String(x.at).slice(0, 10)) : '') : '') + '</td><td><span class="st ' + (x.done ? 'done' : 'open') + '">' + (x.done ? 'done' : 'open') + '</span></td></tr>'; }).join('') + '</table>';
     if (gts && gts.list) h += '<h2>Gates: ' + esc(gts.passed) + ' of ' + esc(gts.of) + ' passed</h2><table><tr><th>Gate</th><th style="text-align:left">Where it stands</th><th></th></tr>' + gts.list.map(function (x) { return '<tr><td>' + esc(x.key + ' ' + x.label) + '</td><td style="text-align:left">' + esc(x.words) + '</td><td><span class="st ' + (x.state === 'pass' ? 'done' : x.state === 'fail' ? 'na' : 'open') + '"' + (x.state === 'fail' ? ' style="color:#a43a26"' : '') + '>' + esc(GATE_WORD[x.state] || x.state) + '</span></td></tr>'; }).join('') + '</table>' +
       (rvw ? '<div class="sub" style="margin-top:6px">' + esc(rvw.words) + '. ' + rvw.votes.map(function (v) { return esc(v.name) + ': ' + esc(v.vote ? (v.vote === 'own' ? 'own and operate' : 'portfolio / flip') + (v.at ? ' (' + String(v.at).slice(0, 10) + ')' : '') : 'not voted'); }).join(' · ') + '</div>' : '');
     if (d || fd || fi) h += '<h2>Decisions</h2>' + kv([['Pre-development', d ? 'Approved: ' + esc(d.label) + (d.by ? ' by ' + esc(d.by) : '') + (d.at ? ' on ' + esc(String(d.at).slice(0, 10)) : '') : 'Not approved'],

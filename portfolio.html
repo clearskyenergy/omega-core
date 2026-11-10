@@ -174,7 +174,7 @@
     <select class="pf-sel" id="f-kind" aria-label="Project type"><option value="">Any type</option></select>
     <select class="pf-sel" id="f-partner" aria-label="Portfolio partner"><option value="">Any partner</option></select>
     <select class="pf-sel" id="f-fund" aria-label="Funding list" style="display:none"><option value="">Any funding</option><option value="ready">Screened, not submitted</option><option value="submitted">Waiting on the committee</option><option value="approved">Funding approved</option><option value="declined">Declined</option></select>
-<select class="pf-sel" id="f-gate" aria-label="Gates" style="display:none"><option value="">Any gate</option><option value="screen-pass">Passes power and lease</option><option value="g1-fail">Power not met</option><option value="g2-fail">Lease not met</option><option value="g2-open">Lease term not on file</option><option value="review-wait">Waiting on the review</option><option value="own">Decided: own and operate</option><option value="flip">Decided: portfolio / flip</option></select>
+<select class="pf-sel" id="f-gate" aria-label="Gates" style="display:none"><option value="">Any gate</option><option value="screen-pass">Passes power and lease</option><option value="g1-fail">Power not met</option><option value="g2-fail">Lease not met</option><option value="g2-open">Lease term not on file</option><option value="closing-wait">Closing: waiting on a step</option><option value="closing-done">Closed</option><option value="review-wait">Waiting on the review</option><option value="own">Decided: own and operate</option><option value="flip">Decided: portfolio / flip</option></select>
     <select class="pf-sel" id="f-cap" aria-label="Free capacity"><option value="">Any capacity</option><option value="upgrade-todo">Under 1 MW · upgrade to request</option><option value="upgrade">Utility upgrade requested</option><option value="90">≥ 90 kW · a 75 kW Nano pod</option><option value="180">≥ 180 kW · a 150 kW Nano pod</option><option value="420">≥ 420 kW · a 350 kW Nano pod</option><option value="600">≥ 600 kW · a 500 kW Nano pod, four posts</option><option value="900">≥ 900 kW · a 750 kW Nano pod</option><option value="1200">≥ 1.2 MW · a 1 MW Micro pod</option><option value="none">No power on file</option></select>
     <label class="pf-toggle"><input type="checkbox" id="f-archived"> Show archived</label>
   </div>
@@ -188,6 +188,7 @@
     <button type="button" id="ba-finance" title="One deal per site on the finance marketplace">Send to marketplace</button>
     <span class="menu"><button type="button" id="ba-fund" aria-haspopup="true" style="display:none" title="The funding list: a screened site is submitted, and the finance committee approves or declines it">Funding ▾</button></span>
     <span class="menu"><button type="button" id="ba-upgrade" aria-haspopup="true" title="Mark that the utility is being asked for more power on these sites, to carry a larger compute unit">Utility upgrade ▾</button></span>
+ <span class="menu"><button type="button" id="ba-closing" aria-haspopup="true" style="display:none" title="Record a closing step on the selected sites: purchased, the host agreement assigned, the lease in place">Closing ▾</button></span>
     <button type="button" id="ba-report" title="One diligence report a site: compute, the battery and fast charging, the power, the screens and the readiness checklist">Diligence reports</button>
     <button type="button" id="ba-model" title="The Compute Site Pro Forma on each site, from its service, chargers, usage and pods; ten at a time">Run compute model</button>
     <span class="menu"><button type="button" id="ba-proforma" aria-haspopup="true">Pod pro forma ▾</button></span>
@@ -361,6 +362,8 @@
         if (gt === 'g2-fail' && gateState(s, 'G2') !== 'fail') return false;
         if (gt === 'g2-open' && gateState(s, 'G2') !== 'open') return false;
         if (gt === 'review-wait' && !(rvv && !rvv.outcome && rvv.cast > 0)) return false;
+        if (gt === 'closing-wait' && !(ga.closing && !ga.closing.complete && ga.closing.done > 0)) return false;
+        if (gt === 'closing-done' && !(ga.closing && ga.closing.complete)) return false;
         if ((gt === 'own' || gt === 'flip') && !(rvv && rvv.outcome === gt)) return false;
       }
       if (fu && fundKey(s) !== fu) return false;
@@ -674,6 +677,18 @@
       { label: 'Portfolio / flip', run: function () { act('assess-review-vote', { vote: 'flip' }); } },
       { label: 'Clear my vote', run: function () { act('assess-review-vote', { vote: 'clear' }); } }];
   }
+  /* a closing step, recorded on the selection */
+  byId('ba-closing').addEventListener('click', function () {
+    function step(body) { return function () { act('assess-closing', body); }; }
+    menu(this, [{ hd: 'Record on the selected sites' },
+      { label: 'Purchased', sub: 'Bought from the partner', run: step({ step: 'purchase', done: true }) },
+      { label: 'Host agreement assigned to us', sub: 'The signed assignment is in hand', run: step({ step: 'assignment', done: true }) },
+      { label: 'Lease in place…', sub: 'The term, in years', run: function () { var v = window.prompt('Lease term in years:'); var n = Number(String(v || '').replace(/[^\d.]/g, '')); if (n >= 1) act('assess-closing', { step: 'lease', done: true, years: n }); } },
+      { hd: 'Undo' },
+      { label: 'Take back the purchase', run: step({ step: 'purchase', done: false }) },
+      { label: 'Take back the assignment', run: step({ step: 'assignment', done: false }) },
+      { label: 'Take back the lease', run: step({ step: 'lease', done: false }) }]);
+  });
   /* a utility-side upgrade request, marked on the selection */
   byId('ba-upgrade').addEventListener('click', function () {
     function req(body) { return function () { act('assess-upgrade', Object.assign({ status: 'requested' }, body)); }; }
@@ -753,6 +768,8 @@
     ['Compute: class', function (s) { var a = asOf(s), c = a && a.compute; return c && c.fits && c.chosen ? c.chosen.klassLabel || '' : ''; }],
     ['Compute: basis', function (s) { var a = asOf(s), e = a && a.compute && a.compute.economics; return e && e.ok ? (e.basis === 'partner' ? 'the offtake partner\u2019s stated figures' : 'public ' + (e.priceBasis || 'reference') + ' price') : ''; }],
     ['Compute: electricity ($/kWh)', function (s) { var a = asOf(s), e = a && a.compute && a.compute.economics; return e && e.electricity && e.electricity.perKwh != null ? e.electricity.perKwh : ''; }],
+    ['Closing', function (s) { var a = asOf(s); return a && a.closing ? a.closing.words : ''; }],
+    ['Closing: lease (years)', function (s) { var a = asOf(s); return a && a.closing && a.closing.leaseYears != null ? a.closing.leaseYears : ''; }],
     ['Gate: power', function (s) { var a = asOf(s), g = a && a.gates && a.gates.list.filter(function (x) { return x.key === 'G1'; })[0]; return g ? g.state + ': ' + g.words : ''; }],
     ['Gate: lease', function (s) { var a = asOf(s), g = a && a.gates && a.gates.list.filter(function (x) { return x.key === 'G2'; })[0]; return g ? g.state + ': ' + g.words : ''; }],
     ['Gate: return', function (s) { var a = asOf(s), g = a && a.gates && a.gates.list.filter(function (x) { return x.key === 'G4'; })[0]; return g ? g.state + ': ' + g.words : ''; }],
@@ -934,6 +951,7 @@
           upgrade: function (id, body) { post('assess-upgrade', Object.assign({ site: id }, body)).then(function (j) { S.toast(j.note || 'Done.'); return load(true); }).then(function () { openDrawer(id); }).catch(function (e) { S.toast(e.message); msg(e.message); }); },
           fund: function (id, action, body) { post('assess-fund-' + action, Object.assign({ site: id }, body)).then(function (j) { S.toast(j.note || 'Done.'); return load(true); }).then(function () { openDrawer(id); }).catch(function (e) { S.toast(e.message); msg(e.message); }); },
           fundingOf: function () { return fundOf(s); },
+          closing: function (id, body) { post('assess-closing', Object.assign({ site: id }, body)).then(function (j) { S.toast(j.note || 'Done.'); return load(true); }).then(function () { openDrawer(id); }).catch(function (e) { S.toast(e.message); msg(e.message); }); },
           vote: function (id, vote, note) { post('assess-review-vote', { site: id, vote: vote, note: note }).then(function (j) { S.toast(j.note || 'Done.'); return load(true); }).then(function () { openDrawer(id); }).catch(function (e) { S.toast(e.message); msg(e.message); }); },
           report: function () { printReports([s]); },
           full: function (id) { return api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(id) + '&assessment=1'); },
@@ -971,6 +989,7 @@
       CANEDIT = j.canEdit !== false; CANADMIN = j.canArchive === true;
       FUNDING = j.funding && j.funding.mode ? j.funding : null;
       REVIEW = j.review || null; GATED = SITES.some(function (s) { return s.assessment && s.assessment.gates; }); byId('f-gate').style.display = GATED ? '' : 'none';
+      byId('ba-closing').style.display = CANEDIT && SITES.some(function (s) { return s.assessment && s.assessment.closing; }) ? '' : 'none';
       byId('f-fund').style.display = FUNDING ? '' : 'none'; byId('ba-fund').style.display = FUNDING && CANEDIT ? '' : 'none'; byId('ba-finance').style.display = FUNDING ? 'none' : '';
       Object.keys(SEL).forEach(function (id) { if (!SITES.some(function (s) { return s.id === id; })) delete SEL[id]; });
       renderStats(); render(); LOADED = true;

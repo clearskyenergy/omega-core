@@ -22,6 +22,9 @@
        .gates    { minKva, minLeaseYears, irrHurdlePct }
                  the workspace's own screening gates: the transformer it
                  prefers, the lease years it wants left, its hurdle rate
+       .closing  { minLeaseYears, agreement }
+                 what must be recorded before a site is the workspace's own:
+                 purchased, the host agreement assigned, a lease that long
        .review   { name, members: [{ name, email }] }
                  its review board: each member votes own and operate or
                  portfolio / flip, and the decision stands when all agree
@@ -47,6 +50,7 @@
      … --committee-name "Finance committee"
      … --min-kva 500 --min-lease-years 5    the screening gates
      … --irr-hurdle 25                      the hurdle rate, in percent
+     … --closing-lease-years 15 --closing-agreement SHA    the closing steps
      … --review-member "Name <address>"     once a member of the review board
      … --review-name "Executive Review"
      … --clear-funding                      back to the finance marketplace
@@ -77,6 +81,8 @@ function asked() {
   function figure(flag, lo, hi) { var v = arg(flag); if (v == null) return undefined; var n = Number(String(v).replace(/[%,\s]/g, '')); if (!(n >= lo && n <= hi)) throw refuse(2, flag + ' must be between ' + lo + ' and ' + hi); return n; }
   var gk = { minKva: figure('--min-kva', 1, 1000000), minLeaseYears: figure('--min-lease-years', 0.1, 99), irrHurdlePct: figure('--irr-hurdle', 0, 500) };
   Object.keys(gk).forEach(function (k) { if (gk[k] !== undefined) out.gates[k] = gk[k]; });
+  var cy = figure('--closing-lease-years', 1, 99);
+  if (cy !== undefined) out.closing = { minLeaseYears: cy, agreement: (arg('--closing-agreement') || 'site host agreement').trim().slice(0, 60) };
   var reviewers = args('--review-member').map(member);
   if (reviewers.length) out.review = { name: (arg('--review-name') || 'Executive Review').trim().slice(0, 60), members: reviewers };
   else if (arg('--review-name')) throw refuse(2, '--review-name needs the board: name each member with --review-member "Name <address>"');
@@ -87,7 +93,7 @@ function asked() {
   var ref = { revenueUsdPerMwYear: money('--revenue-per-mw-year'), capexUsdPerMw: money('--capex-per-mw'), utilityUsdPerMwYear: money('--utility-per-mw-year') };
   Object.keys(ref).forEach(function (k) { if (ref[k] === undefined) delete ref[k]; });
   if (Object.keys(ref).length) out.compute.reference = ref;
-  if (out.funding === undefined && out.review === undefined && !Object.keys(out.compute).length && !Object.keys(out.gates).length) throw refuse(2, 'Nothing to set. Name the committee (--member "Name <address>"), the review board (--review-member), a gate (--min-kva, --min-lease-years, --irr-hurdle), the compute basis (--compute-basis partner), or a figure (--revenue-per-mw-year).');
+  if (out.funding === undefined && out.review === undefined && out.closing === undefined && !Object.keys(out.compute).length && !Object.keys(out.gates).length) throw refuse(2, 'Nothing to set. Name the committee (--member "Name <address>"), the review board (--review-member), a gate (--min-kva, --min-lease-years, --irr-hurdle), the compute basis (--compute-basis partner), or a figure (--revenue-per-mw-year).');
   return out;
 }
 /* the stored block with the change folded in; every other key kept */
@@ -101,9 +107,11 @@ function patch(current, ask) {
   }
   if (Object.keys(ask.gates).length) cur.gates = Object.assign({}, cur.gates && typeof cur.gates === 'object' ? cur.gates : {}, ask.gates);
   if (ask.review) cur.review = ask.review;
+  if (ask.closing) cur.closing = ask.closing;
   /* the one reader must read back exactly what was asked, or nothing is written */
   var read = AS.configOf({ portfolioAssessment: cur });
   if (ask.review && (!read.review || read.review.members.length !== ask.review.members.length)) throw refuse(2, 'Refusing: the assessment would not read that review board back (a repeated or malformed address?).');
+  if (ask.closing && (!read.closing || read.closing.minLeaseYears !== ask.closing.minLeaseYears)) throw refuse(2, 'Refusing: the assessment would not read those closing steps back.');
   Object.keys(ask.gates).forEach(function (k) { if (!read.gates || read.gates[k] !== ask.gates[k]) throw refuse(2, 'Refusing: ' + k + ' = ' + ask.gates[k] + ' is outside the range the assessment accepts.'); });
   if (ask.funding && (!read.funding || read.funding.members.length !== ask.funding.members.length)) throw refuse(2, 'Refusing: the assessment would not read that committee back (a repeated or malformed address?).');
   if (ask.compute.reference) Object.keys(ask.compute.reference).forEach(function (k) { if (read.compute.reference[k] !== ask.compute.reference[k]) throw refuse(2, 'Refusing: ' + k + ' = ' + ask.compute.reference[k] + ' is outside the range the assessment accepts.'); });
@@ -129,7 +137,7 @@ async function write(db, org, ask, now) {
 function summary(p) {
   return { changed: p.changed, funding: p.read.funding ? { name: p.read.funding.name, members: p.read.funding.members } : 'none: the finance marketplace', computeBasis: p.read.compute.basis || 'spot (the public reference price)',
     reference: p.read.compute.basis === 'partner' ? AS.referenceOf(p.read) : null,
-    gates: p.read.gates || 'none', review: p.read.review ? { name: p.read.review.name, members: p.read.review.members } : 'none' };
+    gates: p.read.gates || 'none', closing: p.read.closing || 'none', review: p.read.review ? { name: p.read.review.name, members: p.read.review.members } : 'none' };
 }
 
 (async function () {
