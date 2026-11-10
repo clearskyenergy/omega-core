@@ -325,9 +325,75 @@ function dlgPost(b, all) {
   if (b.action === 'diligence-loi') return { ok: true, status: 'sent', partner: { key: 'lightsmith', name: 'Lightsmith Energy' }, to: ['deals@lightsmith.example'], moved: [], note: 'The LOI package went to Lightsmith Energy.' };
   return { __status: 400, error: 'Unknown diligence action ' + b.action };
 }
+/* THE SITE ASSESSMENT (api/_lib/portfolio/assess-door.js), answered through
+   the REAL library (api/_lib/portfolio/assess.js and its two engines) on the
+   fixture sites: Run stores each site's answer, a screen step lands a
+   substation, a utility, fiber and a parcel and assesses again, a mark and
+   an approval are the library's own; kept for the flow, so a flow sees what
+   it did, and reset before every flow. */
+var ALIB = require('../api/_lib/portfolio/assess');
+var ASX = { state: {}, over: {}, jobs: {}, jseq: 0, now: '2026-11-09T15:00:00.000Z', cfg: null, me: 'ann@northstar.example' };
+function asxCfg() { return ASX.cfg || ALIB.configOf(null); }
+function asxSite(s) { return Object.assign({}, s, ASX.over[s.id] || {}); }
+function asxRun(s) { var st = ASX.state[s.id] = ASX.state[s.id] || {}; st.result = ALIB.assess(asxSite(s), { screen: st.screen || null, parcel: st.parcel || null, marks: st.checklist || null, upgrade: st.upgrade || null, config: asxCfg(), now: ASX.now }); st.at = ASX.now; st.by = 'ann@northstar.example'; return st; }
+function asxJob(j) { return { id: j.id, kind: j.kind, status: j.status, total: j.total, done: j.done, failed: j.failed, failedIds: [] }; }
+function asxPost(b, all) {
+  function site(id) { return all.filter(function (x) { return x.id === id; })[0]; }
+  var ids = b.ids || (b.site ? [b.site] : []);
+  if (b.action === 'assess-run') { var sized = 0; ids.forEach(function (id) { var s = site(id); if (s && asxRun(s).result.power.availableKw != null) sized++; }); return { ok: true, ran: ids.length, sized: sized, missing: [], note: ids.length + ' sites assessed.' }; }
+  if (b.action === 'assess-screen-start') { ASX.jseq++; var jid = 'ascr_fx_' + ASX.jseq; ASX.jobs[jid] = { id: jid, kind: 'assess-screen', status: ids.length ? 'paused' : 'complete', left: ids.slice(), total: ids.length, done: 0, failed: 0 }; return { ok: true, job: asxJob(ASX.jobs[jid]), skippedFresh: [] }; }
+  if (b.action === 'assess-screen-step') {
+    var j = ASX.jobs[b.jobId]; if (!j) return { __status: 404, error: 'Screen not found' };
+    var id = j.left.shift(), s = site(id);
+    if (s) { var st = ASX.state[id] = ASX.state[id] || {};
+      st.screen = { v: 1, at: ASX.now, complete: true, located: { lat: 30.27, lng: -97.74, precision: 'exact', usable: true, approximate: false }, power: { substation: 'Fixture North', kv: 69, distanceMi: 1.4 }, utility: { name: 'Fixture Power & Light', key: 'fpl-fx', basis: 'territory' },
+        fiber: { carriers: ['Fibre One', 'Metro Net'], carriersRead: true, carriersStatus: 'read', symmetric1g: true, lateralMi: 0.4, carrierHotel: 'Fixture IX', carrierHotelMi: 12 }, hosting: { coverage: 'none' }, sources: {}, notes: [], errors: [] };
+      st.parcel = { ok: true, apn: '00-11-22', owner: 'Fixture Holdings LLC', acres: 2.5, zoning: 'C-2', county: 'Fixture', source: 'regrid', at: ASX.now };
+      asxRun(s); j.done++; } else j.failed++;
+    if (!j.left.length) j.status = 'complete';
+    return { ok: true, job: asxJob(j), site: id, phase: 'network' };
+  }
+  if (b.action === 'assess-check') { var cs = site(b.site), ct = ASX.state[b.site] = ASX.state[b.site] || {}; ct.checklist = ct.checklist || {};
+    if (b.state === 'open' && !b.note) delete ct.checklist[b.item]; else ct.checklist[b.item] = { state: b.state, note: b.note || null, by: 'ann@northstar.example', at: ASX.now };
+    asxRun(cs); return { ok: true, item: b.item, state: b.state, readiness: ct.result.readiness, verify: ct.result.verify }; }
+  if (b.action === 'assess-approve') { var dec; try { dec = ALIB.decisionOf(b, { by: 'ann@northstar.example', now: ASX.now }); } catch (e) { return { __status: 400, error: e.message }; }
+    ids.forEach(function (x) { var at = ASX.state[x] = ASX.state[x] || {}; at.decision = dec; ASX.over[x] = Object.assign({}, ASX.over[x], { status: dec.status === 'approved' ? ALIB.PREDEV_STATUS : '' }); });
+    return { ok: true, status: dec.status, uses: dec.uses, label: dec.label, count: ids.length, ids: ids, missing: [], notFitting: [], note: dec.status === 'approved' ? ids.length + ' site(s) approved for pre-development: ' + dec.label + '.' : 'Approval withdrawn on ' + ids.length + ' site(s).' }; }
+  if (b.action === 'site-set-partner') { ids.forEach(function (x) { ASX.over[x] = Object.assign({}, ASX.over[x], { portfolioPartner: b.partner || null }); }); return { ok: true, count: ids.length, ids: ids, note: ids.length + ' site(s) under ' + b.partner + '.' }; }
+  if (b.action === 'assess-closing') {
+    var cd = [], cl = null;
+    for (var ci = 0; ci < ids.length; ci++) { var cst = ASX.state[ids[ci]] = ASX.state[ids[ci]] || {}; try { cst.closing = ALIB.closingChange(cst.closing || null, b, { by: ASX.me, now: ASX.now, config: asxCfg(), canEdit: true }); cl = ALIB.closingView(cst.closing, asxCfg(), site(ids[ci])); cd.push({ siteId: ids[ci] }); } catch (e) { return { __status: e.status || 400, error: e.message }; } }
+    return { ok: true, count: cd.length, done: cd, refused: [], closing: ids.length === 1 ? cl : undefined, note: 'Recorded on ' + cd.length + ' site(s).' };
+  }
+  if (b.action === 'assess-review-vote') {
+    var vd = [], vl = null;
+    for (var vi = 0; vi < ids.length; vi++) { var vt = ASX.state[ids[vi]] = ASX.state[ids[vi]] || {}; try { vt.review = ALIB.reviewChange(vt.review || null, b, { by: b.__as || ASX.me, now: ASX.now, config: asxCfg() }); vl = ALIB.reviewView(vt.review, asxCfg()); vd.push({ siteId: ids[vi] }); } catch (e) { return { __status: e.status || 400, error: e.message }; } }
+    return { ok: true, count: vd.length, done: vd, refused: [], review: ids.length === 1 ? vl : undefined, note: 'Your vote is recorded on ' + vd.length + ' site(s).' };
+  }
+  /* the upgrade mark and the funding list: the library's own rules, a site at a time (assess-door.js each()) */
+  if (b.action === 'assess-upgrade' || /^assess-fund-/.test(b.action)) {
+    var done = [], refused = [], last = null, act = b.action.replace('assess-fund-', '');
+    for (var qi = 0; qi < ids.length; qi++) {
+      var qs = site(ids[qi]), qt = ASX.state[ids[qi]] = ASX.state[ids[qi]] || {};
+      try {
+        if (b.action === 'assess-upgrade') { qt.upgrade = ALIB.upgradeOf(qt.upgrade || null, b, { by: ASX.me, now: ASX.now, limitKw: ALIB.powerOf(qs, qt.screen || null).limitKw, availableKw: ALIB.powerOf(qs, qt.screen || null).availableKw, partner: qs.portfolioPartner || null }); asxRun(qs); last = qt.result.upgrade; }
+        else { qt.funding = ALIB.fundingChange(qt.funding || null, act, b, { by: ASX.me, now: ASX.now, config: asxCfg(), result: qt.result || null, screened: !!(qt.screen && qt.screen.complete), canEdit: true }); last = ALIB.fundingView(qt.funding); }
+        done.push({ siteId: ids[qi] });
+      } catch (e) { if (ids.length === 1) return { __status: e.status || 400, error: e.message }; refused.push({ siteId: ids[qi], reason: e.message }); }
+    }
+    return { ok: true, count: done.length, done: done, refused: refused, upgrade: b.action === 'assess-upgrade' && ids.length === 1 ? last : undefined, funding: b.action !== 'assess-upgrade' && ids.length === 1 ? last : undefined, note: done.length + ' site(s) changed.' };
+  }
+  return null;
+}
 function siteCrmRoute(method, qs, body) {
-  var all = siteCrmSites();
+  var all = siteCrmSites().map(asxSite);
   if (method === 'POST' && DLG.on && /^diligence-/.test(String(body.action || ''))) return dlgPost(body, all);
+  if (method === 'POST' && (/^assess-/.test(String(body.action || '')) || body.action === 'site-set-partner')) { SITES_FX.posts.push(body); return asxPost(body, all) || { __status: 400, error: 'Unknown assessment action' }; }
+  if (method === 'GET' && qs.site && qs.assessment === '1') { var as1 = all.filter(function (x) { return x.id === qs.site; })[0]; if (!as1) return { __status: 404, error: 'Site not found' };
+    var ast = ASX.state[as1.id] || {}, full = ALIB.assess(as1, { screen: ast.screen || null, parcel: ast.parcel || null, marks: ast.checklist || null, upgrade: ast.upgrade || null, config: asxCfg(), now: ASX.now });
+    return { site: { id: as1.id, name: as1.name }, assessment: { result: full, ranAt: ast.at || null, ranBy: ast.by || null, stored: !!ast.result, stale: false, screen: ast.screen || null, parcel: ast.parcel || null, decision: ast.decision && ast.decision.status === 'approved' ? ast.decision : null, uses: ALIB.USES,
+      funding: ALIB.fundingView(ast.funding), fundingHistory: ast.funding ? ast.funding.history || [] : [], upgradeHistory: ast.upgrade ? ast.upgrade.history || [] : [],
+      gates: ALIB.gatesOf(as1, full, asxCfg(), ast), review: ALIB.reviewView(ast.review, asxCfg()), closing: ALIB.closingView(ast.closing, asxCfg(), as1) } }; }
   /* the register's reads (api/_lib/portfolio/register.js) the pages make: nothing on file */
   if (method === 'GET' && qs.packages) return { packages: [] };
   if (method === 'GET' && qs.bills) return { bills: [] };
@@ -336,12 +402,15 @@ function siteCrmRoute(method, qs, body) {
   if (method === 'GET' && qs.site && qs.register) { var sr = all.filter(function (x) { return x.id === qs.site; })[0]; return sr ? { site: sr, agreements: [], equipment: [], tasks: [], files: [], caps: [], role: 'owner' } : { __status: 404, error: 'Site not found' }; }
   if (method === 'GET' && qs.site && qs.model === '1') { var Mm = siteCrmModel(); return qs.site === 's-riverside' ? { model: { id: Mm.id, input: Mm.input, basis: Mm.basis, result: Mm.result, summary: Mm.summary, label: 'Fixture', createdAt: '2026-10-10T16:00:00.000Z' }, brand: { name: 'Northstar Development', accent: '#2B5FA8', platform: 'ClearSky-OMEGA' } } : { model: null }; }
   if (method === 'GET' && qs.site) { var one = all.filter(function (x) { return x.id === qs.site; })[0]; if (!one) return { __status: 404, error: 'Site not found' };
-    var ones = { site: one, contacts: [], activity: [], followUps: [], files: [], proforma: [], canEdit: true, canArchive: true, limited: false, diligence: null };
+    var ones = { site: one, contacts: [], activity: [], followUps: [], files: [], proforma: [], canEdit: true, canArchive: true, limited: false, diligence: null, funding: ALIB.fundingInfo(asxCfg(), ASX.me) };
+    if (ones.funding) one.assessment = ALIB.listView(ASX.state[one.id], one, { config: asxCfg() });
     if (DLG.on) ones.diligence = { view: DLIB.view(dlgSite(one), { config: DLG.config, now: DLG.now, files: [], client: dlgClientOf(one) }), schema: DLIB.schema(DLG.config), brand: DLG.brand,
       clients: dlgClients().map(function (x) { return { id: x.id, name: x.data.name }; }) };
     return ones; }
   if (method === 'GET') {
     var reg = { org: CURRENT_FX ? CURRENT_FX.org : 'northstar.example', sites: all.filter(function (x) { return qs.archived === '1' || !x.archived; }), archivedIncluded: qs.archived === '1', canEdit: true, canArchive: true, next: null, limited: false, diligence: null };
+    reg.sites.forEach(function (x) { x.assessment = ALIB.listView(ASX.state[x.id], x, { config: asxCfg() }); });
+    reg.funding = ALIB.fundingInfo(asxCfg(), ASX.me); reg.review = ALIB.reviewInfo(asxCfg(), ASX.me);
     if (DLG.on) {
       var rows = all.filter(function (x) { return !x.archived; }).map(function (x) { return DLIB.row(dlgSite(x), { config: DLG.config, now: DLG.now, client: dlgClientOf(x) }); });
       reg.sites.forEach(function (x) { x.diligence = DLIB.row(dlgSite(x), { config: DLG.config, now: DLG.now, client: dlgClientOf(x) }); });
@@ -824,7 +893,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar: the Design panel lists Site Map and the sandbox, its extras one row away', drawer && /Design/.test(drawer.title) && drawer.rows.indexOf('editor') >= 0 && drawer.rows.indexOf('sandbox') >= 0 && drawer.rows[drawer.rows.length - 1] === 'hub-hidden' && !drawer.rows.some(function (r) { return /^(siteoptimizer|powerflow|sitediscovery|conductorsizing)/.test(r); }), drawer);
     await p.click('.ows-drawer .ows-row[data-row="hub-hidden"]'); await wait(300);
     var ht = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, first: (e.querySelector('.hub-group') || {}).getAttribute && e.querySelector('.hub-group').getAttribute('data-group'), off: Array.prototype.filter.call(e.querySelectorAll('.hub-group[data-group="design"] [data-tool]'), function (b) { return b.getAttribute('aria-checked') === 'false'; }).map(function (b) { return b.getAttribute('data-tool'); }) }; }).catch(function () { return null; });
-    ok('northstar: Show opens Tools in the hub on Design, its extras switched off', ht && ht.title === 'Tools in the hub' && ht.first === 'design' && ht.off.join() === 'siteoptimizer,powerflow,sitediscovery,conductorsizing', ht);
+    ok('northstar: Show opens Hub settings on Design, its extras switched off', ht && ht.title === 'Hub settings' && ht.first === 'design' && ht.off.join() === 'siteoptimizer,powerflow,sitediscovery,conductorsizing', ht);
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'hub-tools-settings.png') });
     await p.click('.ows-drawer .hub-group[data-group="design"] [data-tool="siteoptimizer"]'); await wait(900);
     var hubSaved = await p.evaluate(function () { return window.__firebaseDouble.store.log.filter(function (w) { return /^dashboard_layouts\//.test(w.path) && w.data.workspace && w.data.workspace.hubTools; }).map(function (w) { return { path: w.path, hubTools: w.data.workspace.hubTools, feed: w.data.workspace.feed }; }); });
@@ -834,6 +903,30 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var shownNow = await p.$$eval('.ows-drawer .ows-row', function (r) { return r.map(function (x) { return x.getAttribute('data-row') + (x.classList.contains('locked') ? ':locked' : ''); }); });
     ok('northstar: the extra shown is listed, locked on Standard, the rest still behind the row', shownNow.join() === drawer.rows.slice(0, -1).concat('siteoptimizer:locked', 'hub-hidden').join(), shownNow);
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'hub-design-panel.png') });
+    await p.keyboard.press('Escape'); await wait(200);
+    /* Hub settings is the last chip under the hub, and every hex is a switch (Tommy, 2026-10-21: "do this for all of them … put a settings tab for the hex right in this bottom area") */
+    var chip = await p.evaluate(function () { var c = document.querySelector('#hub .held [data-hub-settings]'), held = document.querySelector('#hub .held'); return c ? { last: held.lastElementChild === c, text: c.textContent.trim(), tag: c.tagName } : null; });
+    ok('northstar: Hub settings is a button, the last chip under the hub', chip && chip.last && chip.text === 'Hub settings' && chip.tag === 'BUTTON', chip);
+    var ringBefore = await p.$$eval('#hub .hx[data-hub]', function (h) { return h.map(function (x) { return x.getAttribute('data-hub'); }); });
+    await p.click('#hub .held [data-hub-settings]'); await wait(300);
+    var hs = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, n: (e.querySelector('#hub-n') || {}).textContent, cells: Array.prototype.map.call(e.querySelectorAll('[data-cell]'), function (b) { return b.getAttribute('data-cell') + (b.getAttribute('aria-checked') === 'true' ? '' : ':off'); }) }; }).catch(function () { return null; });
+    var ringNow = ringBefore.filter(function (k) { return k !== 'today'; });
+    ok('northstar: the chip opens Hub settings with a switch for every hex in the ring, on, and the count', hs && hs.title === 'Hub settings' && hs.n === String(ringNow.length) && hs.cells.slice(0, ringNow.length).join() === ringNow.join(), { hs: hs, ring: ringNow });
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'hub-settings.png') });
+    var offKey = ringNow.filter(function (k) { return k !== 'projects' && k !== 'team'; })[0];
+    await p.click('.ows-drawer [data-cell="' + offKey + '"]'); await wait(900);
+    var afterOff = await p.evaluate(function (k) { return { ring: Array.prototype.map.call(document.querySelectorAll('#hub .hx[data-hub]'), function (x) { return x.getAttribute('data-hub'); }), off: document.querySelector('.ows-drawer .hub-group[data-group="' + k + '"]').classList.contains('off'), n: document.querySelector('.ows-drawer #hub-n').textContent, saved: window.__firebaseDouble.store.log.filter(function (w) { return /^dashboard_layouts\//.test(w.path) && w.data.workspace && w.data.workspace.hubCells; }).map(function (w) { return w.data.workspace.hubCells; }) }; }, offKey);
+    ok('northstar: a hex switched off leaves the hub at once and is saved for the person', afterOff.ring.indexOf(offKey) < 0 && afterOff.ring.length === ringBefore.length - 1 && afterOff.off && afterOff.n === String(ringNow.length - 1) && afterOff.saved.length === 1 && afterOff.saved[0][offKey] === false, afterOff);
+    await p.click('.ows-drawer [data-cell="' + offKey + '"]'); await wait(900);
+    var afterOn = await p.$$eval('#hub .hx[data-hub]', function (h) { return h.map(function (x) { return x.getAttribute('data-hub'); }); });
+    ok('northstar: switched back on, it returns to its place', afterOn.join() === ringBefore.join(), { before: ringBefore, after: afterOn });
+    var spare = await p.$eval('.ows-drawer', function (e) { var b = e.querySelector('.hub-group.off [data-cell]'); return b ? b.getAttribute('data-cell') : null; });
+    if (ringNow.length >= 6 && spare) {
+      await p.click('.ows-drawer [data-cell="' + spare + '"]'); await wait(300);
+      var refused = await p.evaluate(function (k) { return { on: document.querySelector('.ows-drawer [data-cell="' + k + '"]').getAttribute('aria-checked'), toast: (document.getElementById('ows-toast') || {}).textContent || '' }; }, spare);
+      ok('northstar: a seventh hex is refused and says why', refused.on === 'false' && /holds 6 around Today/.test(refused.toast), refused);
+    }
+    if (shotsAt) { await p.evaluate(function () { var g = document.querySelector('.ows-drawer .hub-group.off'); if (g) g.scrollIntoView({ block: 'center' }); }); await wait(150); await p.screenshot({ path: path.join(shotsAt, 'hub-settings-more.png') }); }
     await p.keyboard.press('Escape'); await wait(200);
     /* a page row wears the rail's own icon (Tommy, 2026-10-20: "icons need to match") */
     await p.click('#hub .hx[data-hub="projects"]'); await wait(300);
@@ -2054,10 +2147,192 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok(name + ': on a phone the strip folds to four a row, the pipeline keeps every site, and nothing scrolls sideways', !ph.scroll && ph.cols === 4 && ph.rows === 2, ph);
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'portfolio-diligence-390.png'), fullPage: true });
   }
+  /* THE SITE ASSESSMENT on the register: Run sizes and prices every site
+     shown and steps the screens; the table turns to what each site carries;
+     the side panel carries the three uses, the approval, the shovel-ready
+     score and the checklist; a partner is set in bulk and filtered on. */
+  /* THE FUNDING LIST, THE UPGRADE MARK AND THE DILIGENCE REPORT (2026-11-09,
+     Tommy: "we dont need to send to the marketplace we are funding these
+     sites … screened first then approved by our finance committe"; "a way
+     to mark the site that we are requesting a utiltiy side upgrade"; "export
+     a dilligence report on each site that shows tesla, bess, and compute").
+     A workspace whose settings name a committee: the marketplace stands
+     down, the column reads Funding, a screened site is submitted from its
+     card and decided by a committee member; the upgrade is a mark that
+     sizes nothing; the report prints from a hidden frame. */
+  async function fundingRegister(p, name) {
+    name += ' (funding list)';
+    await p.waitForFunction(function () { return document.querySelectorAll('.pf-tr.body').length > 0; }, null, { timeout: 6000 }).catch(function () {});
+    SITES_FX.posts = [];
+    await p.click('#btn-run');
+    await p.waitForFunction(function () { return document.getElementById('tbl').classList.contains('am') && !document.getElementById('run').classList.contains('on') && /assessed/.test(document.getElementById('msg').innerText); }, null, { timeout: 20000 }).catch(function () {});
+    function row(id) { return p.evaluate(function (id) { var r = document.querySelector('.pf-tr.body[data-id="' + id + '"]'); return r ? Array.prototype.map.call(r.children, function (c) { return c.innerText.replace(/\s+/g, ' ').trim(); }) : null; }, id); }
+    var st = await p.evaluate(function () { return { head: Array.prototype.map.call(document.querySelector('.pf-tr.head').children, function (c) { return c.textContent.replace(/ [▴▾]/g, '').trim(); }), finance: getComputedStyle(document.getElementById('ba-finance')).display, fundSel: getComputedStyle(document.getElementById('f-fund')).display, k: document.getElementById('c-fin').parentNode.querySelector('.k').textContent, n: document.getElementById('c-fin-n').textContent }; });
+    var mp = await row('s-maple');
+    ok(name + ': the last column is Funding, never Capital; a screened site reads Not submitted; Send to marketplace is gone and the Funding filter is there; the summary card counts the committee’s list', st.head[st.head.length - 1] === 'Funding' && st.head.indexOf('Capital') < 0 && mp[8] === 'Not submitted' && st.finance === 'none' && st.fundSel !== 'none' && st.k === 'Funding' && /waiting on finance committee/.test(st.n), { st: st, mp: mp });
+    ok(name + ': compute is priced on the offtake partner’s figures here and says so on the row', /partner ref$/.test(mp[4]) && /NANO/i.test(mp[4]), mp[4]);
+    /* the card: the pro forma, the upgrade mark, the funding list */
+    await p.click('.pf-tr.body[data-id="s-maple"] .t-name'); await p.waitForSelector('#pa-funding', { timeout: 5000 }).catch(function () {});
+    var card = await p.evaluate(function () { var c = document.getElementById('pa-card'); return { pf: !!c.querySelector('.pa-pf'), pfText: (c.querySelector('.pa-pf') || {}).innerText || '', stated: /stated and unverified/.test(c.innerText), up: !!c.querySelector('#pa-upgrade [data-pa-up="requested"]'), advice: (c.querySelector('#pa-upgrade') || {}).innerText || '', units: Array.prototype.map.call(c.querySelectorAll('[data-pa-up-unit] option'), function (o) { return o.textContent; }), fund: (c.querySelector('#pa-funding') || {}).innerText || '', submit: !!c.querySelector('[data-pa-fund="submit"]'), report: !!c.querySelector('[data-pa="report"]'), market: /Marketplace|Send to marketplace/.test(document.getElementById('ows-overlay').innerText) }; });
+    ok(name + ': the card carries the compute pro forma on the partner’s stated figures (investment, revenue as stated, this site’s utility, the fee, earnings), the upgrade mark offering the larger pods, Submit for funding to the named committee, and the report; nothing about a marketplace', card.pf && /Investment/.test(card.pfText) && /Utility a year, this site/.test(card.pfText) && card.stated && card.up && card.units.length >= 3 && /1 MW Micro pod · 1,200 kW/.test(card.units.join('|')) && /Finance committee \(Ann Lee, Barry D\)/.test(card.fund) && card.submit && card.report && !card.market, card);
+    /* mark an upgrade for the 1 MW Micro pod */
+    await p.selectOption('#pa-upgrade [data-pa-up-unit]', 'm1000'); await p.click('#pa-upgrade [data-pa-up="requested"]');
+    await p.waitForFunction(function () { var b = document.querySelector('#pa-upgrade'); return b && /Requested: a utility-side upgrade to 1,350 kW/.test(b.innerText); }, null, { timeout: 6000 }).catch(function () {});
+    var upPost = SITES_FX.posts.filter(function (x) { return x.action === 'assess-upgrade'; })[0] || {}, upRow = await row('s-maple'), upCard = await p.evaluate(function () { return document.getElementById('pa-upgrade').innerText; });
+    ok(name + ': before any mark the card says the upgrade to ask for (950 kW more for the 1 MW Micro pod, 170 kW more for a 350 kW pod) and that nothing has been asked yet', /To request: 250 kW carries a 150 kW Nano pod today/.test(card.advice) && /950 kW more \(a 1,350 kW service\)/.test(card.advice) && /170 kW more would already carry a 350 kW Nano pod/.test(card.advice) && /Nothing has been asked of the utility yet/.test(card.advice), card.advice);
+    ok(name + ': Mark upgrade requested is one post (the unit it is for); the ask is what the free power is short by on top of the service (1,350 kW: the site already draws 150), the card says what it would carry, and the row’s power keeps today’s figure with the request beneath it', upPost.site === 's-maple' && upPost.unit === 'm1000' && upPost.status === 'requested' && /With it: 1 MW of IT \(Micro pod\)/.test(upCard) && /^250 kW free/.test(upRow[3]) && /↑ 1\.35 MW upgrade requested$/.test(upRow[3]) && !/ask \+/.test(upRow[3]), { post: upPost, row: upRow[3], card: upCard });
+    /* submit, then decide (the signed-in person sits on the committee) */
+    await p.click('#pa-funding [data-pa-fund="submit"]');
+    await p.waitForFunction(function () { var b = document.querySelector('#pa-funding'); return b && /Waiting on Finance committee/.test(b.innerText); }, null, { timeout: 6000 }).catch(function () {});
+    var subPost = SITES_FX.posts.filter(function (x) { return x.action === 'assess-fund-submit'; })[0] || {}, subRow = await row('s-maple');
+    ok(name + ': Submit for funding is one post (the site and what it is for); the card and the row say it is with the committee, with the figure', subPost.site === 's-maple' && Array.isArray(subPost.uses) && subPost.uses.length >= 1 && /^With committee/.test(subRow[8]), { post: subPost, row: subRow[8] });
+    await p.fill('#pa-funding [data-pa-fund-note]', 'Power confirmed by the host'); await p.click('#pa-funding [data-pa-fund="approved"]');
+    await p.waitForFunction(function () { var b = document.querySelector('#pa-funding'); return b && /Funding approved/.test(b.innerText); }, null, { timeout: 6000 }).catch(function () {});
+    var decPost = SITES_FX.posts.filter(function (x) { return x.action === 'assess-fund-decide'; })[0] || {}, decRow = await row('s-maple'), decCard = await p.evaluate(function () { return document.getElementById('pa-funding').innerText; });
+    ok(name + ': Approve funding is one post (the decision and its note); the card names who approved it and the row reads Approved', decPost.site === 's-maple' && decPost.decision === 'approved' && decPost.note === 'Power confirmed by the host' && /Approved by Ann Lee/.test(decCard) && /^Approved/.test(decRow[8]), { post: decPost, row: decRow[8], card: decCard });
+    /* THE GATES AND THE REVIEW (the workspace's own operating rules): a mark a gate on the row, each with its words in the card; a member's vote is one post, and the decision is every member's */
+    var gt = await p.evaluate(function () {
+      var row = document.querySelector('.pf-tr.body[data-id="s-maple"]'), marks = Array.prototype.map.call(row.querySelectorAll('.pa-gs .pa-g'), function (m) { return m.textContent + ':' + (m.classList.contains('pass') ? 'pass' : m.classList.contains('fail') ? 'fail' : 'open'); });
+      var box = document.getElementById('pa-gates'), lines = box ? Array.prototype.map.call(box.querySelectorAll('.pa-gl > div'), function (d) { return d.innerText.replace(/\s+/g, ' ').trim(); }) : [];
+      return { marks: marks, lines: lines, review: (document.getElementById('pa-review') || {}).innerText || '', vote: !!document.querySelector('[data-pa-vote="own"]'), sel: getComputedStyle(document.getElementById('f-gate')).display };
+    });
+    ok(name + ': the row wears one mark a gate (G0 to G6) and the card says each in words: 400 kW of service meets the 500 kVA preferred, the lease term not on file is open (never failed), the pathway and the return follow the funding just approved, and the review is waiting', gt.marks.length === 7 && gt.marks[1] === '1:pass' && gt.marks[2] === '2:open' && gt.marks[3] === '3:pass' && gt.marks[4] === '4:pass' && gt.marks[6] === '6:open' && gt.sel !== 'none' &&
+      /G1 Power passed 400 kW of service \(about 500 kVA\): at or over the 500 kVA preferred/.test(gt.lines[1]) && /G2 Lease open No lease term on file/.test(gt.lines[2]) && /G4 Return passed .*clears the 25% hurdle; approved by Ann Lee/.test(gt.lines[4]) && /Executive Review/.test(gt.review) && /0 of 2 voted/.test(gt.review) && gt.vote, gt);
+    /* CLOSING: purchased, the host agreement assigned, the lease in place; the lease needs its years, and a short one is said */
+    var c0 = await p.evaluate(function () { var b = document.getElementById('pa-closing'); return { text: b ? b.innerText.replace(/\s+/g, ' ') : '', bar: getComputedStyle(document.getElementById('ba-closing')).display }; });
+    await p.click('#pa-closing [data-pa-close="purchase"]'); await p.waitForFunction(function () { var b = document.getElementById('pa-closing'); return b && !b.querySelector('[data-pa-close="purchase"]'); }, null, { timeout: 6000 }).catch(function () {});
+    await p.click('#pa-closing [data-pa-close="assignment"]'); await p.waitForFunction(function () { var b = document.getElementById('pa-closing'); return b && !b.querySelector('[data-pa-close="assignment"]'); }, null, { timeout: 6000 }).catch(function () {});
+    await p.fill('#pa-closing [data-pa-close-years]', '10'); await p.click('#pa-closing [data-pa-close="lease"]'); await p.waitForFunction(function () { var b = document.getElementById('pa-closing'); return b && /under the 15 needed/.test(b.innerText); }, null, { timeout: 6000 }).catch(function () {});
+    var c10 = await p.evaluate(function () { return document.getElementById('pa-closing').innerText.replace(/\s+/g, ' '); });
+    await p.fill('#pa-closing [data-pa-close-years]', '20'); await p.click('#pa-closing [data-pa-close="lease"]'); await p.waitForFunction(function () { var b = document.getElementById('pa-gates'); return b && /Closed: purchased, the SHA assigned, a 20-year lease in place/.test(b.innerText); }, null, { timeout: 6000 }).catch(function () {});
+    var c20 = await p.evaluate(function () { var row = document.querySelector('.pf-tr.body[data-id="s-maple"]'); return { box: document.getElementById('pa-closing').innerText.replace(/\s+/g, ' '), gates: document.getElementById('pa-gates').innerText.replace(/\s+/g, ' '), g0: (row.querySelector('.pa-gs .pa-g') || {}).className || '' }; });
+    var closePosts = SITES_FX.posts.filter(function (x) { return x.action === 'assess-closing'; });
+    ok(name + ': Closing lists the three steps (purchased, the SHA assigned to us, a lease of 15 years or more), each one post; a 10-year lease is recorded and said to be under the 15 needed, a 20-year one closes the site: site control passes and the lease gate reads the new lease', /Purchased Not recorded/.test(c0.text) && /The SHA assigned to us/.test(c0.text) && /A lease of 15 years or more/.test(c0.text) && c0.bar !== 'none' &&
+      closePosts.length === 4 && closePosts[0].step === 'purchase' && closePosts[1].step === 'assignment' && closePosts[2].years === 10 && closePosts[3].years === 20 && /10 years: under the 15 needed/.test(c10) && /G0 Intake & site control passed Closed/.test(c20.gates) && /G2 Lease passed 20-year lease recorded at closing/.test(c20.gates) && /pass/.test(c20.g0), { before: c0, ten: c10, twenty: c20, posts: closePosts });
+    await p.fill('#pa-review [data-pa-vote-note]', 'Keep it'); await p.click('#pa-review [data-pa-vote="own"]');
+    await p.waitForFunction(function () { var b = document.getElementById('pa-review'); return b && /1 of 2 voted/.test(b.innerText); }, null, { timeout: 6000 }).catch(function () {});
+    var votePost = SITES_FX.posts.filter(function (x) { return x.action === 'assess-review-vote'; })[0] || {};
+    /* the other member votes the same way (through the door, as they would): the decision stands */
+    asxPost({ action: 'assess-review-vote', site: 's-maple', vote: 'own', __as: 'barry@northstar.example' }, siteCrmSites().map(asxSite));
+    await p.keyboard.press('Escape'); await wait(150); await p.reload({ waitUntil: 'domcontentloaded' });
+    await p.waitForFunction(function () { return document.querySelectorAll('.pf-tr.body .pa-gs').length > 0; }, null, { timeout: 8000 }).catch(function () {});
+    await p.selectOption('#f-gate', 'own'); await wait(150);
+    var owned = await p.evaluate(function () { return { ids: Array.prototype.map.call(document.querySelectorAll('.pf-tr.body'), function (r) { return r.getAttribute('data-id'); }), g6: (document.querySelector('.pf-tr.body[data-id="s-maple"] .pa-gs .pa-g:last-child') || {}).className || '' }; });
+    await p.selectOption('#f-gate', 'closing-done'); await wait(150);
+    var g1f = await p.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('.pf-tr.body'), function (r) { return r.getAttribute('data-id'); }); });
+    await p.selectOption('#f-gate', ''); await wait(100);
+    ok(name + ': a member’s vote is one post (own, with its note) and the card counts it; when every member has voted the same way the review gate passes, and the gate filter lists the decided sites, and the closed ones', votePost.site === 's-maple' && votePost.vote === 'own' && votePost.note === 'Keep it' && owned.ids.join() === 's-maple' && /pass/.test(owned.g6) && g1f.join() === 's-maple', { post: votePost, owned: owned, closed: g1f });
+    await p.click('.pf-tr.body[data-id="s-maple"] .t-name'); await p.waitForSelector('#pa-card [data-pa="report"]', { timeout: 5000 }).catch(function () {});
+    /* the diligence report: drawn into a hidden frame and printed from there (no tab, no pop-up) */
+    await p.evaluate(function () { window.__printed = 0; var d = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow'); Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', { get: function () { var w = d.get.call(this); if (this.id === 'pa-print' && w && !w.__stub) { w.__stub = true; w.print = function () { window.__printed++; }; } return w; } }); });
+    await p.click('#pa-card [data-pa="report"]');
+    await p.waitForFunction(function () { return window.__printed > 0; }, null, { timeout: 8000 }).catch(function () {});
+    var rep = await p.evaluate(function () { var f = document.getElementById('pa-print'), d = f && f.contentDocument, t = d ? d.body.innerText : ''; return { printed: window.__printed, frame: !!f, shown: f ? getComputedStyle(f).visibility : '', heads: d ? Array.prototype.map.call(d.querySelectorAll('h2'), function (h) { return h.textContent; }) : [], title: d ? (d.querySelector('h1') || {}).textContent : '', three: d ? d.querySelectorAll('.three .bx').length : 0, tables: d ? d.querySelectorAll('table').length : 0, stray: /undefined|NaN|\[object/.test(t), gates: /Gates: \d of 7 passed/.test(t) && /Executive Review: Own and operate, all 2 agreed/.test(t) && /Closing: 3 of 3/.test(t), funding: /Funding · Finance committee/.test(t) && /Approved/.test(t), upgrade: /Utility-side upgrade/.test(t), stated: /stated, unverified/.test(t) }; });
+    ok(name + ': Diligence report prints one document from a hidden frame: the site, the three uses side by side (compute, the battery, Tesla fast charging), power and grid with the upgrade, each use’s figures and yearly tables, fiber and parcel, the readiness checklist, the funding decision, and what it does not read; no stray value', rep.printed === 1 && rep.frame && rep.shown === 'hidden' && rep.title === 'Maple Yard Chargers' && rep.three === 3 && ['What this site carries', 'Power and grid', 'Battery storage', 'Fast charging · Tesla Supercharger host', 'Fiber, parcel and zoning', 'Decisions', 'What this report does not read'].every(function (h) { return rep.heads.indexOf(h) >= 0; }) && rep.heads.some(function (h) { return /^Compute/.test(h); }) && rep.heads.some(function (h) { return /^Shovel ready/.test(h); }) && rep.tables >= 8 && !rep.stray && rep.funding && rep.upgrade && rep.stated && rep.gates, rep);
+    await p.keyboard.press('Escape'); await wait(250);
+    var closed = await p.evaluate(function () { return !document.getElementById('ows-overlay'); });
+    ok(name + ': after the report prints the keyboard is back on the page: Escape closes the side panel', closed, closed);
+    /* the filter is the list */
+    await p.selectOption('#f-fund', 'approved'); await wait(150);
+    var listed = await p.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('.pf-tr.body'), function (r) { return r.getAttribute('data-id'); }); });
+    await p.selectOption('#f-fund', ''); await p.selectOption('#f-cap', 'upgrade'); await wait(150);
+    var upListed = await p.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('.pf-tr.body'), function (r) { return r.getAttribute('data-id'); }); });
+    await p.selectOption('#f-cap', 'upgrade-todo'); await wait(150);
+    var todo = await p.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('.pf-tr.body'), function (r) { return r.getAttribute('data-id'); }); });
+    await p.selectOption('#f-cap', ''); await wait(100);
+    ok(name + ': the Funding filter lists what the committee approved; the capacity filter lists the sites with an upgrade requested, and apart from them the sites under 1 MW with one still to request', listed.join() === 's-maple' && upListed.join() === 's-maple' && todo.join() === 's-riverside', { approved: listed, upgrade: upListed, todo: todo });
+    /* a phone keeps the row whole */
+    await p.setViewportSize({ width: 390, height: 844 }); await wait(250);
+    var ph = await p.evaluate(function () { return document.documentElement.scrollWidth > document.documentElement.clientWidth + 1; });
+    ok(name + ': nothing scrolls sideways on a 390 px phone', !ph, ph);
+    await p.setViewportSize({ width: 1366, height: 900 }); await wait(150);
+    if (shotsAt) { await p.click('.pf-tr.body[data-id="s-maple"] .t-name'); await wait(400); await p.screenshot({ path: path.join(shotsAt, 'portfolio-funding-panel-1366.png'), fullPage: false }); await p.keyboard.press('Escape'); await p.screenshot({ path: path.join(shotsAt, 'portfolio-funding-1366.png'), fullPage: true }); }
+  }
+  async function assessRegister(p, name) {
+    await p.waitForFunction(function () { return document.querySelectorAll('.pf-tr.body').length > 0; }, null, { timeout: 6000 }).catch(function () {});
+    var before = await p.evaluate(function () { return { am: document.getElementById('tbl').classList.contains('am'), run: !!document.getElementById('btn-run'), terra: !!document.getElementById('ba-terra'), runOn: document.getElementById('run').classList.contains('on') }; });
+    ok(name + ': before any run the register is the classic table, with Run all sites in the head and no Send to Terra', !before.am && before.run && !before.terra && !before.runOn, before);
+    SITES_FX.posts = [];
+    await p.click('#btn-run');
+    await p.waitForFunction(function () { return document.getElementById('tbl').classList.contains('am') && !document.getElementById('run').classList.contains('on') && /assessed/.test(document.getElementById('msg').innerText); }, null, { timeout: 20000 }).catch(function () {});
+    var ran = await p.evaluate(function () {
+      function cellsOf(r) { return Array.prototype.map.call(r.children, function (c) { return c.innerText.replace(/\s+/g, ' ').trim(); }); }
+      var rows = {}; Array.prototype.forEach.call(document.querySelectorAll('.pf-tr.body'), function (r) { rows[r.getAttribute('data-id')] = cellsOf(r); });
+      return { am: document.getElementById('tbl').classList.contains('am'), head: Array.prototype.map.call(document.querySelector('.pf-tr.head').children, function (c) { return c.textContent.trim(); }), rows: rows, msg: document.getElementById('msg').innerText, sum: document.getElementById('am-sum').innerText, sumShown: getComputedStyle(document.getElementById('am-sum')).display,
+        unk: document.getElementById('c-unk').textContent, unkN: document.getElementById('c-unk-n').textContent, scroll: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1 };
+    });
+    var acts = SITES_FX.posts.map(function (x) { return x.action; }), runPost = SITES_FX.posts.filter(function (x) { return x.action === 'assess-run'; })[0] || {};
+    ok(name + ': Run all sites asks the door for the numbers on every site shown (one assess-run with both ids), then starts the screens and steps them to the end, a site a step', acts.filter(function (a) { return a === 'assess-run'; }).length === 1 && (runPost.ids || []).slice().sort().join() === 's-maple,s-riverside' && acts.filter(function (a) { return a === 'assess-screen-start'; }).length === 1 && acts.filter(function (a) { return a === 'assess-screen-step'; }).length === 2 && acts.indexOf('assess-run') < acts.indexOf('assess-screen-start'), acts);
+    var rv = ran.rows['s-riverside'] || [], mp = ran.rows['s-maple'] || [];
+    ok(name + ': the table turns to what each site carries — Site, Status, Power, Compute, Battery, Charging, Ready, Capital — and says the run in plain words', ran.am && ran.head.join('|').replace(/ [▴▾]/g, '') === '|Site|Status|Power|Compute|Battery|Charging|Ready|Capital' && /2 site\(s\) assessed\. Screens: 2 read\./.test(ran.msg) && !ran.scroll, { head: ran.head, msg: ran.msg, scroll: ran.scroll });
+    ok(name + ': the Power cell is the server’s answer with its basis and the transformer: 300 kW entered, 250 kW free (service less the peak on file), kVA not on file on both; under 1 MW, each says the upgrade to ask for (what 1,200 kW free is short by)', /^300 kW entered · kVA not on file ↑ ask \+900 kW for 1 MW$/.test(rv[3]) && /^250 kW free · kVA not on file ↑ ask \+950 kW for 1 MW$/.test(mp[3]), { rv: rv[3], mp: mp[3] });
+    ok(name + ': Compute is the ONE right-sized pod that fits (250 kW carries a 150 kW Nano pod, never two 75s) with its class and its return at the public reference (the compute model’s own figure where one has run); the Battery its energy and IRR marked ref outside its market; Charging says No fit under four posts; Ready is the score', /compute model$/.test(rv[4]) && /^150 kW ?NANO [\d.]+% at spot$/i.test(mp[4]) && /^1\.2 MWh [\d.]+% ref$/.test(rv[5]) && /^1 MWh [\d.]+% ref$/.test(mp[5]) && rv[6] === 'No fit' && mp[6] === 'No fit' && /^0% Screened$/.test(mp[7]), { rv: rv, mp: mp });
+    ok(name + ': the summary strip counts what was assessed, the capacity on file, each use that fits, the screens and the approvals; Needs verification counts the sizes on a ceiling or none', ran.sumShown === 'block' && /2 assessed · 550 kW of capacity on file · compute fits 2 · a battery 2 · fast charging 0 · screened 2 · approved for pre-development 0/.test(ran.sum) && ran.unk === '0' && /of 2 assessed/.test(ran.unkN), { sum: ran.sum, unk: ran.unk, unkN: ran.unkN });
+    /* the side panel */
+    await p.click('.pf-tr.body[data-id="s-maple"] .t-name'); await wait(400);
+    var card = await p.evaluate(function () { var c = document.querySelector('.ows-drawer #pa-card'); return c ? { text: c.innerText.replace(/\s+/g, ' '), uses: c.querySelectorAll('.pa-use').length, off: c.querySelectorAll('.pa-use.off').length, best: (c.querySelector('.pa-use.best .k') || {}).textContent || '', boxes: c.querySelectorAll('[data-pa-use]').length, checked: Array.prototype.filter.call(c.querySelectorAll('[data-pa-use]'), function (x) { return x.checked; }).map(function (x) { return x.getAttribute('data-pa-use'); }) } : null; });
+    ok(name + ': a row opens the assessment card: the free power with its basis and what the screen found (substation, utility), the three uses side by side with the highest marked and the one that does not fit said, the approval, the score and what to verify next', !!card && /250 kW free ?Measured/.test(card.text) && /Substation: Fixture North, 69 kV, 1\.4 mi · Fixture Power & Light/.test(card.text) && card.uses === 3 && card.off === 1 && /highest/.test(card.best) && /does not carry the 4-post minimum/.test(card.text) && /alternatives, not a stack/.test(card.text) && /Approve for pre-development/i.test(card.text) && /Shovel ready 0% with evidence on file/i.test(card.text) && /Verify next/.test(card.text) && /will-serve letter/.test(card.text) && card.boxes === 3 && card.checked.length === 1, card);
+    await p.click('.ows-drawer [data-pa="full"]');
+    await p.waitForFunction(function () { return document.querySelectorAll('.ows-drawer #pa-check details').length === 8; }, null, { timeout: 6000 }).catch(function () {});
+    var full = await p.evaluate(function () { var d = document.querySelector('.ows-drawer'); return { sections: d.querySelectorAll('#pa-check details').length, items: d.querySelectorAll('#pa-check .pa-item').length, screened: d.querySelectorAll('#pa-check .st.screened').length, tables: d.querySelectorAll('#pa-full .pa-tbl').length, bessRows: d.querySelectorAll('#pa-full details:nth-of-type(1) .pa-tbl tr').length }; });
+    ok(name + ': the checklist opens from the server: eight sections, forty-nine items, the ones public data and the record screen marked Screened, with the battery’s ten years and the shelf beside it', full.sections === 8 && full.items === 49 && full.screened >= 8 && full.tables >= 2, full);
+    SITES_FX.posts = [];
+    await p.evaluate(function () { var it = document.querySelector('.ows-drawer .pa-item[data-item="power-evidence"]'); it.closest('details').open = true; });
+    await p.fill('.ows-drawer .pa-item[data-item="power-evidence"] input', 'Will-serve letter, 2026-11-02');
+    await p.click('.ows-drawer .pa-item[data-item="power-evidence"] [data-set="done"]');
+    await p.waitForFunction(function () { var s = document.querySelector('.ows-drawer .pa-item[data-item="power-evidence"] .st'); return s && /Evidence on file/.test(s.textContent); }, null, { timeout: 6000 }).catch(function () {});
+    var marked = await p.evaluate(function () { var d = document.querySelector('.ows-drawer'); return { st: d.querySelector('.pa-item[data-item="power-evidence"] .st').textContent, open: d.querySelector('.pa-item[data-item="power-evidence"]').closest('details').open, ready: d.querySelector('#pa-ready').innerText.replace(/\s+/g, ' '), row: document.querySelector('.pf-tr.body[data-id="s-maple"]').children[7].innerText.replace(/\s+/g, ' ').trim() }; });
+    var chk = SITES_FX.posts.filter(function (x) { return x.action === 'assess-check'; })[0] || {};
+    ok(name + ': marking an item is one post (assess-check with the note); the item reads Evidence on file, its section stays open, and the score moves in the card and on the row without a reload', SITES_FX.posts.length === 1 && chk.site === 's-maple' && chk.item === 'power-evidence' && chk.state === 'done' && chk.note === 'Will-serve letter, 2026-11-02' && /Evidence on file/.test(marked.st) && marked.open && /^2% with evidence on file/.test(marked.ready) && /^2% In diligence$/.test(marked.row), { posts: SITES_FX.posts, marked: marked });
+    /* approve: a hybrid */
+    SITES_FX.posts = [];
+    await p.evaluate(function () { Array.prototype.forEach.call(document.querySelectorAll('.ows-drawer [data-pa-use]'), function (c) { c.checked = c.getAttribute('data-pa-use') !== 'supercharger'; }); });
+    await p.click('.ows-drawer [data-pa="approve"]');
+    await p.waitForFunction(function () { var r = document.querySelector('.pf-tr.body[data-id="s-maple"]'); return r && /Pre-development/.test(r.children[2].textContent); }, null, { timeout: 8000 }).catch(function () {});
+    await wait(400);
+    var appr = await p.evaluate(function () { var r = document.querySelector('.pf-tr.body[data-id="s-maple"]'), c = document.querySelector('.ows-drawer #pa-card'); return { status: r.children[2].innerText.trim(), ready: r.children[7].innerText.replace(/\s+/g, ' ').trim(), card: c ? c.innerText.replace(/\s+/g, ' ') : '', sum: document.getElementById('am-sum').innerText }; });
+    var ap = SITES_FX.posts.filter(function (x) { return x.action === 'assess-approve'; })[0] || {};
+    ok(name + ': Approve in the card is one post (assess-approve, the site and the uses ticked: a hybrid); the site reads Pre-development, the row and the card name what was approved, and the strip counts it', ap.site === 's-maple' && (ap.uses || []).join() === 'compute,bess' && appr.status === 'Pre-development' && /✓ Compute \+ Battery storage/.test(appr.ready) && /✓ Compute \+ Battery storage/.test(appr.card) && /Withdraw/.test(appr.card) && /approved for pre-development 1/.test(appr.sum), { post: ap, appr: appr });
+    await p.keyboard.press('Escape'); await wait(200);
+    /* the bar: Run, Approve, Partner; the partner set in bulk and filtered on */
+    await p.click('#sel-all'); await wait(300);
+    var barA = await p.evaluate(function () { return Array.prototype.filter.call(document.querySelectorAll('#bar button'), function (b) { return getComputedStyle(b).display !== 'none'; }).map(function (b) { return b.textContent.trim(); }); });
+    ok(name + ': the selection bar leads with Run, then Approve for pre-dev and Partner; Send to Terra is gone', barA[0] === 'Run' && barA[1] === 'Approve for pre-dev ▾' && barA[2] === 'Partner ▾' && barA.indexOf('Send to Terra (solar)') < 0 && barA.indexOf('Open in Site Map') > 0, barA);
+    await p.click('#ba-approve'); await wait(200);
+    var apMenu = await p.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('.pf-menu button'), function (b) { return b.firstChild.textContent.trim(); }); });
+    ok(name + ': Approve for pre-dev offers each use, the hybrids and the way back', apMenu.join('|') === 'Compute|Battery storage|Fast charging|Compute + battery|Compute + fast charging|Battery + fast charging|All three|Withdraw the approval', apMenu);
+    await p.keyboard.press('Escape'); await wait(150);
+    SITES_FX.posts = [];
+    p.once('dialog', function (d) { d.accept('Francis Energy'); });
+    await p.click('#ba-partner'); await wait(200);
+    await p.evaluate(function () { Array.prototype.filter.call(document.querySelectorAll('.pf-menu button'), function (b) { return /Another partner/.test(b.textContent); })[0].click(); });
+    await p.waitForFunction(function () { return Array.prototype.some.call(document.querySelectorAll('#f-partner option'), function (o) { return o.value === 'Francis Energy'; }); }, null, { timeout: 8000 }).catch(function () {});
+    var pt = SITES_FX.posts.filter(function (x) { return x.action === 'site-set-partner'; })[0] || {};
+    var subs = await p.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('.pf-tr.body .t-sub'), function (x) { return x.textContent; }); });
+    ok(name + ': Partner sets who the sites come from in one post (site-set-partner with both ids); each row names it and the filter offers it', pt.partner === 'Francis Energy' && (pt.ids || []).length === 2 && subs.length === 2 && subs.every(function (x) { return /Francis Energy/.test(x); }), { post: pt, subs: subs });
+    await p.click('#ba-clear'); await wait(150);
+    await p.selectOption('#f-cap', '420'); await wait(250);
+    var none = await p.evaluate(function () { return document.getElementById('tbl').innerText; });
+    await p.selectOption('#f-cap', '90'); await wait(250);
+    var some = await p.evaluate(function () { return document.querySelectorAll('.pf-tr.body').length; });
+    await p.selectOption('#f-cap', ''); await p.selectOption('#f-partner', 'Francis Energy'); await wait(250);
+    var byPartner = await p.evaluate(function () { return document.querySelectorAll('.pf-tr.body').length; });
+    ok(name + ': the register filters by free capacity (nothing carries a 350 kW unit; both carry a 75 kW one) and by partner', /No sites match/.test(none) && some === 2 && byPartner === 2, { none: none.slice(0, 60), some: some, byPartner: byPartner });
+    await p.selectOption('#f-partner', ''); await wait(150);
+    await p.setViewportSize({ width: 390, height: 844 }); await wait(300);
+    var phone = await p.evaluate(function () { var head = document.querySelector('.pf-tr.head'); return { scroll: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1, rows: document.querySelectorAll('.pf-tr.body').length, cols: Array.prototype.filter.call(head.children, function (c) { return getComputedStyle(c).display !== 'none'; }).map(function (c) { return c.textContent.replace(/ [▴▾]/g, '').trim(); }) }; });
+    ok(name + ': on a phone the assessed register keeps the site, its power, its compute and how ready it is, and nothing scrolls sideways', !phone.scroll && phone.rows === 2 && phone.cols.join('|') === '|Site|Power|Compute|Ready', phone);
+    if (shotsAt) { await p.screenshot({ path: path.join(shotsAt, 'portfolio-assess-390.png'), fullPage: true }); await p.setViewportSize({ width: 1366, height: 900 }); await wait(200); await p.screenshot({ path: path.join(shotsAt, 'portfolio-assess-1366.png'), fullPage: true });
+      await p.click('.pf-tr.body[data-id="s-maple"] .t-name'); await wait(400); await p.screenshot({ path: path.join(shotsAt, 'portfolio-assess-panel-1366.png'), fullPage: false }); await p.keyboard.press('Escape'); }
+  }
   async function flow(page, current, opts) {
     opts = opts || {};
     if (ONLY && !ONLY.test('flow')) return;
     DLG.on = opts.diligence === true; DLG.state = {}; DLG.posts = []; DLG.portfolios = {}; DLG.assign = {}; DLG.pseq = 0;
+    ASX.state = {}; ASX.over = {}; ASX.jobs = {}; ASX.jseq = 0;
+    /* a workspace that funds its own sites: its committee named (the signed-in person sits on it) and compute on its offtake partner's figures */
+    ASX.cfg = opts.funding ? ALIB.configOf({ portfolioAssessment: { compute: { basis: 'partner' }, funding: { mode: 'committee', name: 'Finance committee', members: [{ name: 'Ann Lee', email: ASX.me }, { name: 'Barry D', email: 'barry@northstar.example' }] },
+      gates: { minKva: 500, minLeaseYears: 5, irrHurdlePct: 25 }, closing: { minLeaseYears: 15, agreement: 'SHA' }, review: { name: 'Executive Review', members: [{ name: 'Ann Lee', email: ASX.me }, { name: 'Barry D', email: 'barry@northstar.example' }] } } }) : null;
     if (page === '/marketplace.html') { CURRENT_FX = ns; PACKAGE_VIEW = null; STORE.posts = []; }
     var errs = [], ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) { var url = r.request().url(); if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); if (/Chart\.js/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: 'window.Chart=function(){};window.Chart.register=function(){};' }); return r.fulfill({ status: 200, contentType: 'text/css', body: '' }); });
@@ -2092,7 +2367,9 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
       ok(name + ': the rail is the workspace rail with this page current', out.items.join('|') === 'Home|Projects|Portfolio|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings'.replace(current, current + '*'), out.items);
       ok(name + ': Dashboard points at /workspace and the ground is the blueprint grid', out.home === '/workspace' && out.theme && out.grid, out);
       if (page === '/portfolio.html' && opts.diligence) await diligenceRegister(p, name);
-      if (page === '/portfolio.html' && !opts.diligence) {
+      if (page === '/portfolio.html' && opts.assess) await assessRegister(p, name);
+      if (page === '/portfolio.html' && opts.funding) await fundingRegister(p, name);
+      if (page === '/portfolio.html' && !opts.diligence && !opts.assess && !opts.funding) {
         /* the register in the shell: every row's IRR is the stored scenario's; a row opens the side panel with the figures; the selection bar works the way a mail client's does, and every action is asked of the endpoint */
         await p.waitForFunction(function () { return document.querySelectorAll('.pf-tr.body').length > 0 || /Could not load|No sites/.test((document.getElementById('tbl') || {}).innerText || ''); }, null, { timeout: 6000 }).catch(function () {});
         var pf = await p.evaluate(function () {
@@ -2129,6 +2406,16 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
       }
       if (page === '/site-crm.html') {
         await p.waitForFunction(function () { return !!document.querySelector('#site-head h1'); }, null, { timeout: 6000 }).catch(function () {});
+        /* nothing on the site record sends a site to Terra any more (2026-11-09, Tommy: "remove all send to terra") */
+        if (opts.funding) await p.waitForSelector('#capital-card', { state: 'attached', timeout: 6000 }).catch(function () {});
+        var terra = await p.evaluate(function () { return { card: !!document.getElementById('terra-card'), send: !!document.getElementById('terra-send'), word: /Terra Energy/.test(document.getElementById('main').textContent), capital: !!document.getElementById('capital-card') }; });
+        ok(name + (opts.label || '') + ': nothing on the site record sends a site to Terra', !terra.card && !terra.send && !terra.word && (!opts.funding || terra.capital), terra);
+        if (opts.funding) {
+          /* a workspace that funds its own sites: the card is the funding list, never a marketplace */
+          var fc = await p.evaluate(function () { var c = document.getElementById('capital-card'), f = document.querySelector('#site-head .fact .k, .site-head .fact .k'); return { text: c.innerText.replace(/\s+/g, ' '), send: !!document.getElementById('cap-send'), pkg: (document.getElementById('pane-deck').innerText.match(/funding list above is the committee[^.]*/) || [''])[0], facts: Array.prototype.map.call(document.querySelectorAll('.fact .k'), function (k) { return k.textContent; }) }; });
+          ok(name + (opts.label || '') + ': the capital card is Funding with the committee named and where the site stands (not assessed yet: screen first), with no Send to the finance marketplace; the head fact reads Funding', /^Funding Finance committee \(Ann Lee, Barry D\)/.test(fc.text) && /Screen first/.test(fc.text) && /sees screened sites only/.test(fc.text) && !/marketplace/i.test(fc.text) && !fc.send && fc.facts.indexOf('Funding') >= 0 && fc.facts.indexOf('Capital') < 0 && !!fc.pkg, fc);
+          return;
+        }
         var sc = await p.evaluate(function () { return { h1: (document.querySelector('#site-head h1') || {}).textContent, shell: document.body.classList.contains('ows') && !!document.querySelector('#side-nav.ows-rail') && !!document.querySelector('#topbar.ows-top'), tabs: Array.prototype.map.call(document.querySelectorAll('#tabs .tab'), function (b) { return b.textContent; }), old: !!document.querySelector('.tb-nav') }; });
         ok(name + ': the site record wears the same shell, with Portfolio current, opens on the site and reads Funded in its head', sc.shell && sc.h1 === 'Riverside Garage' && sc.tabs.indexOf('Pro forma') >= 0 && sc.tabs.indexOf('Investor deck & capital') >= 0 && !sc.old, sc);
         var dtab = await p.evaluate(function () { var t = document.getElementById('tab-diligence'); return { shown: !!t && getComputedStyle(t).display !== 'none', title: document.title }; });
@@ -2181,6 +2468,9 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   await flow('/projects.html', 'Projects'); await flow('/marketplace.html', 'Marketplace'); await flow('/', '');
   await flow('/portfolio.html', 'Portfolio'); await flow('/site-crm.html', 'Portfolio', { query: '?site=s-riverside&home=workspace' });
   /* the compute-site diligence, switched on (one workspace: Solela Capital) */
+  await flow('/portfolio.html', 'Portfolio', { assess: true, label: ' (assessment)' });
+  await flow('/portfolio.html', 'Portfolio', { funding: true, label: ' (funding list)' });
+  await flow('/site-crm.html', 'Portfolio', { funding: true, query: '?site=s-maple&home=workspace#deck', label: ' (funding list)' });
   await flow('/portfolio.html', 'Portfolio', { diligence: true, label: ' (diligence on)' }); await flow('/site-crm.html', 'Portfolio', { query: '?site=s-riverside&home=workspace', diligence: true, label: ' (diligence on)' });
   /* the classic choice: a browser that asked for the classic dashboard is sent there from /workspace, and index keeps it (the same rule on both pages, so no loop) */
   if (!ONLY || ONLY.test('flow')) await (async function () {

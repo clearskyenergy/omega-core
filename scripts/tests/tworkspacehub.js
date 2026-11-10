@@ -93,10 +93,28 @@ var stdShown = HUB.items('design', ctxFor({ orgId: 'x', tierLevel: 1 }, { hubToo
 ok('a shown extra the plan does not open is listed locked, last', stdShown[stdShown.length - 1].key === 'siteoptimizer' && stdShown[stdShown.length - 1].locked, stdShown);
 ok('hiding never changes the ring: the plan composes the hub', HUB.compose(ctxFor({ orgId: 'x', tierLevel: 3 }, { hubTools: { editor: false, sandbox: false } })).ring.map(function (a) { return a.key; }).join() === ent.ring.map(function (a) { return a.key; }).join());
 var ch = HUB.choices(pro), chDesign = ch.filter(function (g) { return g.key === 'design'; })[0];
-ok('Settings lists the cells of the ring that list tools, in ring order', ch.map(function (g) { return g.key; }).join() === ent.ring.filter(function (a) { return HUB.items(a.key, pro).some(function (r) { return !r.page; }) || HUB.hidden(a.key, pro).length; }).map(function (a) { return a.key; }).join(), ch.map(function (g) { return g.key; }));
+ok('Hub settings lists the ring in ring order, then every other cell the plan holds', ch.map(function (g) { return g.key; }).join() === 'projects,design,grid,money,sales,team,market,compute,permits,ops' && ch.every(function (g, i) { return g.inRing === (i < 6); }), ch.map(function (g) { return g.key + (g.inRing ? '' : ':out'); }));
+ok('a cell with pages names them, a subject among them', ch.filter(function (g) { return g.key === 'projects'; })[0].pages.join() === 'In flight,All projects,Portfolio' && ch.filter(function (g) { return g.key === 'sales'; })[0].pages.join() === 'Screening', ch.map(function (g) { return g.key + ':' + g.pages.join('/'); }));
+ok('Hub settings never offers a cell the plan does not hold', HUB.choices(ctxFor({ orgId: 'x', toolAccess: ['editor', 'gridatlas'] })).map(function (g) { return g.key; }).join() === 'projects,design,grid,market,team', HUB.choices(ctxFor({ orgId: 'x', toolAccess: ['editor', 'gridatlas'] })).map(function (g) { return g.key; }));
 ok('Settings lists every Design tool, the extras switched off', chDesign && chDesign.tools.map(function (t) { return t.key + (t.shown ? '' : ':off'); }).join() === DESIGN.tools.map(function (k) { return k + (EXTRAS.indexOf(k) >= 0 ? ':off' : ''); }).join(), chDesign);
 ok('Settings follows the person\'s choice', HUB.choices(ctxFor({ orgId: 'x', tierLevel: 3 }, { hubTools: { powerflow: true } })).filter(function (g) { return g.key === 'design'; })[0].tools.filter(function (t) { return t.key === 'powerflow'; })[0].shown === true);
 ok('a subject\'s tools sit under the subject, never as their own switch', !HUB.choices(pro).some(function (g) { return g.key === 'sales' && g.tools.some(function (t) { return t.key === 'parcelscreening'; }); }));
+
+/* 3c · the cells are the person's to choose (Tommy, 2026-10-21: "do this
+   for all of them … a settings tab for the hex"): a cell out of the ring
+   leaves it and frees its place, a cell the plan holds comes in, never
+   past six, never one the plan does not hold; Projects stays first and
+   Team last; a cell left unchosen keeps the plan's place */
+var ringOf = function (extra) { return HUB.compose(ctxFor({ orgId: 'x', tierLevel: 3 }, extra)).ring.map(function (a) { return a.key; }).join(); };
+ok('no choice is the plan\'s ring, and an empty choice is the same', ringOf({}) === ent.ring.map(function (a) { return a.key; }).join() && ringOf({ hubCells: {} }) === ringOf({}), [ringOf({}), ringOf({ hubCells: {} })]);
+ok('a cell turned off leaves the ring, and nothing fills its place unasked', ringOf({ hubCells: { sales: false } }) === 'projects,design,grid,money,team', ringOf({ hubCells: { sales: false } }));
+ok('a cell the plan holds comes in where one was turned off, in the table\'s order', ringOf({ hubCells: { sales: false, compute: true } }) === 'projects,design,grid,money,compute,team', ringOf({ hubCells: { sales: false, compute: true } }));
+ok('Projects and Team may be turned off too', ringOf({ hubCells: { projects: false, team: false } }) === 'design,grid,money,sales', ringOf({ hubCells: { projects: false, team: false } }));
+ok('never past six: a cell chosen over a full ring displaces one the plan placed, not one chosen', ringOf({ hubCells: { ops: true } }) === 'projects,design,grid,money,ops,team', ringOf({ hubCells: { ops: true } }));
+ok('a cell the plan does not hold is never put in by a choice', HUB.compose(ctxFor({ orgId: 'x', toolAccess: ['editor'] }, { hubCells: { money: true, plant: true, compute: true } })).ring.map(function (a) { return a.key; }).join() === 'projects,design,market,team', HUB.compose(ctxFor({ orgId: 'x', toolAccess: ['editor'] }, { hubCells: { money: true, plant: true, compute: true } })).ring.map(function (a) { return a.key; }));
+ok('the centre is never a choice', HUB.compose(ctxFor({ orgId: 'x', tierLevel: 3 }, { hubCells: { today: false } })).centre.key === 'today' && ringOf({ hubCells: { today: true } }) === ringOf({}));
+var chOff = HUB.choices(ctxFor({ orgId: 'x', tierLevel: 3 }, { hubCells: { sales: false, compute: true } }));
+ok('Hub settings follows the choice: in the ring first, the rest after', chOff.map(function (g) { return g.key + (g.inRing ? '' : ':out'); }).join() === 'projects,design,grid,money,compute,team,sales:out,market:out,permits:out,ops:out', chOff.map(function (g) { return g.key + (g.inRing ? '' : ':out'); }));
 
 /* 4 · does a workspace hold a module: the one rule the Modules page and
    the marketplace store share */

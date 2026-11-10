@@ -167,6 +167,38 @@
   .empty{text-align:center;color:var(--dim);padding:40px 16px}
   .empty .big{font-size:26px;margin-bottom:10px}
   .empty .t{font-size:13px;color:var(--muted);line-height:1.5}
+  .empty .step{text-align:left;margin:8px auto;max-width:260px}
+  .empty .step b{display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;border-radius:50%;border:1px solid var(--line);color:var(--ink);font-size:11px;margin-right:8px}
+  /* the fiber tools, folded to one line */
+  #fiberTools{border-bottom:1px solid var(--line)}
+  #fiberTools summary{cursor:pointer;padding:10px 16px;font-size:12px;color:var(--muted);list-style:none}
+  #fiberTools summary::-webkit-details-marker{display:none}
+  #fiberTools summary:before{content:"▸";margin-right:7px;color:var(--dim);font-size:10px}
+  #fiberTools[open] summary:before{content:"▾"}
+  /* AT A GLANCE — the answer for the pin, before any detail */
+  .glance{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0 6px;background:rgba(255,255,255,.035)}
+  .glance .gt{font:10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+  .grow{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--line);cursor:pointer}
+  .grow.first{border-top:0}
+  .grow:hover .gk{text-decoration:underline}
+  .grow .gd{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:0 0 8px}
+  .grow .gm{flex:1;min-width:0}
+  .grow .gk{font-size:12px;font-weight:600;color:var(--ink)}
+  .grow .gv{font-size:11px;color:var(--muted);line-height:1.45}
+  .grow .go{color:var(--dim);font-size:12px;margin-top:1px}
+  .gnext{margin:8px 0 2px;padding-top:8px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);line-height:1.55}
+  .gnext b{color:var(--ink)}
+  .gnext ol{margin:4px 0 0 16px;padding:0}
+  .gbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .gbtn{font-size:11px;cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:6px 9px;color:var(--ink);-webkit-user-select:none;user-select:none}
+  .gbtn.pri{border-color:var(--amp);color:var(--amp)}
+  .gall{font-size:11px;color:var(--dim);margin:8px 0 0;cursor:pointer}
+  /* every detail section opens and closes; closed until asked for */
+  .sec.tog{cursor:pointer;display:flex;align-items:center;gap:7px;padding:9px 0;margin:0;border-top:1px solid var(--line)}
+  .sec.tog:before{content:"▾";font-size:10px;color:var(--dim)}
+  .sec.tog.shut:before{content:"▸"}
+  .sec.tog:hover{color:var(--ink)}
+  .secbody{padding-bottom:8px}
 
   /* legend / status bottom-left */
   #status{position:absolute;left:354px;bottom:12px;z-index:1100;font-family:var(--mono);font-size:10px;
@@ -219,6 +251,25 @@
   .eia-t .nm{flex:1}
   .eia-t .val{font-family:var(--mono);font-size:10.5px;color:var(--muted);text-align:right}
   .eia-t .val b{color:var(--ink);font-weight:600}
+/* ── Print = the DD report. The map is a screen tool; what goes in the deal
+   folder is the Site Analysis panel with the due-diligence checklist. ── */
+@media print{
+  #map,#topbar,#status,#baseSwitch,#eiaPanel,#sideTabs,#settingsShell,
+  #projectControl,#fiberTools,#fiberRouteControls,#fiberEvidenceHost,.x,.gbtns,.gall{display:none !important}
+  .secbody{display:block !important}   /* the printed report shows every section, open or not */
+  .sec.tog:before{content:"" !important}
+  .glance{background:#fff !important;border-color:#ccc !important}
+  .grow .gk{color:#111 !important}.grow .gv,.gnext{color:#444 !important}
+  html,body{background:#fff !important;color:#111 !important;height:auto !important;overflow:visible !important}
+  #rail,#panel{position:static !important;width:100% !important;max-width:100% !important;
+    height:auto !important;max-height:none !important;overflow:visible !important;
+    background:#fff !important;color:#111 !important;border:0 !important;box-shadow:none !important}
+  .p-b{max-height:none !important;overflow:visible !important;color:#111 !important}
+  #panel .nm,#panel .ti{color:#111 !important}
+  #panel .meta,#panel .hint,#panel .coord{color:#444 !important}
+  #panel .sec{color:#333 !important;border-color:#ccc !important}
+  #panel .row{border-color:#e4e4e4 !important;page-break-inside:avoid}
+}
 </style>
 </head>
 <body>
@@ -258,13 +309,24 @@
 
 <div id="panel">
   <div class="p-h"><span class="dot"></span><span class="ti">Site Analysis</span><span class="x" id="pClose">✕</span></div>
-  <div id="projectControl"><label for="projectSelect">Screen for</label><select id="projectSelect" aria-label="Project type"></select></div>
-  <div id="fiberRouteControls"></div>
-  <div id="fiberEvidenceHost"></div>
+  <div id="projectControl"><label for="projectSelect">What are you siting?</label><select id="projectSelect" aria-label="Project type"></select></div>
+  <!-- The fiber map filters and the server route check are tools for one
+       job; folded to a line so the answer for the pin is the first thing
+       under the profile, not three screens down. Open on the Fiber profile. -->
+  <details id="fiberTools">
+    <summary>Fiber routes on the map · filters and route check</summary>
+    <div id="fiberRouteControls"></div>
+    <div id="fiberEvidenceHost"></div>
+  </details>
   <div class="p-b" id="pBody">
     <div class="empty">
       <div class="big">◎</div>
-      <div class="t">Choose a project type, then drop a pin anywhere on the map. Grid Atlas keeps fiber evidence, interconnection proximity, and data-center context together without implying service availability.</div>
+      <div class="t">
+        <div class="step"><b>1</b> Choose what you are siting above.</div>
+        <div class="step"><b>2</b> Search an address, or click the map to drop a pin.</div>
+        <div class="step"><b>3</b> Read the answer here: power, fiber, zoning and what to do next.</div>
+        <div style="margin-top:10px;font-size:11px;color:var(--dim)">Everything shown is a screening read from public data. It tells you who to ask; it confirms nothing by itself.</div>
+      </div>
     </div>
   </div>
 </div>
@@ -293,6 +355,9 @@
 <script src="/config.js"></script>
 <script src="/omega-tools.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/grid-atlas-dd.js"></script>
+<script src="/omega-fiber-confirm.js"></script>
+<script src="/omega-zoning-watch.js"></script>
 <script>
 (function(){
 "use strict";
@@ -825,12 +890,20 @@ var LAYERS = {
      ISPs must report fiber availability to the FCC by law (Broadband DATA Act).
      Utah SGID republishes the FCC BDC API monthly as per-provider fiber hexes.
      This is coverage geography (where fiber SERVICE exists), not conduit routes. */
+  /* NATIONAL since 2026-11-09. This pointed at Utah's SGID copy (a UTM-12
+     extent, so it drew nothing outside Utah) with a filter on a field that
+     layer does not have, so it answered 400 everywhere and "FCC fiber
+     service" never once read true for an Oklahoma site. It is now the FCC
+     Broadband Data Collection (December 2025) H3 resolution-8 hexes from
+     Esri Living Atlas — the same source omega-fiber-confirm.js asks for the
+     NAMED providers at the pin. A hex is drawn where at least one location
+     is fiber-served. */
   fcc_fiber: {
     name:"FCC Fiber Coverage", color:"#FFB020", on:false, geom:"poly", role:"connectivity",
-    url:"https://services.arcgis.com/j195B8Fn38z3xQw8/arcgis/rest/services/all_record_hexes_dissolved/FeatureServer/0",
-    where:"Technology IN (50)", // 50 = Fiber to the Premises in FCC BDC coding
-    label:function(a){return (a.Provider||a.provider||a.brand_name||"Fiber provider");},
-    meta:function(a){var d=a.max_advertised_download_speed||a.MaxDown;return "Fiber"+(d?" · "+d+" Mbps":"")+(a.state?" · "+a.state:"");}
+    url:"https://services8.arcgis.com/peDZJliSvYims39Q/arcgis/rest/services/FCC_Broadband_Data_Collection_December_2024_View/FeatureServer/5",
+    where:"ServedBSLsFiber > 0",
+    label:function(a){return "Fiber-served: "+(a.ServedBSLsFiber||0)+" of "+(a.TotalBSLs||0)+" locations";},
+    meta:function(a){var n=a.UniqueProvidersFiber||0;return n+" fiber provider"+(n===1?"":"s")+" · FCC BDC Dec 2025 · self-reported";}
   },
   zayo: {
     name:"Zayo Backbone (ref)", color:"#F5822A", on:false, geom:"line", role:"connectivity",
@@ -1047,9 +1120,12 @@ function status(msg,loading){ stTxt.textContent=msg; stEl.className=loading?"loa
    Walks a fallback chain of endpoints (L2.urls[]), so a dead mirror auto-recovers
    to the next. This is the reliability layer: HIFLD's official portal was
    decommissioned 8/25/2025, so grid layers rely on redundant public mirrors. */
-function fetchArc(key,cb){
+function fetchArc(key,cb,envOverride){
+  /* envOverride: ask around a POINT instead of the visible map — the pin
+     analysis uses it so the nearest substation is found however far in the
+     map is zoomed (pinGridEnsure) */
   var L2=LAYERS[key], b=map.getBounds();
-  var env=b.getWest()+","+b.getSouth()+","+b.getEast()+","+b.getNorth();
+  var env=envOverride||(b.getWest()+","+b.getSouth()+","+b.getEast()+","+b.getNorth());
   var where=L2.where?encodeURIComponent(L2.where):"1%3D1";
   var qs="/query?f=geojson&where="+where+"&outFields=*&returnGeometry=true"+
     "&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects"+
@@ -1377,7 +1453,11 @@ var catCollapsed={generation:true, connectivity:true, market:true, site:true, lo
 /* ---------- Quick-view PRESETS: one click selects the right layer set ----------
    Each preset lists the layer keys to turn ON (all others turn OFF). */
 var PRESETS=[
-  {key:"bess", name:"BESS", icon:"▮", layers:["substations","transmission","osm_subs","utility_terr","iso_rto"]},
+  /* dd: a key in GridAtlasDD.PROFILES (grid-atlas-dd.js). Choosing the
+     profile turns its layers on AND adds the due-diligence checklist to the
+     pin analysis — auto items judged from the loaded layers, open items
+     carrying the evidence a lender asks for. */
+  {key:"bess", name:"BESS", icon:"▮", dd:"bess", layers:["substations","transmission","osm_subs","utility_terr","iso_rto","flood"]},
   {key:"solar", name:"Solar", icon:"☀", layers:["substations","transmission","plants","eia_plants","utility_terr"]},
   {key:"solarbess", name:"Solar+BESS", icon:"⌁", layers:["substations","transmission","plants","eia_plants","osm_subs","utility_terr","iso_rto"]},
   /* GAS IS ON THIS PRESET NOW. A compute campus that cannot get its full
@@ -1387,8 +1467,9 @@ var PRESETS=[
      "Gas pipeline (microgrid)" row, but not on the preset for the one
      project type that most often needs it — so it had to be switched on by
      hand every time, by somebody who already knew to look. */
-  {key:"datacenter", name:"Data Center", icon:"▤", layers:["substations","transmission","eia_plants","pf_inventory","pf_routes","fiber","fiber_licensed","dc_registry","ixp","colo","subsea","water","flood","gas","utility_terr","iso_rto"]},
+  {key:"datacenter", name:"Data Center / Compute", icon:"▤", dd:"compute", layers:["substations","transmission","eia_plants","pf_inventory","pf_routes","fiber","fiber_licensed","dc_registry","ixp","colo","subsea","water","flood","gas","utility_terr","iso_rto"]},
   {key:"ev", name:"EV Charging", icon:"⌁", layers:["substations","ev","osm_subs","utility_terr"]},
+  {key:"supercharger", name:"Tesla Supercharger", icon:"⚡", dd:"supercharger", layers:["substations","transmission","osm_subs","ev","utility_terr","flood"]},
   {key:"der", name:"DER", icon:"◇", layers:["substations","transmission","osm_subs","osm_plants","bess","utility_terr","ba_area"]},
   {key:"derdata", name:"DER + Data", icon:"◈", layers:["substations","transmission","osm_subs","eia_plants","pf_inventory","fiber","fiber_verified","water","flood","utility_terr","iso_rto","ba_area"]},
   /* Connectivity on its own: the question "how much fiber is at this point"
@@ -1414,14 +1495,24 @@ function applyPreset(p){
   buildRail(); updateRailCounts(); renderProjectSelect();
   loadVisible();
   status("Preset: "+p.name+" — "+p.layers.length+" layers on",false);
+  var ft=document.getElementById("fiberTools");
+  if(ft&&p.key==="fiber") ft.open=true;      /* the Fiber profile IS the fiber tools */
+  /* the profile changes what the pin analysis asks (its DD checklist, the
+     RFI's wording) — re-read at once, not when the slowest layer answers */
+  if(pinLatLng) analyze(pinLatLng);
 }
 function renderProjectSelect(){
   var el=document.getElementById("projectSelect"); if(!el) return;
-  var h='<option value="">Choose project profile…</option>';
+  /* the three that run a due-diligence checklist lead, named for what they
+     answer; the rest are map layer sets and are grouped as that */
+  var h='<option value="">Choose one…</option>', g1='', g2='';
   for(var i=0;i<PRESETS.length;i++){
     var p=PRESETS[i];
-    h+='<option value="'+p.key+'"'+(activePreset===p.key?' selected':'')+'>'+p.icon+'  '+p.name+'</option>';
+    var o='<option value="'+p.key+'"'+(activePreset===p.key?' selected':'')+'>'+p.icon+'  '+p.name+'</option>';
+    if(p.dd) g1+=o; else g2+=o;
   }
+  h+='<optgroup label="Site due diligence — full checklist">'+g1+'</optgroup>'+
+     '<optgroup label="Map layers only">'+g2+'</optgroup>';
   el.innerHTML=h;
   el.onchange=function(){
     var key=el.value, p=null;
@@ -1463,7 +1554,13 @@ function buildRail(){
         el.className="lyr"+(L2.on?"":" off");
         if(L2.on){ groups[k].addTo(map); loadVisible(); }
         else { map.removeLayer(groups[k]); }
-        if(activePreset){ activePreset=null; renderProjectSelect(); } // manual edit breaks preset match
+        /* A manual edit breaks a plain layer preset's match. A due-diligence
+           profile is more than its layers — it is the checklist being run —
+           so adding or dropping a layer (FCC Fiber Coverage, say) keeps it. */
+        var keepDd=false;
+        for(var pk=0;pk<PRESETS.length;pk++){ if(PRESETS[pk].key===activePreset&&PRESETS[pk].dd) keepDd=true; }
+        if(activePreset&&!keepDd){ activePreset=null; renderProjectSelect(); }
+        if(keepDd&&pinLatLng&&!L2.on) analyze(pinLatLng); /* a layer switched off stops counting as measured */
         updateRailCounts();
       };
       body.appendChild(el);
@@ -1521,12 +1618,63 @@ function updateRailCounts(){
 
 /* ---------- Pin + proximity analysis ---------- */
 var pinLatLng=null, pinMarker=null, pinMode=true;
+var ddItKw=1000, lastDD=null; /* compute profile's selected IT load / last DD report for export */
+/* FCC BDC lookup at the pin (omega-fiber-confirm.js). k = the pin it was
+   asked for; data undefined = not answered, null = looked and the point is
+   in no block or hex; err = the lookup failed, which is not a reading. */
+var bdcState={k:null,data:undefined,err:null,loading:false};
+/* THE PIN LOOKS AROUND ITSELF. Layers load for the visible map only, and an
+   address search zooms to a few blocks — so the nearest substation was
+   "not in view" and Power read "not measured" until somebody zoomed out
+   (2026-11-09, Tommy: "it needs to be easy to use"). One fetch per pin asks
+   the same grid sources for ~33 km around the point (lines ~17 km); the
+   analysis reads them beside whatever the map has loaded. A layer that is
+   switched off is still not asked: off stays "not measured". */
+var pinGrid={k:null,subs:[],lines:[],loading:false,done:0};
+function pinGridKey(ll){ return bdcKey(ll)+"|"+(LAYERS.substations.on?1:0)+(LAYERS.transmission.on?1:0); }
+function pinGridEnsure(ll){
+  var k=pinGridKey(ll); if(pinGrid.k===k) return;
+  pinGrid={k:k,subs:[],lines:[],loading:true,done:0};
+  var c=Math.cos(ll.lat*Math.PI/180)||1;
+  function box(d){ return (ll.lng-d/c)+","+(ll.lat-d)+","+(ll.lng+d/c)+","+(ll.lat+d); }
+  function fin(){ if(pinGrid.k!==k) return; if(++pinGrid.done>=2){ pinGrid.loading=false; if(pinLatLng&&pinGridKey(pinLatLng)===k) analyze(pinLatLng); } }
+  if(LAYERS.substations.on) fetchArc("substations",function(f){ if(pinGrid.k===k) pinGrid.subs=f||[]; fin(); },box(0.3)); else fin();
+  if(LAYERS.transmission.on) fetchArc("transmission",function(f){ if(pinGrid.k===k) pinGrid.lines=f||[]; fin(); },box(0.15)); else fin();
+}
+var lastSearch=null, lastConfirm=null; /* the searched address / the last confirmation block (for Copy RFI) */
+/* the zoning & legislation tracker (omega-zoning-watch.js): fetched once,
+   from this origin; a failure is kept and said, never retried in a loop */
+var zoningState={asked:false,data:null,err:null};
+function zoningEnsure(){
+  if(zoningState.asked||!window.OmegaZoningWatch) return;
+  zoningState.asked=true;
+  OmegaZoningWatch.load(function(err,data){
+    if(err) zoningState.err=String(err.message||err); else zoningState.data=data;
+    if(pinLatLng) analyze(pinLatLng);
+  });
+}
+function bdcKey(ll){ return ll.lat.toFixed(5)+","+ll.lng.toFixed(5); }
+function bdcEnsure(ll){
+  if(!window.OmegaFiberConfirm) return;
+  var k=bdcKey(ll);
+  if(bdcState.k===k) return;
+  bdcState={k:k,data:undefined,err:null,loading:true};
+  OmegaFiberConfirm.lookup(ll.lat,ll.lng,function(err,bdc){
+    if(bdcState.k!==k) return;               /* the pin moved while it was asking */
+    bdcState.loading=false;
+    if(err){ bdcState.err=String(err.message||err); } else { bdcState.data=bdc; }
+    if(pinLatLng&&bdcKey(pinLatLng)===k) analyze(pinLatLng);
+  });
+}
 var pinBtn=document.getElementById("pinBtn");
 pinBtn.onclick=function(){ pinMode=!pinMode; pinBtn.className="modechip"+(pinMode?" on":"");
   document.getElementById("map").className=pinMode?"pin-drop":""; };
 document.getElementById("map").className="pin-drop";
 
 map.on("click",function(e){ if(pinMode) dropPin(e.latlng); });
+/* The fiber evidence panel (omega-fiber-atlas.js) calls this after a server
+   screen so an open due-diligence checklist absorbs the result in place. */
+window.__gaReanalyze=function(){ if(pinLatLng) analyze(pinLatLng); };
 
 function dropPin(ll){
   pinLatLng=ll;
@@ -1604,11 +1752,13 @@ function containingFeature(ll,feats){
 }
 
 function analyze(ll){
-  var sub=nearestPoint(ll,cache.substations,LAYERS.substations);
+  pinGridEnsure(ll);
+  var pg=(pinGrid.k===pinGridKey(ll))?pinGrid:{subs:[],lines:[],loading:false};
+  var sub=nearestPoint(ll,(cache.substations||[]).concat(LAYERS.substations.on?pg.subs:[]),LAYERS.substations);
   if(sub) sub.src="substations";
   var subOsm=nearestPoint(ll,cache.osm_subs,LAYERS.osm_subs);
   if(subOsm&&(!sub||subOsm.km<sub.km)){ sub=subOsm; sub.src="osm_subs"; } // OSM independent fallback/refiner
-  var tx=nearestLine(ll,cache.transmission);
+  var tx=nearestLine(ll,(cache.transmission||[]).concat(LAYERS.transmission.on?pg.lines:[]));
   var plant=nearestPoint(ll,cache.plants,LAYERS.plants);
   var dcN=within(ll,cache.datacenters,40);
   var evN=within(ll,cache.ev,15);
@@ -1640,7 +1790,8 @@ function analyze(ll){
   h+='<div class="coord">'+ll.lat.toFixed(5)+', '+ll.lng.toFixed(5)+
      '  ·  <span style="color:var(--amp);cursor:pointer" id="copyc">copy</span></div>';
 
-  h+='<div class="sec">Interconnect Score</div>';
+  h+='<!--GLANCE-->';
+  h+='<div class="sec" data-k="interconnect">Interconnect Score</div>';
   h+='<div class="score"><span class="n" style="color:'+band+'">'+score+'</span><span class="lab">/ 100</span></div>';
   h+='<div class="bar"><span style="width:'+score+'%;background:'+band+'"></span></div>';
   h+='<div class="hint" style="margin:6px 0 2px;color:'+band+'">'+verdict+'</div>';
@@ -1692,13 +1843,36 @@ function analyze(ll){
   function anyOn(keys){ for(var i=0;i<keys.length;i++) if(LAYERS[keys[i]]&&LAYERS[keys[i]].on) return true; return false; }
 
   // ── Fiber Confidence — blends every free signal into one screening read ──
-  var fiberLayersOn=anyOn(fiberKeys);
+  /* THE PUBLISHED INVENTORY IS A MAPPED ROUTE (2026-11-09). The score read
+     only the licensed / imported / OSM layers, so a site with a published
+     route 59 m away still said "0 / 100, no route in view" — the inventory
+     was drawn on the map and listed below, and counted for nothing. Its
+     detailed geometry (it only reaches the cache at zoom 8+, never the
+     simplified overview) is now the nearest route when it is the nearest.
+     Its status caveats are unchanged: a published line is proximity, not
+     serviceability, and the rows below still say so. */
+  var invOn=!!(LAYERS.pf_inventory&&LAYERS.pf_inventory.on);
+  var invRoute=invOn?nearestLine(ll,cache.pf_inventory):null;
+  if(invRoute&&invRoute.km>80) invRoute=null;
+  if(invRoute&&(!fiber||invRoute.km<fiber.km)){ invRoute.sourceKey='pf_inventory'; fiber=invRoute; }
+  var fiberLayersOn=anyOn(fiberKeys)||(invOn&&!!layerHealth.pf_inventory&&layerHealth.pf_inventory.state==='loaded');
   var ixpN=within(ll,cache.ixp,60), coloN=within(ll,cache.colo,60);
   var fccCov=containingFeature(ll,cache.fcc_fiber);
+  /* The FCC's provider-level answer AT the pin (omega-fiber-confirm.js),
+     asked once per pin; analyze() runs again when it lands. undefined =
+     not answered yet, null = the point is in no block or hex. */
+  bdcEnsure(ll);
+  var bdc=(bdcState.k===bdcKey(ll))?bdcState.data:undefined;
+  var bdcBlockFiber=(bdc&&bdc.block)?bdc.block.fiber:[], bdcHexFiber=(bdc&&bdc.hex)?bdc.hex.fiber:[];
+  var bdcNearFiber=(bdc&&bdc.nearby)?bdc.nearby.fiber:[];
   /* null = the source was never consulted. Not a zero. */
   var fcRoute = !fiberLayersOn ? null : (fiber?Math.max(0,100-fiber.km*7):0);
   var fcInterconnect = (LAYERS.ixp.on||LAYERS.colo.on) ? Math.min(100,(ixpN*20)+(coloN*12)) : null;
-  var fcCoverage = LAYERS.fcc_fiber.on ? (fccCov?90:0) : null;
+  /* the pin's own block beats the drawn hex layer: 95 when a provider
+     reports fiber in the block, 75 in the surrounding hex only, 0 when the
+     FCC data was read and names none; the layer stays the fallback */
+  var fcCoverage = bdc ? (bdcBlockFiber.length?95:bdcHexFiber.length?75:bdcNearFiber.length?55:0)
+                       : (LAYERS.fcc_fiber.on ? (fccCov?90:0) : null);
   var fcW=wScore([["mapped route",fcRoute,45],["peering / colo",fcInterconnect,30],["FCC coverage",fcCoverage,25]]);
   var fcScore=fcW.score;
   var fcBand=fcScore==null?"var(--muted)":fcScore>=65?"var(--ok)":fcScore>=35?"var(--warn)":"var(--bad)";
@@ -1708,8 +1882,12 @@ function analyze(ll){
         ? "Partial read — "+fcW.missedWeight+"% of the weight was never measured ("+fcW.missed.join(", ")+")"
         : fcScore>=65?"High — multiple fiber signals present"
         : fcScore>=35?"Moderate — some signal, verify"
-        : "Low — the loaded sources show thin signal here";
-  if(fcScore==null){ fcBand="var(--muted)"; }
+        : (bdcBlockFiber.length||bdcHexFiber.length||bdcNearFiber.length)
+          ? "Low on mapped routes — but the FCC data names a fiber provider here. See Confirm fiber below."
+          : "Low — the loaded sources show thin signal here";
+  /* a number resting on too little of the weight is shown, and said to be
+     partial, but never in a verdict colour */
+  if(fcScore==null || fcW.missedWeight>=30){ fcBand="var(--muted)"; }
   h+='<div class="score" style="margin-top:2px"><span class="n" style="color:'+fcBand+';font-size:26px">'+(fcScore==null?"—":fcScore)+'</span><span class="lab">/ 100 fiber confidence'+(fcW.missedWeight&&fcScore!=null?" · partial":"")+'</span></div>';
   h+='<div class="bar"><span style="width:'+(fcScore==null?0:fcScore)+'%;background:'+fcBand+'"></span></div>';
   h+='<div class="hint" style="margin:5px 0 8px;color:'+fcBand+'">'+fcWord+'</div>';
@@ -1718,7 +1896,11 @@ function analyze(ll){
         fiber?fmtKm(fiber.km):"—");
   h+=infoRow(LAYERS.ixp.color,"Internet exchanges","within 60 km"+(LAYERS.ixp.on?"":" · layer off"),String(ixpN));
   h+=infoRow(LAYERS.colo.color,"Colo facilities","within 60 km"+(LAYERS.colo.on?"":" · layer off"),String(coloN));
-  h+=infoRow(LAYERS.fcc_fiber.color,"FCC fiber service",fccCov?"reported at this point":(LAYERS.fcc_fiber.on?"none mapped here":"enable FCC Fiber Coverage"),fccCov?"✓":"—");
+  h+=infoRow(LAYERS.fcc_fiber.color,"FCC fiber service",
+        bdc ? (bdcBlockFiber.length?"reported in this census block":bdcHexFiber.length?"reported in the surrounding hex":bdcNearFiber.length?"reported within ~1.5 km":"no provider reports fiber here")
+            : bdcState.loading ? "asking the FCC data…"
+            : fccCov?"reported at this point":(LAYERS.fcc_fiber.on?"none mapped here":"enable FCC Fiber Coverage"),
+        bdc ? ((bdcBlockFiber.length||bdcHexFiber.length||bdcNearFiber.length)?"✓":"0") : (fccCov?"✓":"—"));
   h+='<div id="bbRow"></div>'; // live FCC broadband-at-point, filled async
   if(fiber){
     var fv=fiber.km<=2?"Route within 2 km — carrier serviceability unconfirmed":fiber.km<=8?"Mapped route nearby — lateral route and cost unconfirmed":"Fiber build is a cost driver";
@@ -1785,6 +1967,83 @@ function analyze(ll){
       +'© OpenStreetMap contributors (ODbL); California Department of Technology MMBI.</div>';
   }
 
+  /* ── CONFIRM FIBER — the ladder, who to ask, and the request ───────────
+     A map with no line on it is not a site with no fiber; it is a site
+     nobody has asked a carrier about. Four rungs, never merged: Mapped
+     (route geometry), Reported (the FCC data names a provider with fiber
+     in this block), Quoted and Confirmed (a carrier's own words — only a
+     human's evidence reaches those). The judgement, the carrier list and
+     the RFI are omega-fiber-confirm.js; this is paint. */
+  lastConfirm=null;
+  if(window.OmegaFiberConfirm){
+    var fsR=window.__gaFiberScreen||null, cfRoutes=[], cfKm=null;
+    if(fsR&&fsR.routes){ for(var cr=0;cr<fsR.routes.length&&cr<5;cr++){ var rr=fsR.routes[cr]; cfRoutes.push({operator:rr.operator||rr.name, km:(rr.mapped_distance_m||0)/1000}); } }
+    var cfInv=nearestLine(ll,cache.pf_inventory);
+    if(cfInv&&cfInv.km<=80){ cfRoutes.push({operator:cfInv.props.carrier||cfInv.props.operator, km:cfInv.km}); cfKm=cfInv.km; }
+    if(fiber){ cfRoutes.push({operator:fiber.props.operator||fiber.props.carrier||fiber.props.name, km:fiber.km}); if(cfKm==null||fiber.km<cfKm) cfKm=fiber.km; }
+    var cfLad=OmegaFiberConfirm.ladder({
+      mappedMeasured: fiberLayersOn||!!LAYERS.pf_inventory.on, mappedKm: cfKm,
+      screenRoutes: (fsR&&fsR.counts_in_radius)?(fsR.counts_in_radius.routes||0):null,
+      bdc: bdc, bdcError: bdcState.err });
+    var cfCar=OmegaFiberConfirm.carriers(bdc||null, cfRoutes);
+    var cfUse="a commercial facility";
+    for(var cu=0;cu<PRESETS.length;cu++){ if(PRESETS[cu].key===activePreset){
+      cfUse=PRESETS[cu].dd==="compute"?"a modular AI compute deployment":PRESETS[cu].dd==="supercharger"?"a DC fast-charging site":PRESETS[cu].dd==="bess"?"a battery energy storage site":cfUse; } }
+    var cfAddr=(lastSearch&&lastSearch.exact&&haversine(ll.lat,ll.lng,lastSearch.lat,lastSearch.lng)<=0.3)?lastSearch.text:"";
+    var cfSite={address:cfAddr,lat:ll.lat,lng:ll.lng,use:cfUse};
+    var cfEv={ mappedMeasured: fiberLayersOn||!!LAYERS.pf_inventory.on, mappedKm: cfKm,
+      screenRoutes: (fsR&&fsR.counts_in_radius)?(fsR.counts_in_radius.routes||0):null,
+      bdc: bdc, bdcError: bdcState.err, routes: cfRoutes };
+    var cfPack=OmegaFiberConfirm.pack(cfEv), cfTech=OmegaFiberConfirm.byTech(bdc);
+    lastConfirm={ ladder:cfLad, carriers:cfCar, pack:cfPack,
+      rfi:OmegaFiberConfirm.rfi(cfSite, cfCar, {gbps:10,minGbps:5}, bdc),
+      brief:OmegaFiberConfirm.brief(cfSite, cfEv, {gbps:10,minGbps:5}) };
+    var CF_STYLE={ yes:["var(--ok)","YES"], near:["var(--warn)","NEARBY"], no:["var(--muted)","NONE"],
+                   open:["var(--amp)","TO DO"], unknown:["var(--muted)","—"] };
+    h+='<div class="sec" data-k="fiber">◈ Confirm fiber</div>';
+    h+='<div class="hint" style="margin:2px 0 6px;color:'+(cfLad.reached===2?"var(--ok)":cfLad.reached===1?"var(--warn)":"var(--muted)")+'">'+esc(cfLad.summary)+'</div>';
+    for(var cg=0;cg<cfLad.rungs.length;cg++){
+      var rg=cfLad.rungs[cg], st=CF_STYLE[rg.status]||CF_STYLE.unknown;
+      h+='<div class="row" style="align-items:flex-start"><span class="ic" style="background:'+st[0]+';margin-top:4px"></span>'+
+         '<div class="main"><div class="nm">'+(cg+1)+' · '+esc(rg.label)+'</div><div class="meta" style="white-space:normal">'+esc(rg.detail)+'</div></div>'+
+         '<div class="dist" style="color:'+st[0]+';font-size:9px;letter-spacing:.06em">'+st[1]+'</div></div>';
+    }
+    if(bdcState.loading) h+='<div class="hint" style="margin:4px 0;color:var(--muted)">Asking the FCC data which providers report fiber here…</div>';
+    /* the telecom facts of record at the point */
+    if(bdc){
+      h+='<div class="hint" style="margin:8px 0 2px"><b style="color:var(--ink)">Telecom at this address</b></div>';
+      if(bdc.ilec) h+=infoRow("#9aa7b5","Telephone company of record", bdc.ilec.label+" · study area "+bdc.ilec.sac+(bdc.ilec.ocn?" · OCN "+bdc.ilec.ocn:"")+" · "+bdc.ilec.regulation, "");
+      for(var ct=0;ct<cfTech.length;ct++){
+        var tg=cfTech[ct], tn=[];
+        for(var cp=0;cp<tg.providers.length&&cp<5;cp++) tn.push(tg.providers[cp].name+" ("+tg.providers[cp].totalBsls+"/"+tg.of+")");
+        h+=infoRow(tg.tech===50?"#FFB020":"#5b6b7c", tg.techName+" · "+tg.providers.length+" provider"+(tg.providers.length===1?"":"s"), tn.join("; ")+(tg.providers.length>5?" …":"")+" · locations in the "+(tg.scope==="block"?"census block":"hex"), "");
+      }
+      if(bdc.nearby&&bdc.nearby.fiber.length){
+        var rn=[]; for(var ri=0;ri<bdc.nearby.fiber.length&&ri<5;ri++) rn.push(bdc.nearby.fiber[ri].name+" ("+bdc.nearby.fiber[ri].totalBsls+" locations)");
+        h+=infoRow("#FFB020","Fiber within ~"+bdc.nearby.radiusKm+" km", rn.join("; "), "");
+      }
+      if(bdc.block) h+='<div class="hint" style="margin:2px 0;color:var(--muted)">Census block '+esc(bdc.block.geoid)+' — carriers ask for it.</div>';
+    }
+    if(cfCar.length){
+      h+='<div class="hint" style="margin:8px 0 2px"><b style="color:var(--ink)">Carriers to ask, in order</b></div>';
+      for(var cc2=0;cc2<cfCar.length&&cc2<8;cc2++) h+=infoRow(cfCar[cc2].rank<=2?"#FFB020":cfCar[cc2].rank===3?"#9aa7b5":LAYERS.fiber.color, (cc2+1)+". "+cfCar[cc2].name, cfCar[cc2].basis, "");
+      h+='<div class="hint" style="margin:2px 0"><a href="'+esc(OmegaFiberConfirm.SOURCE.filerSearch)+'" target="_blank" rel="noopener" style="color:var(--amp)">Carrier contact details — FCC filer database ↗</a></div>';
+    }
+    /* what "verified" is made of: three public facts, six carrier documents */
+    h+='<div class="hint" style="margin:8px 0 2px"><b style="color:var(--ink)">Verification package</b> <span style="color:var(--muted)">· '+cfPack.filter(function(x){return x.done;}).length+' of '+cfPack.length+' in hand</span></div>';
+    for(var pkI=0;pkI<cfPack.length;pkI++){
+      var pkR=cfPack[pkI], pkC=pkR.done?"var(--ok)":(pkR.who==="public data"?"var(--muted)":"var(--amp)");
+      h+='<div class="row" style="align-items:flex-start"><span class="ic" style="background:'+pkC+';margin-top:4px"></span>'+
+         '<div class="main"><div class="nm">'+esc(pkR.label)+'</div><div class="meta" style="white-space:normal">'+esc(pkR.detail)+'</div></div>'+
+         '<div class="dist" style="color:'+pkC+';font-size:9px;letter-spacing:.06em">'+(pkR.done?"IN HAND":pkR.who==="public data"?"—":"CARRIER")+'</div></div>';
+    }
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 2px">'+
+       '<span id="cfCopy" style="color:var(--amp);font-size:12px;cursor:pointer;border:1px solid var(--amp);border-radius:6px;padding:6px 10px">⧉ Copy carrier RFI</span>'+
+       '<span id="cfBrief" style="color:var(--amp);font-size:12px;cursor:pointer;border:1px solid var(--amp);border-radius:6px;padding:6px 10px">⧉ Copy verification brief</span>'+
+       '<a href="'+esc(OmegaFiberConfirm.fccMapUrl(ll.lat,ll.lng))+'" target="_blank" rel="noopener" style="color:var(--ink);font-size:12px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:6px 10px">FCC map at this point ↗</a></div>';
+    h+='<div class="hint" style="margin:6px 0 0;color:var(--muted)">'+esc(OmegaFiberConfirm.SOURCE.attribution)+' It names who has fiber plant here; it does not confirm dedicated symmetrical service. The RFI asks for 10 Gbps (5 minimum) — edit it to the offtake before sending.</div>';
+  }
+
   // Market / utility context via point-in-polygon
   var terr=containingFeature(ll,cache.utility_terr);
   var iso=containingFeature(ll,cache.iso_rto);
@@ -1849,7 +2108,7 @@ function analyze(ll){
      its own. A threshold that let the single most common gap through would
      have been a threshold in name only. */
   if(dcMissWeight>=20){ dcBand="var(--muted)"; dcVerdict="Partial read — "+dcMissWeight+"% of the weight is unmeasured"; }
-  h+='<div class="sec">◆ Data Center Site Report</div>';
+  h+='<div class="sec" data-k="dc">◆ Data Center Site Report</div>';
   h+='<div class="score"><span class="n" style="color:'+dcBand+'">'+(dcScore==null?"—":dcScore)+'</span><span class="lab">/ 100 DC suitability'+(dcMissing.length?" · partial":"")+'</span></div>';
   h+='<div class="bar"><span style="width:'+(dcScore==null?0:dcScore)+'%;background:'+dcBand+'"></span></div>';
   h+='<div class="hint" style="margin:6px 0 8px;color:'+dcBand+'">'+dcVerdict+'</div>';
@@ -1874,13 +2133,14 @@ function analyze(ll){
   // rough deliverable-capacity band by highest nearby voltage class (screening only)
   var mwBand = lineV>=500?"1,000+ MW":lineV>=345?"500–1,000 MW":lineV>=230?"200–600 MW":
                lineV>=115?"50–200 MW":lineV>=69?"10–60 MW":lineV>0?"<10 MW (distribution)":"unknown";
-  var subCount=within(ll,cache.substations,40)+within(ll,cache.osm_subs,40);
+  /* the larger of what the map has loaded and what the pin found around itself — the same substations, never added together */
+  var subCount=Math.max(within(ll,cache.substations,40),within(ll,LAYERS.substations.on?pg.subs:[],40))+within(ll,cache.osm_subs,40);
   var plantMW=0,plantN=0;
   (cache.eia_plants||[]).forEach(function(f){ if(f.geom&&f.geom.type==="Point"){
     var c=f.geom.coordinates; if(haversine(ll.lat,ll.lng,c[1],c[0])<=40){ plantN++; plantMW+=(f.bubbleMw||0);} }});
   var gasNear=nearestLine(ll,cache.gas);
 
-  h+='<div class="sec">⚡ Available Power Estimate</div>';
+  h+='<div class="sec" data-k="power">⚡ Available Power Estimate</div>';
   h+='<div class="score" style="margin-top:2px"><span class="n" style="font-size:22px;color:var(--amp)">'+esc(mwBand)+'</span></div>';
   h+='<div class="hint" style="margin:3px 0 8px;color:var(--muted)">Screening band from highest nearby voltage ('+(lineV||"?")+' kV). NOT confirmed capacity.</div>';
   h+=infoRow(LAYERS.substations.color,"Highest voltage nearby",sub?(subV?subV+" kV substation":"voltage not published"):"no substation",lineV?lineV+" kV":"—");
@@ -1903,14 +2163,222 @@ function analyze(ll){
        'style="color:var(--amp);font-size:12px;text-decoration:none;border:1px solid var(--amp);border-radius:6px;padding:6px 10px;display:inline-block">↳ '+esc(portal.label)+'</a></div>';
   }
 
+  /* ── Due Diligence checklist — only when the chosen profile carries one.
+     The judgement lives in grid-atlas-dd.js; everything measured here is
+     handed over as an evidence object, with null meaning never measured
+     (layer off), which the companion renders as "—", not as a reading. */
+  lastDD=null;
+  var ddKey=null;
+  for(var ddp=0;ddp<PRESETS.length;ddp++){ if(PRESETS[ddp].key===activePreset&&PRESETS[ddp].dd) ddKey=PRESETS[ddp].dd; }
+
+  /* ── ZONING & LEGISLATION, AS REPORTED ────────────────────────────────
+     The local measures on file for the pin's COUNTY and the state measures
+     on file for its state (omega-zoning-watch.js, /data/zoning). The county
+     is the FCC census block's — the lookup above already has it. Nothing
+     here is a legal status and "none on file" is never "no restriction":
+     the module has no pass, and the rows say what to confirm and with whom. */
+  var zj=null;
+  if(window.OmegaZoningWatch){
+    zoningEnsure();
+    var zF=(bdc&&bdc.block&&bdc.block.geoid)?OmegaZoningWatch.fipsOf(bdc.block.geoid):null;
+    var zSubject=ddKey==="compute"?"data-center":ddKey==="bess"?"bess":ddKey==="supercharger"?"ev-charging":null;
+    if(zoningState.data||zoningState.err){
+      zj=OmegaZoningWatch.judge(zoningState.data||null,{ state:zF?zF.state:null, county:zF?zF.county:null,
+        countyName:(bdc&&bdc.block&&bdc.block.county)?bdc.block.county:"", subject:zSubject,
+        /* the address the person searched, while the pin still stands on it */
+        placeHint:(lastSearch&&haversine(ll.lat,ll.lng,lastSearch.lat,lastSearch.lng)<=3)?lastSearch.text:"" });
+      var Z_STYLE={ risk:["var(--bad)","REPORTED"], conditional:["var(--warn)","VERIFY"], unknown:["var(--muted)","—"] };
+      h+='<div class="sec" data-k="zoning">⚖ Zoning &amp; legislation — as reported</div>';
+      h+='<div class="hint" style="margin:2px 0 6px;color:var(--muted)">'+
+         esc(zF?((bdc.block.county||"County "+zF.county)+", "+zF.state):"County not resolved yet")+
+         (zSubject?" · "+esc(OmegaZoningWatch.SUBJECT[zSubject]):" · all project types")+
+         (zj.asOf?" · tracker as of "+esc(zj.asOf):"")+'</div>';
+      var zRows=[["Local measures (county)",zj.rows.local],["State measures",zj.rows.state]];
+      for(var zr=0;zr<zRows.length;zr++){
+        var zv=zRows[zr][1], zs=Z_STYLE[zv.status]||Z_STYLE.unknown;
+        h+='<div class="row" style="align-items:flex-start"><span class="ic" style="background:'+zs[0]+';margin-top:4px"></span>'+
+           '<div class="main"><div class="nm">'+esc(zRows[zr][0])+(zv.value?' <span style="color:var(--muted);font-weight:400">· '+esc(zv.value)+'</span>':'')+'</div>'+
+           '<div class="meta" style="white-space:normal">'+esc(zv.note)+'</div></div>'+
+           '<div class="dist" style="color:'+zs[0]+';font-size:9px;letter-spacing:.06em">'+zs[1]+'</div></div>';
+      }
+      var zList=zj.local.concat(zj.state), zToday=new Date().toISOString();
+      for(var zi=0;zi<zList.length&&zi<10;zi++){
+        var zR=zList[zi], zSt=OmegaZoningWatch.standing(zR,zToday), zIn=(zSt==="enacted"||zSt==="active");
+        var zC=zR.effect==="restrictive"?(zIn?"var(--bad)":"var(--warn)"):"#5b6b7c";
+        var zU=(zR.sources&&zR.sources[0]&&/^https?:\/\//i.test(zR.sources[0].url))?zR.sources[0].url:"";
+        h+='<div class="row" style="align-items:flex-start"><span class="ic" style="background:'+zC+';margin-top:4px"></span>'+
+           '<div class="main"><div class="nm">'+esc(zR.title)+'</div>'+
+           '<div class="meta" style="white-space:normal">'+esc(zR.jurisdiction)+' · '+esc(zSt==="lapsed?"?"Expiry date passed — confirm":(OmegaZoningWatch.STATUS[zSt]||zSt))+
+             (zR.statusDate?' · '+esc(zR.statusDate):'')+' · '+esc(zR.summary||"")+
+             (zU?' <a href="'+esc(zU)+'" target="_blank" rel="noopener" style="color:var(--amp)">source ↗</a>':'')+'</div></div>'+
+           '<div class="dist" style="font-size:9px;letter-spacing:.06em;color:'+zC+'">'+esc((zR.level==="state"?"STATE":"LOCAL"))+'</div></div>';
+      }
+      if(zList.length>10) h+='<div class="hint" style="margin:2px 0;color:var(--muted)">'+(zList.length-10)+' more on file — they are in the DD report download.</div>';
+      h+='<div class="hint" style="margin:6px 0 0;color:var(--muted)">'+esc(zj.disclaimer)+'</div>';
+    }
+  }
+
+  if(ddKey && window.GridAtlasDD && GridAtlasDD.PROFILES[ddKey]){
+    var ddProf=GridAtlasDD.PROFILES[ddKey];
+    var ddMw=ddProf.defaultMw;
+    if(ddKey==='compute') ddMw=Math.round(ddItKw*(ddProf.facilityFactor||1.25))/1000;
+    var mwLow = lineV>=500?1000: lineV>=345?500: lineV>=230?200: lineV>=115?50: lineV>=69?10: lineV>0?2: null;
+    var fsRaw=window.__gaFiberScreen||null;
+    var fsEv=(fsRaw&&fsRaw.counts_in_radius)?{routes:fsRaw.counts_in_radius.routes||0,
+      facilities:fsRaw.counts_in_radius.facilities||0,
+      radiusKm:(fsRaw.query&&fsRaw.query.radius_km)||25}:null;
+    var ddEv={
+      subMeasured: !!(LAYERS.substations.on||LAYERS.osm_subs.on),
+      txMeasured: !!LAYERS.transmission.on,
+      subKm: sub?sub.km:null,
+      subName: sub?(subL.label(sub.f.props)||""):null,
+      subKv: subV||null,
+      txKm: tx?tx.km:null, txKv: txV2||null,
+      lineKvMax: lineV||null, mwBand: mwBand, mwLow: mwLow,
+      utilityMeasured: !!LAYERS.utility_terr.on, utility: uName||null,
+      isoMeasured: !!LAYERS.iso_rto.on, iso: iso?LAYERS.iso_rto.label(iso.props):null,
+      evMeasured: !!LAYERS.ev.on, evWithin15: evN, dcWithin40: dcN,
+      fiberMeasured: fiberLayersOn, fiberKm: fiber?fiber.km:null, fiberScreen: fsEv,
+      bdcMeasured: !!bdc,
+      bdcBlockFiber: bdcBlockFiber.map(function(p){return p.name;}),
+      bdcHexFiber: bdcHexFiber.map(function(p){return p.name;}),
+      bdcNearFiber: bdcNearFiber.map(function(p){return p.name;}),
+      ilec: (bdc&&bdc.ilec)?bdc.ilec.label:null,
+      zoning: zj?zj.rows:null,
+      floodMeasured: !!LAYERS.flood.on, inFlood: !!inFlood,
+      floodZone: floodF?(floodF.props.FLD_ZONE||floodF.props.fld_zone||""):null,
+      waterMeasured: !!LAYERS.water.on, waterKm: water?water.km:null,
+      gasMeasured: !!LAYERS.gas.on, gasKm: gasNear?gasNear.km:null,
+      ixpColoMeasured: !!(LAYERS.ixp.on||LAYERS.colo.on), ixp60: ixpN, colo60: coloN,
+      subCount40: subCount, plantMW40: Math.round(plantMW),
+      targetMw: ddMw
+    };
+    var dd=GridAtlasDD.run(ddKey, ddEv);
+    lastDD={ generated:new Date().toISOString(), lat:ll.lat, lng:ll.lng,
+             profile:ddKey, targetMw:ddMw, evidence:ddEv, report:dd,
+             fiberConfirm: lastConfirm?{reached:lastConfirm.ladder.reached,summary:lastConfirm.ladder.summary,carriers:lastConfirm.carriers,
+               verificationPackage:lastConfirm.pack, telecom:bdc||null}:null,
+             zoning: zj?{rows:zj.rows,local:zj.local,state:zj.state,asOf:zj.asOf,disclaimer:zj.disclaimer}:null };
+    var rdBand=dd.readiness==null?"var(--muted)":dd.readiness>=70?"var(--ok)":dd.readiness>=45?"var(--warn)":"var(--bad)";
+    h+='<div class="sec" data-k="dd">⛭ Due Diligence — '+esc(dd.title)+'</div>';
+    if(ddKey==='compute'&&ddProf.loadOptions){
+      h+='<div style="display:flex;align-items:center;gap:8px;margin:2px 0 6px">'+
+         '<span class="hint" style="margin:0">IT load</span>'+
+         '<select id="ddLoadSel" style="background:var(--panel2,#16222e);color:var(--ink);border:1px solid var(--line);border-radius:6px;font:inherit;font-size:11px;padding:3px 6px">';
+      for(var lo=0;lo<ddProf.loadOptions.length;lo++){
+        var op=ddProf.loadOptions[lo];
+        h+='<option value="'+op.itKw+'"'+(op.itKw===ddItKw?' selected':'')+'>'+esc(op.label)+'</option>';
+      }
+      h+='</select><span class="hint" style="margin:0">≈ '+ddMw+' MW facility</span></div>';
+    }
+    h+='<div class="score" style="margin-top:2px"><span class="n" style="color:'+rdBand+';font-size:26px">'+(dd.readiness==null?"—":dd.readiness)+'</span><span class="lab">/ 100 mapped screen · '+dd.tally.open+' evidence items open</span></div>';
+    h+='<div class="bar"><span style="width:'+(dd.readiness==null?0:dd.readiness)+'%;background:'+rdBand+'"></span></div>';
+    h+='<div class="hint" style="margin:5px 0 6px;color:'+rdBand+'">'+esc(dd.verdict)+'</div>';
+    h+='<div class="hint" style="margin:0 0 6px;color:var(--muted)">'+esc(dd.note)+'</div>';
+    for(var sx=0;sx<dd.sections.length;sx++){
+      var ssec=dd.sections[sx];
+      h+='<div class="sec sub" style="font-size:10px;opacity:.85">'+esc(ssec.name)+'</div>';
+      for(var ix=0;ix<ssec.items.length;ix++) h+=ddRow(ssec.items[ix]);
+    }
+    /* queue routing beside the hosting-capacity portal the panel already shows */
+    var qp=isoQueuePortal(ddEv.iso);
+    if(qp) h+='<div style="margin:8px 0 2px"><a href="'+esc(qp.url)+'" target="_blank" rel="noopener" style="color:var(--amp);font-size:12px;text-decoration:none;border:1px solid var(--amp);border-radius:6px;padding:6px 10px;display:inline-block">↳ '+esc(qp.label)+'</a></div>';
+    h+='<div style="display:flex;gap:8px;margin:8px 0 2px">'+
+       '<span id="ddExport" style="color:var(--amp);font-size:12px;cursor:pointer;border:1px solid var(--amp);border-radius:6px;padding:6px 10px">⇩ Download DD report</span>'+
+       '<span id="ddPrint" style="color:var(--ink);font-size:12px;cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:6px 10px">⎙ Print</span></div>';
+    h+='<div class="hint" style="margin:6px 0 0;color:var(--muted)">'+esc(dd.disclaimer)+'</div>';
+  }
+
   h+='<div class="sec">Notes</div>';
   h+='<div class="hint">Interconnect score weights substation distance (42%), transmission distance (33%), and voltage class (25%). '+
      'Coverage depends on active layers and map extent — enable a layer and it feeds the score automatically. '+
      'Public data (HIFLD / EIA / OSM); confirm hosting capacity with the utility before siting.</div>';
 
+  /* ── AT A GLANCE ───────────────────────────────────────────────────────
+     The panel had grown to a dozen sections in a narrow rail (2026-11-09,
+     Tommy: "it needs to be easy to use"). The answer for the pin comes
+     first — power, fiber, zoning, the checklist — in a line each, then what
+     to do next and the things to copy. Every detail section below it is
+     closed until asked for; a line here opens the section it summarises.
+     Nothing here is a new judgement: each line repeats a reading made
+     above, in its own words, and "not measured" stays "not measured". */
+  var G_C={ok:"var(--ok)",warn:"var(--warn)",bad:"var(--bad)",off:"var(--muted)",info:"var(--amp)"};
+  function gRow(c,k,v,key,first){ return '<div class="grow'+(first?' first':'')+'" data-jump="'+key+'"><span class="gd" style="background:'+G_C[c]+'"></span>'+
+    '<div class="gm"><div class="gk">'+esc(k)+'</div><div class="gv">'+esc(v)+'</div></div><span class="go">›</span></div>'; }
+  var g='<div class="glance"><div class="gt">At a glance</div>';
+  var gPowerSeen=!!(sub||tx);
+  g+=gRow(!gPowerSeen?"off":score>=70?"ok":score>=45?"warn":"bad","Power",
+     !gPowerSeen?(pg.loading?"Finding the nearest substation and line…"
+         :(LAYERS.substations.on||LAYERS.transmission.on)?"No substation within ~30 km or line within ~15 km in the public data — a long extension; ask the utility."
+         :"Not measured — choose what you are siting so the grid layers load.")
+       :verdict+(sub?" · substation "+fmtKm(sub.km)+(subV?" ("+subV+" kV)":""):"")+" · capacity is the utility's to confirm","power",true);
+  if(typeof cfLad!=="undefined"&&cfLad){
+    g+=gRow(cfLad.reached===2?"ok":cfLad.reached===1?"warn":"off","Fiber",
+       bdcState.loading?"Asking the FCC data who serves this address…"
+         :(cfLad.reached===2?"Carrier named"+(cfCar.length?": "+cfCar[0].name+(cfCar.length>1?" and "+(cfCar.length-1)+" more to ask":""):"")
+           :cfLad.reached===1?"Route mapped nearby"+(cfKm!=null?" ("+fmtKm(cfKm)+")":"")+", no carrier named yet"
+           :"Nothing found yet — not evidence of absence")+" · not confirmed until a carrier quotes","fiber");
+  }
+  if(zj){
+    var gz=zj.rows.local;
+    g+=gRow(gz.status==="risk"?"bad":gz.status==="conditional"?(/none on file/.test(gz.value)?"off":"warn"):"off","Zoning & legislation",
+       gz.status==="unknown"?gz.note:(gz.value.charAt(0).toUpperCase()+gz.value.slice(1))+(zj.local.length?" — "+zj.local[0].jurisdiction:"")+" · as reported, not verified","zoning");
+  }
+  if(LAYERS.flood.on) g+=gRow(inFlood?"bad":"ok","Flood",inFlood?"In a mapped FEMA flood hazard zone "+(floodF.props.FLD_ZONE||floodF.props.fld_zone||""):"Not in a mapped special flood hazard area at this point","dc");
+  if(lastDD&&lastDD.report){
+    var gdd=lastDD.report;
+    g+=gRow(gdd.readiness==null?"off":gdd.readiness>=70?"ok":gdd.readiness>=45?"warn":"bad","Checklist — "+gdd.title,
+       (gdd.readiness==null?"Nothing measured yet":gdd.readiness+" / 100 on what the map can read")+" · "+gdd.tally.open+" items need documents"+(gdd.tally.risk?" · "+gdd.tally.risk+" flagged":""),"dd");
+  }
+  var gNext=[];
+  if(typeof cfCar!=="undefined"&&cfCar&&cfCar.length) gNext.push("Send the carrier request to <b>"+esc(cfCar[0].name)+"</b> — copy it below.");
+  if(zj&&zj.rows.local.status==="risk"&&zj.local.length) gNext.push("Ask the planning department about <b>"+esc(zj.local[0].jurisdiction)+"</b>: "+esc(zj.local[0].title)+".");
+  if(uName) gNext.push("Check service and hosting capacity with <b>"+esc(uName)+"</b>"+(portal?' — <a href="'+esc(portal.url)+'" target="_blank" rel="noopener" style="color:var(--amp)">open its portal ↗</a>':"")+".");
+  else if(gPowerSeen) gNext.push("Identify the serving utility and ask about capacity at this address.");
+  if(!ddKey) gNext.push("Choose what you are siting (top of this panel) to get the full checklist.");
+  if(gNext.length){ g+='<div class="gnext"><b>Next</b><ol>'; for(var gn=0;gn<gNext.length&&gn<4;gn++) g+='<li>'+gNext[gn]+'</li>'; g+='</ol></div>'; }
+  g+='<div class="gbtns">'+
+     (lastConfirm?'<span class="gbtn pri" id="gRfi">⧉ Copy carrier request</span><span class="gbtn" id="gBrief">⧉ Copy fiber brief</span>':'')+
+     (lastDD?'<span class="gbtn" id="gExport">⇩ Download report</span>':'')+
+     '<span class="gbtn" id="gPrint">⎙ Print</span></div>';
+  g+='<div class="gall" id="gAll">Show all details ▾</div></div>';
+  h=h.replace('<!--GLANCE-->',function(){ return g; });   /* a function: a "$" in a carrier's name is not a pattern */
+
   document.getElementById("pBody").innerHTML=h;
+  collapseSections();
+  var gj=document.querySelectorAll("#pBody .grow");
+  for(var gi=0;gi<gj.length;gi++) gj[gi].onclick=(function(k){ return function(){ openSection(k); }; })(gj[gi].getAttribute("data-jump"));
+  var gAll=document.getElementById("gAll");
+  if(gAll){
+    gAll.textContent=secAllOpen()?"Hide all details ▴":"Show all details ▾";
+    gAll.onclick=function(){ setAllSections(!secAllOpen()); gAll.textContent=secAllOpen()?"Hide all details ▴":"Show all details ▾"; };
+  }
+  var gR=document.getElementById("gRfi"); if(gR) gR.onclick=function(){ if(lastConfirm){ copy(lastConfirm.rfi); gR.textContent="✓ Copied — paste into an email"; } };
+  var gB=document.getElementById("gBrief"); if(gB) gB.onclick=function(){ if(lastConfirm){ copy(lastConfirm.brief); gB.textContent="✓ Copied"; } };
+  var gP=document.getElementById("gPrint"); if(gP) gP.onclick=function(){ window.print(); };
+  var gE=document.getElementById("gExport"); if(gE) gE.onclick=function(){ var b=document.getElementById("ddExport"); if(b&&b.onclick) b.onclick(); };
   var cc=document.getElementById("copyc");
   if(cc) cc.onclick=function(){ copy(ll.lat.toFixed(6)+","+ll.lng.toFixed(6)); cc.textContent="copied"; };
+  var cfc=document.getElementById("cfCopy");
+  if(cfc) cfc.onclick=function(){ if(!lastConfirm) return; copy(lastConfirm.rfi); cfc.textContent="✓ RFI copied — paste into an email"; };
+  var cfb=document.getElementById("cfBrief");
+  if(cfb) cfb.onclick=function(){ if(!lastConfirm) return; copy(lastConfirm.brief); cfb.textContent="✓ Brief copied"; };
+  var dls=document.getElementById("ddLoadSel");
+  if(dls) dls.onchange=function(){ ddItKw=+dls.value||1000; analyze(ll); };
+  var dex=document.getElementById("ddExport");
+  if(dex) dex.onclick=function(){
+    if(!lastDD) return;
+    try{
+      var blob=new Blob([JSON.stringify(lastDD,null,2)],{type:"application/json"});
+      var a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);
+      a.download="grid-atlas-dd-"+lastDD.profile+"-"+ll.lat.toFixed(4)+"_"+ll.lng.toFixed(4)+".json";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(a.href); },4000);
+    }catch(e){}
+  };
+  var dpr=document.getElementById("ddPrint");
+  if(dpr) dpr.onclick=function(){ window.print(); };
   fetchBroadbandAtPoint(ll); // live FCC service check, fills #bbRow async
 }
 
@@ -1989,6 +2457,72 @@ function utilityPortal(name, ll){
   return null;
 }
 
+/* ── Due-diligence rendering (GridAtlasDD, grid-atlas-dd.js) ─────────────
+   The checklist judgement is the companion file's; this is only paint.
+   Status words stay honest: OK is a mapped reading, VERIFY means a human
+   confirms it, RISK is a measured adverse reading, EVIDENCE is an open
+   checklist item nobody has produced yet, — means never measured. */
+/* ── Sections open and close ─────────────────────────────────────────────
+   analyze() writes the panel as one string and runs again whenever a layer
+   answers, so what is open is remembered by section key, not by the DOM. */
+var secOpen={};
+function secKey(el){ return el.getAttribute("data-k")||String(el.textContent||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,32); }
+function collapseSections(){
+  var body=document.getElementById("pBody"); if(!body) return;
+  var kids=[].slice.call(body.childNodes), cur=null;
+  for(var i=0;i<kids.length;i++){
+    var k=kids[i], isSec=k.nodeType===1&&/(^| )sec( |$)/.test(k.className)&&!/(^| )sub( |$)/.test(k.className);
+    if(isSec){
+      var key=secKey(k); k.setAttribute("data-k",key);
+      k.className+=" tog"+(secOpen[key]?"":" shut");
+      cur=document.createElement("div"); cur.className="secbody"; cur.setAttribute("data-body",key);
+      cur.style.display=secOpen[key]?"":"none";
+      body.insertBefore(cur,k.nextSibling);
+      k.onclick=(function(kk){ return function(){ setSection(kk,!secOpen[kk]); }; })(key);
+    } else if(cur){ cur.appendChild(k); }
+  }
+}
+function setSection(key,open){
+  secOpen[key]=!!open;
+  var hd=document.querySelector('#pBody .sec.tog[data-k="'+key+'"]'), bd=document.querySelector('#pBody .secbody[data-body="'+key+'"]');
+  if(hd) hd.className=hd.className.replace(/ shut/g,"")+(open?"":" shut");
+  if(bd) bd.style.display=open?"":"none";
+}
+function openSection(key){
+  setSection(key,true);
+  var hd=document.querySelector('#pBody .sec.tog[data-k="'+key+'"]'), host=document.getElementById("panel");
+  if(hd&&host) host.scrollTop=hd.getBoundingClientRect().top-host.getBoundingClientRect().top+host.scrollTop-8;
+}
+function secAllOpen(){ var hs=document.querySelectorAll("#pBody .sec.tog"); if(!hs.length) return false; for(var i=0;i<hs.length;i++){ if(/ shut/.test(hs[i].className)) return false; } return true; }
+function setAllSections(open){ var hs=document.querySelectorAll("#pBody .sec.tog"); for(var i=0;i<hs.length;i++) setSection(hs[i].getAttribute("data-k"),open); }
+var DD_STYLE={ pass:["var(--ok)","OK"], conditional:["var(--warn)","VERIFY"],
+               risk:["var(--bad)","RISK"], open:["var(--amp)","EVIDENCE"],
+               unknown:["var(--muted)","—"] };
+function ddRow(it){
+  var s=DD_STYLE[it.status]||DD_STYLE.unknown;
+  return '<div class="row" style="align-items:flex-start">'+
+    '<span class="ic" style="background:'+s[0]+';margin-top:4px"></span>'+
+    '<div class="main"><div class="nm">'+esc(it.label)+(it.value?' <span style="color:var(--muted);font-weight:400">· '+esc(it.value)+'</span>':'')+'</div>'+
+    '<div class="meta" style="white-space:normal">'+esc(it.note)+'</div></div>'+
+    '<div class="dist" style="color:'+s[0]+';font-size:9px;letter-spacing:.06em">'+s[1]+'</div></div>';
+}
+/* ISO/RTO → interconnection queue, the companion of utilityPortal()'s
+   hosting-capacity links. Queue position is diligence evidence the public
+   map cannot read; this routes to where it lives. */
+function isoQueuePortal(name){
+  var n=(name||"").toLowerCase();
+  var Q=[
+    [/pjm/, "PJM interconnection queue", "https://www.pjm.com/planning/service-requests/serial-service-request-status"],
+    [/miso|midcontinent/, "MISO interconnection queue", "https://www.misoenergy.org/planning/resource-utility-interconnection/GI_Queue/"],
+    [/ercot|texas/, "ERCOT interconnection (GIS reports)", "https://www.ercot.com/gridinfo/resource"],
+    [/caiso|california/, "CAISO interconnection queue", "https://www.caiso.com/generation-transmission/generation/generator-interconnection"],
+    [/nyiso|new york/, "NYISO interconnection queue", "https://www.nyiso.com/interconnections"],
+    [/iso-?ne|new england/, "ISO-NE interconnection queue", "https://www.iso-ne.com/system-planning/interconnection-service/"],
+    [/spp|southwest power/, "SPP generator interconnection", "https://www.spp.org/engineering/generator-interconnection/"]
+  ];
+  for(var i=0;i<Q.length;i++){ if(Q[i][0].test(n)) return {label:Q[i][1], url:Q[i][2]}; }
+  return null;
+}
 function dcFactor(name,score,detail){
   score=Math.max(0,Math.min(100,Math.round(score)));
   var c=score>=70?"var(--ok)":score>=45?"var(--warn)":"var(--bad)";
@@ -2058,6 +2592,9 @@ function geocodeChain(raw){
       var r=res[0], lat=+r.lat, lon=+r.lon;
       var exact=(i===1); // first attempt was the full address
       map.setView([lat,lon], exact?16:13);
+      /* the address a carrier RFI may name: only an exact match, and only
+         while the pin still stands on it (analyze() checks the distance) */
+      lastSearch={text:t,lat:lat,lng:lon,exact:exact};
       // auto-drop a pin so the site analysis runs at the searched address
       if(typeof dropPin==="function"){ dropPin(L.latLng(lat,lon)); }
       var where=(r.display_name||qy).split(",").slice(0,3).join(", ");
@@ -2098,6 +2635,14 @@ buildRail(); updateRailCounts();
 buildPresets();
 // A state deep link opens the requested route map without unrelated grid symbols.
 if(/[?&]state=[a-z]{2}(?:&|$)/i.test(window.location.search))applyPreset(PRESETS.filter(function(p){return p.key==='fiber';})[0]);
+/* ?profile=compute|bess|supercharger opens on that checklist, so a link from
+   a site record lands on the answer instead of on a blank choice */
+(function(){
+  var m=String(window.location.search||"").match(/[?&]profile=([a-z]+)/i); if(!m) return;
+  var want=m[1].toLowerCase(), hit=null;
+  for(var i=0;i<PRESETS.length;i++){ if(PRESETS[i].key===want||PRESETS[i].dd===want) hit=hit||PRESETS[i]; }
+  if(hit) applyPreset(hit);
+})();
 
 /* ── FIBER EVIDENCE CONTROL ───────────────────────────────────────────────
    Hands the bundled public route inventory to /omega-fiber-atlas.js. Its
@@ -2136,5 +2681,35 @@ window.addEventListener("resize",function(){ map.invalidateSize(); });
 <script src="/omega-fiber-atlas.js"></script>
 <script src="/omega-published-fiber.js"></script>
 <script src="/omega-demo.js" defer></script>
+<script>
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   The white label on a page with NO tenant runtime (this page starts no
+   Firebase, by design — see the fiber note above): the world-readable
+   tenant_public record for this HOSTNAME says what the platform is called
+   here (api/_lib/whitelabel.js is the one allowlist that fills it). On an
+   unregistered host, or any failure, the page keeps our name. Paint only:
+   nothing about access changes. */
+(function () {
+  try {
+    fetch('https://firestore.googleapis.com/v1/projects/clearsky-portal/databases/(default)/documents/tenant_public/' + encodeURIComponent(location.hostname.toLowerCase()))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        var wl = d && d.fields && d.fields.whiteLabel && d.fields.whiteLabel.mapValue && d.fields.whiteLabel.mapValue.fields;
+        if (!wl) return;
+        if (wl.enabled && wl.enabled.booleanValue === false) return;
+        var name = wl.platformName && wl.platformName.stringValue;
+        if (!name) return;
+        var t = document.querySelector('.tb-logo-txt'); if (t) t.textContent = name;
+        var img = document.querySelector('.tb-omega');
+        if (img) {
+          var mk = wl.markUrl && wl.markUrl.stringValue;
+          if (mk) { img.src = mk; img.alt = name; } else { img.style.display = 'none'; }
+        }
+        document.title = document.title.replace('ClearSky-OMEGA', name);
+        var port = document.querySelector('.tb-portal'); if (port) port.textContent = '';
+      })['catch'](function () {});
+  } catch (e) {}
+})();
+</script>
 </body>
 </html>

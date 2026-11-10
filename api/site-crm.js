@@ -19,7 +19,10 @@
                        annualUsageKwh, monthlyUsageKwh[12],
                        usageNotes, externalSiteIds, status, tags, notes }
      site-import     { rows: [ site-save-shaped, … ] }  bulk register,
-                       at most 500 rows; all-or-nothing validation
+                       at most 500 rows; all-or-nothing validation; a row
+                       whose externalSiteIds.import names a site already
+                       here UPDATES it (the non-blank cells only; the
+                       word "clear" in a cell empties that fact)
      contact-save    { id?, name, title, email, phone, notes, primary }
      contact-archive { id }                               workspace admin
      log             { type, subject, body, at?, contactId?, followUpAt? }
@@ -75,6 +78,22 @@
           acquisition paperwork: NDA → MSA → LOI → Term sheet → Contract
      POST diligence-assign { portfolioId|null, site|sites }  its sites;
           one client a site, other portfolio uses untouched
+
+   THE SITE ASSESSMENT (api/_lib/portfolio/assess-door.js on assess.js,
+   assess-bess.js and assess-supercharger.js) answers through this door too:
+     POST assess-run { ids }            what each site's free power carries:
+          the compute shelf, a battery, fast charging, each with its return,
+          and the shovel-ready score (50 a call)
+     POST assess-screen-start { ids } / assess-screen-step { jobId }
+          the Grid Atlas and parcel screens, a phase of a site a step, the
+          assessment again on what they found
+     POST assess-check { site, item, state, note? }   a readiness item marked
+     POST assess-approve { ids | site, uses[], note? }  approved for
+          pre-development (compute, bess, supercharger or a hybrid)
+     GET  ?site=&assessment=1           the whole answer, with its tables
+     (the register's rows carry `assessment`, without the tables)
+     site-set-partner { ids, partner }  the PORTFOLIO PARTNER the sites come
+          from (the company they were bought or taken over from)
 
    Bulk actions take { ids: [siteId, …] } (at most 200) and answer per site:
      site-archive / site-restore    hide from, or return to, the register
@@ -149,14 +168,18 @@ var SM = require('./_lib/site-model'), CS = require('./_lib/compute-site'), PA =
 var OC = require('./_lib/omega-core');
 var REG = require('./_lib/portfolio/register'), BR = require('./_lib/portfolio/site-bridge'), AS = require('./_lib/portfolio/assets');
 var DG = require('./_lib/portfolio/diligence-door');
+/* the site assessment: what the free power carries and what each use returns */
+var ASD = require('./_lib/portfolio/assess-door');
 var PARTNERS = require('./_lib/partners'), mail = require('./_lib/mail');
 var PARTNER_DAILY_CAP = 25;
 
 var EDITORS = ['owner', 'admin', 'member'], ADMINS = ['owner', 'admin'];
 var LIST_CAP = 200, FOLLOW_SCAN = 2000, FOLLOW_CAP = 200, SCAN = 500;
 var PROFORMA_CAP = 25, BULK_CAP = 200;
-var BULK_ACTIONS = ['site-archive', 'site-restore', 'site-delete', 'site-set-status', 'site-tag', 'send-to-editor', 'send-to-finance', 'send-to-partner', 'proforma-bulk', 'site-model-bulk', 'design-sync'];
+var BULK_ACTIONS = ['site-archive', 'site-restore', 'site-delete', 'site-set-status', 'site-set-partner', 'site-tag', 'send-to-editor', 'send-to-finance', 'send-to-partner', 'proforma-bulk', 'site-model-bulk', 'design-sync'];
 var MODEL_BULK_CAP = 10, PLATFORM = 'ClearSky-OMEGA';
+/* the facts a CSV update may empty with the word "clear" */
+var IMPORT_CLEARABLE = ['installedKw', 'reportedPeakKw', 'termYearsRemaining', 'availablePowerMw', 'serviceCapacityKw', 'transformerKva', 'existingPeakKw', 'powerPricePerKwh', 'annualUsageKwh', 'portfolioPartner', 'status'];
 
 /* level: 'read' | 'write' | 'admin'. The caller's org comes from the verified
    identity; staff pass everywhere. */
@@ -268,6 +291,12 @@ function siteInput(b) {
     termYearsRemaining: optNum(b.termYearsRemaining, 'Remaining term (years)', 0, 99),
     availablePowerMw: optNum(b.availablePowerMw, 'Available power (MW)', 0, 100000),
     serviceCapacityKw: optNum(b.serviceCapacityKw, 'Service capacity (kW)', 0, 100000000),
+    /* the transformer's own rating (2026-11-09): the assessment's limit is
+       kVA × 0.8 continuous; never derived from the service figure */
+    transformerKva: optNum(b.transformerKva, 'Transformer (kVA)', 0, 1000000),
+    /* who the site comes from: the company it was bought or taken over
+       from (Francis Energy, EVCS…); the register filters on it */
+    portfolioPartner: b.portfolioPartner === undefined ? undefined : C.text(b.portfolioPartner, 80, 'Portfolio partner'),
     existingPeakKw: optNum(b.existingPeakKw, 'Existing peak kW', 0, 100000000),
     powerPricePerKwh: optNum(b.powerPricePerKwh, 'Power price ($/kWh)', 0, 10),
     /* the PPA the host's solar + storage is sold under (NextNRG's executed
@@ -328,6 +357,8 @@ function siteView(id, s) {
     termYearsRemaining: s.termYearsRemaining == null ? null : Number(s.termYearsRemaining),
     availablePowerMw: s.availablePowerMw == null ? null : Number(s.availablePowerMw),
     serviceCapacityKw: s.serviceCapacityKw == null ? null : Number(s.serviceCapacityKw),
+    transformerKva: s.transformerKva == null ? null : Number(s.transformerKva),
+    portfolioPartner: s.portfolioPartner || null,
     existingPeakKw: s.existingPeakKw == null ? null : Number(s.existingPeakKw),
     powerPricePerKwh: s.powerPricePerKwh == null ? null : Number(s.powerPricePerKwh),
     ppaRatePerKwh: s.ppaRatePerKwh == null ? null : Number(s.ppaRatePerKwh),
@@ -446,7 +477,14 @@ var handler = A.handler(async function (req, res) {
     /* the diligence, where the switch is on: a row a site, the strip and the tally (null elsewhere, and the page draws nothing new) */
     var dj = await DG.registerJoin({ db: db, org: org, root: root, caller: caller, by: by }, listed);
     if (dj) sites.forEach(function (s) { s.diligence = dj.rows[s.id] || null; });
+    /* the assessment, where one has run: the row a site, without its yearly tables */
+    var aj = await ASD.listJoin({ root: root }, listed);
+    sites.forEach(function (s) { s.assessment = aj[s.id] || null; });
     return { org: org, sites: sites, archivedIncluded: withArchived, canEdit: reader.edit, canArchive: reader.admin,
+      /* the funding list, where the workspace funds its own sites: the committee's names and whether this person decides (null elsewhere) */
+      funding: await ASD.info({ root: root, caller: caller, by: by }),
+      /* the workspace's review board, where its settings name one (null elsewhere) */
+      review: await ASD.reviewInfo({ root: root, caller: caller, by: by }),
       next: snap.docs.length > LIST_CAP ? snap.docs[LIST_CAP - 1].id : null,
       limited: snap.docs.length > LIST_CAP,
       diligence: dj ? { pipeline: dj.pipeline, tally: dj.tally, counted: dj.counted, limited: dj.limited, clients: dj.clients, unassigned: dj.unassigned, schema: dj.schema, brand: dj.brand } : null };
@@ -457,6 +495,8 @@ var handler = A.handler(async function (req, res) {
   var who = await access(caller, org, adminOnly ? 'admin' : req.method === 'POST' ? 'write' : 'read');
   /* the diligence's own actions: an editor's (the write access above), the door's 403 where the switch is off */
   if (req.method === 'POST' && DG.owns(action)) return DG.post({ db: db, org: org, root: root, caller: caller, by: by, b: b, site: b.site ? C.recordId(b.site, 'Site') : null, canEdit: who.edit, req: req });
+  /* the assessment's own actions: an editor's (the write access above) */
+  if (req.method === 'POST' && ASD.owns(action)) return ASD.post({ db: db, org: org, root: root, caller: caller, by: by, b: b, site: b.site ? C.recordId(b.site, 'Site') : null, canEdit: who.edit, req: req });
   var BULK = BULK_ACTIONS.indexOf(action) >= 0;
   if (!b.site && action !== 'site-save' && action !== 'site-import' && !BULK) throw A.httpError(400, 'Which site?');
   var sid = b.site ? C.recordId(b.site, 'Site') : null;
@@ -473,6 +513,9 @@ var handler = A.handler(async function (req, res) {
     if (!f || f.archived === true) throw A.httpError(404, 'Document not found');
     return stream(res, org, sid, f);
   }
+
+  /* ── the whole assessment of one site, recomputed on what is on file ── */
+  if (req.method === 'GET' && (b.assessment === '1' || b.assessment === 'true')) return { site: { id: sid, name: site.data.name || '' }, assessment: await ASD.fullView({ root: root }, siteRef, site.data) };
 
   /* ── the SPV term sheet: composed from the record and the latest scenario,
      rendered on the way out, never stored as a fact. A DRAFT every time. */
@@ -537,11 +580,15 @@ var handler = A.handler(async function (req, res) {
     try { await syncDesign(db, org, site, now); auto = await designModel(db, org, site, { caller: caller, root: root, by: by }, now); }
     catch (e) { console.error('[site-crm] design sync', e && e.message); }
     var siteOut = siteView(sid, site.data); await capitalJoin(db, [siteOut]);
+    /* a workspace that funds its own sites: the committee's names, and this site's place on the funding list (null elsewhere) */
+    var fundInfo = await ASD.info({ root: root, caller: caller, by: by });
+    if (fundInfo) siteOut.assessment = (await ASD.listJoin({ root: root }, [{ id: sid, data: function () { return site.data; } }]))[sid] || null;
     var dsgOut = siteOut.latestDesign;
     /* the diligence, where the switch is on (null elsewhere): the view the Diligence tab draws, the vocabulary and the name */
     var dilig = await DG.siteView({ db: db, org: org, root: root, caller: caller, by: by }, siteRef, site.data);
     return {
       site: siteOut,
+      funding: fundInfo,
       diligence: dilig,
       /* the Omega-Core skid's facts for a page whose design carries one: the product record's, never a page's own */
       skid: dsgOut && dsgOut.compute && dsgOut.compute.omegaCoreUnits > 0 ? SM.skidFacts() : null,
@@ -599,17 +646,67 @@ var handler = A.handler(async function (req, res) {
     var rows = b.rows;
     if (!Array.isArray(rows) || !rows.length) throw A.httpError(400, 'No rows to import');
     if (rows.length > 500) throw A.httpError(400, 'At most 500 rows per import; split the file and retry');
-    var prepared = [], importErrors = [];
+    /* THE WORD "clear" IN A CELL EMPTIES THAT FACT on a site the row
+       updates (a blank cell is "no change", so a wrong figure could never
+       be taken off in bulk: a sheet that put the transformer's kVA in the
+       service column, 2026-11-09). Only the facts named in CLEARABLE, never
+       the name; on a row that creates a site it is simply a blank. */
+    var prepared = [], importErrors = [], clears = [];
     rows.forEach(function (r, i) {
-      try { prepared.push(sentFields(siteInput(r || {}))); }
-      catch (e) { importErrors.push({ row: i + 1, error: e.message }); }
+      var row = Object.assign({}, r || {}), gone = [];
+      Object.keys(row).forEach(function (k) { if (typeof row[k] === 'string' && /^\(?clear\)?$/i.test(row[k].trim())) { if (IMPORT_CLEARABLE.indexOf(k) >= 0) gone.push(k); delete row[k]; } });
+      clears.push(gone);
+      try { prepared.push(sentFields(siteInput(row))); }
+      catch (e) { importErrors.push({ row: i + 1, error: e.message }); prepared.push(null); }
     });
     if (importErrors.length)
       return { ok: false, imported: 0, errorCount: importErrors.length, errors: importErrors.slice(0, 25),
         note: 'Fix the flagged rows and re-import. Nothing was written.' };
-    var ids = [], batch = db.batch(), wn = 0;
+    /* A ROW THAT NAMES A SITE ALREADY HERE UPDATES IT (2026-11-09): the
+       sheet's own ID (externalSiteIds.import) is the match. Before this a
+       corrected sheet — the transformer's kVA, a peak, the partner added —
+       duplicated every site it named. An update takes only the cells that
+       carry something (a blank cell is "no change", never a clearing) and
+       never the tags or kinds the sheet does not carry; a site the
+       workbook import keeps as facts is refused by name (its facts would
+       win over the flat fields on the next read), and so is an ID twice in
+       one file. Still all-or-nothing. */
+    var wanted = {}, known = {};
+    prepared.forEach(function (r, i) {
+      var k = r && r.externalSiteIds && r.externalSiteIds.import; if (!k) return;
+      if (wanted[k] != null) importErrors.push({ row: i + 1, error: 'External ID "' + k + '" is on row ' + (wanted[k] + 1) + ' too: one row a site' });
+      else wanted[k] = i;
+    });
+    if (Object.keys(wanted).length && !importErrors.length) {
+      var have = await root.collection('sites').limit(FOLLOW_SCAN).get();
+      have.docs.forEach(function (d) { var v = d.data() || {}, k = v.externalSiteIds && v.externalSiteIds.import; if (k && wanted[k] != null && !known[k]) known[k] = d; });
+      Object.keys(known).forEach(function (k) { if (known[k].data().facts && typeof known[k].data().facts === 'object') importErrors.push({ row: wanted[k] + 1, error: '"' + (known[k].data().name || k) + '" is kept by the workbook import: change it on the site record, or re-import the workbook' }); });
+    }
+    if (importErrors.length)
+      return { ok: false, imported: 0, errorCount: importErrors.length, errors: importErrors.slice(0, 25),
+        note: 'Fix the flagged rows and re-import. Nothing was written.' };
+    var ids = [], batch = db.batch(), wn = 0, updatedN = 0;
     async function flush() { await batch.commit(); batch = db.batch(); wn = 0; }
     for (var bi = 0; bi < prepared.length; bi++) {
+      var extKey = prepared[bi].externalSiteIds && prepared[bi].externalSiteIds.import, hit = extKey ? known[extKey] : null;
+      if (hit) {
+        var raw = rows[bi] || {}, cur = hit.data() || {}, patchI = {};
+        Object.keys(prepared[bi]).forEach(function (k) {
+          if (k === 'externalSiteIds' || k === 'tags' || k === 'siteScopes' || k === 'meters' || k === 'commercial') return;
+          if (raw[k] === undefined || raw[k] === null || raw[k] === '') return;
+          if (typeof raw[k] === 'string' && /^\(?clear\)?$/i.test(raw[k].trim())) return;   /* the clears below, and only the clearable */
+          patchI[k] = prepared[bi][k];
+        });
+        if (Array.isArray(raw.tags) && raw.tags.length) patchI.tags = prepared[bi].tags;
+        clears[bi].forEach(function (k) { patchI[k] = null; });
+        patchI.externalSiteIds = Object.assign({}, cur.externalSiteIds || {}, prepared[bi].externalSiteIds);
+        batch.update(hit.ref, Object.assign(patchI, { updatedAt: now, updatedBy: by }));
+        batch.create(db.collection('omega_audit').doc(),
+          { action: 'sitecrm-import', orgId: org, siteId: hit.id, by: by, at: now, source: 'site-import', name: cur.name || prepared[bi].name, updated: true, fields: Object.keys(patchI).filter(function (k) { return k !== 'updatedAt' && k !== 'updatedBy' && k !== 'externalSiteIds'; }) });
+        ids.push(hit.id); wn += 2; updatedN++;
+        if (wn >= 400) await flush();
+        continue;
+      }
       var bref = root.collection('sites').doc();
       var bdoc = Object.assign({ orgId: org }, prepared[bi],
         { archived: false, createdAt: now, createdBy: by, source: 'site-import' });
@@ -620,8 +717,8 @@ var handler = A.handler(async function (req, res) {
       if (wn >= 400) await flush();
     }
     await batch.commit();
-    return { ok: true, imported: prepared.length, ids: ids,
-      note: prepared.length + ' site(s) imported into this workspace.' };
+    return { ok: true, imported: prepared.length, created: prepared.length - updatedN, updated: updatedN, ids: ids,
+      note: (prepared.length - updatedN) + ' site(s) added' + (updatedN ? ' and ' + updatedN + ' already here updated by their ID' : '') + ' in this workspace.' };
   }
 
   /* ── bulk site actions ──────────────────────────────────────────────────
@@ -642,8 +739,9 @@ var handler = A.handler(async function (req, res) {
     if (missing.length) throw A.httpError(404, 'Not in this workspace’s register: ' + missing.slice(0, 5).join(', '));
     var rows = picked.map(function (s) { return { id: s.id, ref: s.ref, data: s.data() || {} }; });
 
-    if (action === 'site-archive' || action === 'site-restore' || action === 'site-delete' || action === 'site-set-status' || action === 'site-tag') {
+    if (action === 'site-archive' || action === 'site-restore' || action === 'site-delete' || action === 'site-set-status' || action === 'site-set-partner' || action === 'site-tag') {
       var st = action === 'site-set-status' ? C.text(b.status, 60, 'Status', { required: true }) : null;
+      var partnerName = action === 'site-set-partner' ? C.text(b.partner, 80, 'Portfolio partner') : null;
       var addTags = action === 'site-tag' ? tagList(b.add) : [], dropTags = action === 'site-tag' ? tagList(b.remove) : [];
       if (action === 'site-tag' && !addTags.length && !dropTags.length) throw A.httpError(400, 'Name a tag to add or remove');
       var batch2 = db.batch();
@@ -656,6 +754,7 @@ var handler = A.handler(async function (req, res) {
         else if (action === 'site-archive') patch = Object.assign(BR.archiveState(true), { archivedAt: now, archivedBy: by, revision: (rw.data.revision || 1) + 1 });
         else if (action === 'site-restore') patch = Object.assign(BR.archiveState(false), { restoredAt: now, restoredBy: by, revision: (rw.data.revision || 1) + 1 });
         else if (action === 'site-set-status') patch = { status: st };
+        else if (action === 'site-set-partner') patch = { portfolioPartner: partnerName || null };
         else {
           var tags = (Array.isArray(rw.data.tags) ? rw.data.tags : []).filter(function (t) { return dropTags.indexOf(t) < 0; });
           addTags.forEach(function (t) { if (tags.indexOf(t) < 0) tags.push(t); });
@@ -663,7 +762,7 @@ var handler = A.handler(async function (req, res) {
         }
         if (patch) batch2.update(rw.ref, Object.assign(patch, { updatedAt: now, updatedBy: by }));
         batch2.create(db.collection('omega_audit').doc(),
-          { action: 'sitecrm-' + action, orgId: org, siteId: rw.id, by: by, at: now, status: st, add: addTags, remove: dropTags, was: action === 'site-delete' ? rw.data : null });
+          { action: 'sitecrm-' + action, orgId: org, siteId: rw.id, by: by, at: now, status: st, partner: partnerName, add: addTags, remove: dropTags, was: action === 'site-delete' ? rw.data : null });
       });
       await batch2.commit();
       var n2 = rows.length;
@@ -671,6 +770,7 @@ var handler = A.handler(async function (req, res) {
         : action === 'site-archive' ? n2 + ' site(s) archived. They are kept on record; Show archived lists them.'
         : action === 'site-restore' ? n2 + ' site(s) back on the register.'
         : action === 'site-set-status' ? n2 + ' site(s) moved to "' + st + '".'
+        : action === 'site-set-partner' ? (partnerName ? n2 + ' site(s) under ' + partnerName + '.' : n2 + ' site(s) taken off their portfolio partner.')
         : n2 + ' site(s) tagged.';
       return { ok: true, count: n2, ids: rows.map(function (rw) { return rw.id; }), note: note2 };
     }
@@ -736,6 +836,8 @@ var handler = A.handler(async function (req, res) {
        DRAFT only the sponsor sees, finished in the portal. Idempotent as
        the editor hand-off is. */
     if (action === 'send-to-finance') {
+      /* a workspace that funds its own sites never lists one on the marketplace: its funding list is the road */
+      if (await ASD.fundingMode({ root: root })) throw A.httpError(409, 'This workspace funds its own sites: submit them to its finance committee (Submit for funding), not the finance marketplace');
       var orgRec = await root.get(), orgNm = orgRec.exists ? ((orgRec.data() || {}).name || org) : org;
       var madeF = [], FVf = A.FieldValue();
       for (var fi = 0; fi < rows.length; fi++) {

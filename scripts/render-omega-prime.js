@@ -435,8 +435,12 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     /* Site Map is the engineering editor, never "the design of record" over
        Prime's own (2026-10-20, Tommy): no banner says so; the side panel says
        the proposal is priced from the design here */
+    /* the sent-on date is builtAt, the run's own day — never a fixed month
+       (the literal "on Oct" fell into the past on Nov 1 and failed every
+       branch's CI, as the office check's fixed due date did before it) */
+    var builtMonth = new Date(builtAt).toLocaleDateString('en-US', { month: 'short' });
     ok('a project Site Map has built says it went there for engineering, and that the proposal is priced from the design here', !/design of record/.test(bn) && !/Edited in Site Map/.test(bn) &&
-      /Sent to Site Map for engineering on [A-Z][a-z]{2}/.test(rs.side) && /The proposal is priced from the design here/.test(rs.side) && !/Changed here since/.test(rs.side), { banner: bn, side: rs.side.slice(0, 400) });
+      new RegExp('Sent to Site Map for engineering on ' + builtMonth).test(rs.side) && /The proposal is priced from the design here/.test(rs.side) && !/Changed here since/.test(rs.side), { banner: bn, side: rs.side.slice(0, 400) });
     await p.click('#path button[data-step="circuit"]');
     var circ2 = await until(p, function () { var t = document.getElementById('sfRes').textContent; return /Circuit F0297/.test(t) ? t : null; });
     ok('the circuit step shows the saved answer without asking again', !!circ2 && /As checked/.test(circ2) && /10,725 kW/.test(circ2) && calls.hosting.length === 1, { calls: calls.hosting.length, circ: circ2 && circ2.slice(0, 200) });

@@ -79,6 +79,11 @@
         return fetch(url,{headers:{Authorization:'Bearer '+t}}).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.error||'Fiber check failed');return d;});});
       }).then(function(data){
         if(id!==requestId)return;
+        /* Stash for the host page's due-diligence checklist (GridAtlasDD):
+           the server screen is the connectivity evidence the compute
+           checklist cites. The host re-renders its pin analysis if it
+           exposed a hook; otherwise the stash waits for the next pin. */
+        try{ w.__gaFiberScreen=data; if(typeof w.__gaReanalyze==='function')w.__gaReanalyze(); }catch(_e){}
         var h='<div style="border-top:1px solid #344458;padding-top:9px"><b>Serviceability: unconfirmed</b><br>Available capacity: unknown<br>'+text(data.query.lat.toFixed(5))+', '+text(data.query.lon.toFixed(5))+'</div>';
         h+='<p>'+data.counts_in_radius.routes+' mapped fiber route record(s) within 25 km. '+data.counts_in_radius.facilities+' telecom facility record(s).</p>';
         data.routes.slice(0,5).forEach(function(r){h+='<div style="margin:6px 0"><b>'+text(r.operator||r.name)+'</b><br>'+(r.mapped_distance_m/1000).toFixed(2)+' km to published route geometry<br>Status: '+text(r.operational_status)+'<br><a style="color:#6ee7d0" href="'+text(r.source_url)+'" target="_blank" rel="noopener">Source ↗</a></div>';});

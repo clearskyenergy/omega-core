@@ -153,6 +153,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     if (!S.wantsWorkspace()) Array.prototype.forEach.call(document.querySelectorAll('#side-nav a[data-key="home"], .ows-tabs a[data-tab="home"]'), function (a) { a.setAttribute('href', '/'); });
   }
   var ORG = '', SITE = '', DATA = null, CANEDIT = false, CANARCHIVE = false, TAB = 'overview';
+  /* the funding list, where the workspace funds its own sites (null: the finance marketplace) */
+  var FUNDING = null;
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
   function msg(html, ok) { document.getElementById('msg').innerHTML = html ? '<div class="' + (ok ? 'okmsg' : 'err') + '">' + html + '</div>' : ''; }
@@ -225,6 +227,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   }
 
   function capitalFact(s) {
+    if (FUNDING) { var fa = s.assessment && s.assessment.funding, fd0 = fa && fa.decision; return '<div class="fact"><div class="k">Funding</div><div class="v">' + fundingPill(s) + '</div><div class="n">' + (fd0 ? esc((fd0.name || '') + (fd0.at ? ' \u00b7 ' + String(fd0.at).slice(0, 10) : '')) : esc(FUNDING.name)) + '</div></div>'; }
     var lm = s.latestModel, cap = s.capital;
     var v = cap && cap.funded ? '<span class="pill pill-funded">Funded</span>' : cap && cap.status && cap.status !== 'missing' ? '<span class="pill pill-ok">' + esc(cap.status === 'draft' ? 'Draft deal' : 'On the marketplace') + '</span>' : lm && lm.totalProjectCost > 0 ? esc(money(lm.totalProjectCost, true)) : notProvided();
     var n = cap && cap.funded ? 'accepted by ' + esc(cap.awardedToOrg || 'a capital partner') : cap && cap.offerCount ? cap.offerCount + ' offer(s) waiting' : lm ? 'total project cost \u00b7 after-tax IRR ' + esc(irrPct(lm.irr)) + (lm.auto ? ' \u00b7 from the design' : '') + (lm.host && lm.host.noRevenue ? ' \u00b7 <b style="color:#B45309">the host\u2019s system has no revenue on record: enter the PPA</b>' : '') : s.designModel && s.designModel.missing ? 'the model needs what the design card names' : s.latestDesign ? 'runs by itself from the design' : 'run the compute model';
@@ -281,6 +284,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     return '<div class="card"><h3>Power &amp; usage</h3>' +
       fact('Available power', s.availablePowerMw != null ? s.availablePowerMw + ' MW' : null) +
       fact('Service capacity', s.serviceCapacityKw != null ? Number(s.serviceCapacityKw).toLocaleString('en-US') + ' kW' : null) +
+      fact('Transformer', s.transformerKva != null ? Number(s.transformerKva).toLocaleString('en-US') + ' kVA' : null) +
       fact('Existing peak', s.existingPeakKw != null ? Number(s.existingPeakKw).toLocaleString('en-US') + ' kW' : null) +
       fact('Power price', s.powerPricePerKwh != null ? '$' + s.powerPricePerKwh + '/kWh' : null) +
       fact('Annual usage', s.annualUsageKwh != null ? Number(s.annualUsageKwh).toLocaleString('en-US') + ' kWh' : null) +
@@ -379,6 +383,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
         return '<label class="ef-kind"><input type="checkbox" id="ef-kind-' + esc(k.key) + '" value="' + esc(k.key) + '"' + ((s.siteScopes || []).indexOf(k.key) >= 0 ? ' checked' : '') + '> ' + esc(k.label) + '</label>';
       }).join('') + '</div>' +
       txtIn('ef-status', 'Status', s.status) +
+      txtIn('ef-portfolioPartner', 'Portfolio partner (the company the site comes from)', s.portfolioPartner) +
       txtIn('ef-tags', 'Tags (comma-separated)', (s.tags || []).join(', ')) + txtIn('ef-meters', 'Meter IDs (comma-separated; a bill must name one)', (s.meters || []).join(', ')) + '</div><div>' +
       numIn('ef-installedKw', 'Installed chargers (kW)', s.installedKw) + numIn('ef-reportedPeakKw', 'Reported peak (kW)', s.reportedPeakKw) +
       '<label class="fl">Meter owned</label><select id="ef-meterOwned" class="inline" style="width:100%">' +
@@ -389,6 +394,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '<div class="grid2"><div>' +
       numIn('ef-availablePowerMw', 'Available power (MW)', s.availablePowerMw, '0.01') +
       numIn('ef-serviceCapacityKw', 'Service capacity (kW)', s.serviceCapacityKw) +
+      numIn('ef-transformerKva', 'Transformer (kVA; the assessment sizes on 80% of it, less the site\u2019s peak)', s.transformerKva) +
       numIn('ef-existingPeakKw', 'Existing peak (kW)', s.existingPeakKw) +
       numIn('ef-powerPricePerKwh', 'Power price ($/kWh)', s.powerPricePerKwh, '0.001') +
       numIn('ef-ppaRatePerKwh', 'PPA rate, year one ($/kWh; the host\u2019s solar + storage is sold under it)', s.ppaRatePerKwh, '0.0001') +
@@ -433,7 +439,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
         installedKw: num('ef-installedKw'), reportedPeakKw: num('ef-reportedPeakKw'),
         meterOwned: mv === '' ? null : mv === 'true',
         termYearsRemaining: num('ef-termYearsRemaining'),
-        availablePowerMw: num('ef-availablePowerMw'), serviceCapacityKw: num('ef-serviceCapacityKw'),
+        availablePowerMw: num('ef-availablePowerMw'), serviceCapacityKw: num('ef-serviceCapacityKw'), transformerKva: num('ef-transformerKva'), portfolioPartner: str('ef-portfolioPartner'),
         existingPeakKw: num('ef-existingPeakKw'), powerPricePerKwh: num('ef-powerPricePerKwh'),
         ppaRatePerKwh: num('ef-ppaRatePerKwh'), ppaEscalatorPct: num('ef-ppaEscalatorPct'), ppaTermYears: num('ef-ppaTermYears'),
         ppaPriceSchedule: str('ef-ppaPriceSchedule') || [], ppaYear1Kwh: num('ef-ppaYear1Kwh'),
@@ -727,7 +733,23 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '<a href="/compute-proforma.html">Compute Site Pro Forma ↗</a>' +
       (s.finProjectId ? '<a href="/finance#deal=' + encodeURIComponent(s.finProjectId) + '&tab=market">The deal on the marketplace ↗</a>' : '') + '</div>';
   }
+  /* a workspace that funds its own sites (its settings name a finance committee): where this site stands on the funding list, never a marketplace */
+  function fundingPill(s) {
+    var a = s.assessment && !s.assessment.notRun ? s.assessment : null, fd = a && a.funding;
+    if (!fd) return a && a.confidence && a.confidence.screened ? '<span class="pill pill-unk">Not submitted</span>' : '<span class="pill pill-unk">Screen first</span>';
+    return fd.status === 'approved' ? '<span class="pill pill-funded">Funding approved</span>' : fd.status === 'declined' ? '<span class="pill pill-no">Declined</span>' : '<span class="pill pill-ok">With the committee</span>';
+  }
+  function fundingCard(s) {
+    var a = s.assessment && !s.assessment.notRun ? s.assessment : null, fd = a && a.funding, d = fd && fd.decision, who = FUNDING.name + (FUNDING.members && FUNDING.members.length ? ' (' + FUNDING.members.join(', ') + ')' : '');
+    var h = '<div class="card" id="capital-card"><h3>Funding <span class="li-meta">' + esc(who) + '</span></h3>';
+    if (!fd) h += '<div class="li-body">' + (a && a.confidence && a.confidence.screened ? 'Screened and not yet submitted. Submit it from the site\u2019s assessment card on the Portfolio register, saying what the funding is for.' : (a ? 'The Grid Atlas and parcel screens have not finished on this site. ' : 'This site has not been assessed. ') + esc(FUNDING.name) + ' sees screened sites only: Run it on the Portfolio register first.') + '</div>';
+    else h += '<div class="li-body">' + (fd.lines || []).map(function (l) { return '<div><b>' + esc(l.label) + '</b> \u00b7 ' + esc(l.size || '') + (l.capexUsd != null ? ' \u00b7 ' + esc(money(l.capexUsd)) : '') + (l.irrPct != null ? ' \u00b7 ' + esc(l.irrPct) + '% screening return' : '') + '</div>'; }).join('') +
+      '<div class="li-meta">Submitted by ' + esc(fd.submittedBy || '') + (fd.submittedAt ? ' on ' + esc(String(fd.submittedAt).slice(0, 10)) : '') + (fd.note ? ' \u00b7 \u201c' + esc(fd.note) + '\u201d' : '') + '</div>' +
+      (d ? '<div style="margin-top:6px">' + (d.status === 'approved' ? 'Approved' : 'Declined') + ' by <b>' + esc(d.name || d.by || '') + '</b>' + (d.at ? ' on ' + esc(String(d.at).slice(0, 10)) : '') + (d.note ? ': ' + esc(d.note) : '') + '</div>' : '') + '</div>';
+    return h + '<div class="cap-state">' + fundingPill(s) + '<a class="btn" href="/portfolio.html">Open the Portfolio register</a></div>' + siteLinks(s) + '</div>';
+  }
   function capitalCard(s) {
+    if (FUNDING) return fundingCard(s);
     var lm = s.latestModel, lp = s.latestProforma, cap = s.capital || null;
     var ask = lm && lm.totalProjectCost > 0 ? { amount: lm.totalProjectCost, equity: lm.equity, debt: lm.debt, irr: lm.irr, label: (lm.structureLabel || '') + ' · ' + (lm.termYears || 10) + '-year term', src: 'Compute Site Pro Forma' }
       : lp && lp.investorCapital > 0 ? { amount: lp.investorCapital, equity: lp.investorCapital, debt: 0, irr: lp.investorIrrDefined ? lp.investorIrrAnnual : null, label: lp.pods + ' pod(s), 60-month investor case', src: 'pod pro forma' } : null;
@@ -852,8 +874,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   }
   function renderDeck() {
     var s = DATA.site;
-    document.getElementById('pane-deck').innerHTML = capitalCard(s) + terraCard(s) + packageCard(s) + modelForm(s) + resultsCard(s) + deckCard(s);
-    wirePackage(); wireTerra(); wireNeeds();
+    document.getElementById('pane-deck').innerHTML = capitalCard(s) + packageCard(s) + modelForm(s) + resultsCard(s) + deckCard(s);
+    wirePackage(); wireNeeds();
     var send = document.getElementById('cap-send');
     if (send) send.addEventListener('click', function () {
       if (!confirm('Send this site to the finance marketplace? It is listed OPEN to approved capital partners with the total project cost as the ask.')) return;
@@ -970,7 +992,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     return '<div class="card" id="package-card"><h3>Finance package <span class="li-meta">the diligence gate: map, reviewed bills, site control, power evidence, a current compute case</span></h3>' +
       '<div id="pkg-body"><div class="li-meta">Loading…</div></div>' +
       (CANEDIT ? '<div class="row" style="margin-top:10px"><button class="btn-ghost" id="pkg-map">Sync Site Map</button><button class="btn" id="pkg-prepare">Prepare the package</button>' + (CANARCHIVE ? '<button class="btn-ghost" id="pkg-submit" disabled>Submit (private)</button>' : '') + '</div>' : '') +
-      '<div class="assume">Submission is private: one snapshot per package, never published or mailed by itself. The capital request above is the marketplace listing; this is what a partner diligences.</div></div>';
+      '<div class="assume">Submission is private: one snapshot per package, never published or mailed by itself. ' + (FUNDING ? 'The funding list above is the committee\u2019s decision; this is what diligence reads.' : 'The capital request above is the marketplace listing; this is what a partner diligences.') + '</div></div>';
   }
   var PKG = null;
   function loadPackage() {
@@ -994,21 +1016,6 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     if (ps) ps.addEventListener('click', function () { if (!PKG || !window.confirm('Submit this package? One private snapshot is recorded; nothing is published or mailed.')) return; regPost('package-submit', { packageId: PKG.id, confirm: true }).then(function (j) { msg(j.duplicate ? 'Already submitted.' : 'Submitted: one private snapshot (' + esc(j.submission.publication.state) + ').', true); loadPackage(); }).catch(function (e) { msg(esc(e.message)); }); });
     loadPackage();
   }
-  function terraCard(s) {
-    var t = s.partners && s.partners.terra;
-    return '<div class="card" id="terra-card"><h3>Terra Energy <span class="li-meta">the solar partner: a solar package and detail for the site</span></h3>' +
-      '<div class="cap-state">' + (t ? '<span class="pill pill-ok">Sent ' + esc(String(t.sentAt || '').slice(0, 10)) + '</span><span class="li-meta">to ' + esc((t.to || []).join(', ')) + ' by ' + esc(t.by || '') + (t.status === 'not-sent' ? ' · no mailbox was configured, so it is recorded only' : '') + '</span>' : '<span class="pill pill-unk">Not sent</span><span class="li-meta">Terra usually funds its own package; it is one of the partners, not the capital request.</span>') + '</div>' +
-      (CANEDIT ? '<div class="row" style="margin-top:10px"><input type="text" id="terra-note" placeholder="A note for Terra (roof, land, what you want sized)" style="flex:1;min-width:220px"><button class="btn" id="terra-send">' + (t ? 'Send to Terra again' : 'Send to Terra Energy') + '</button></div>' : '') + '</div>';
-  }
-  function wireTerra() {
-    var b = document.getElementById('terra-send'); if (!b) return;
-    b.addEventListener('click', function () {
-      if (!window.confirm('Send this site to Terra Energy for a solar package? They receive the site facts, the compute case on file and a link to the record, with you in copy.')) return;
-      msg('Sending…', true);
-      api('/api/site-crm', { method: 'POST', json: { org: ORG, action: 'send-to-partner', partner: 'terra', ids: [SITE], note: document.getElementById('terra-note').value } }).then(function (j) { msg(esc(j.note), true); load(true); }).catch(function (e) { msg(esc(e.message)); });
-    });
-  }
-
   /* ── boot ── */
   function showTab(t) {
     TAB = t;
@@ -1039,7 +1046,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   function load(keepTab) {
     msg('');
     api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(SITE)).then(function (j) {
-      DATA = j; CANEDIT = !!j.canEdit; CANARCHIVE = !!j.canArchive;
+      DATA = j; CANEDIT = !!j.canEdit; CANARCHIVE = !!j.canArchive; FUNDING = j.funding && j.funding.mode ? j.funding : null;
       document.getElementById('tab-diligence').style.display = j.diligence ? '' : 'none';
       try { if (window.OmegaSplash) OmegaSplash.done(); } catch (e) {}
       renderHead();

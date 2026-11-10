@@ -599,7 +599,8 @@ test('D19 the enable script: an offline dry run by default that writes nowhere; 
   assert.ok(/omega_orgs\/' \+ org \+ ' does not exist/.test(src) && /billing\/current does not exist/.test(src), 'refuses a missing workspace or billing record');
   assert.ok(fs.readFileSync(path.join(ROOT, '.vercelignore'), 'utf8').split('\n').indexOf('tenants/*/portfolio-diligence.json') >= 0, 'the seed is kept off the site');
   /* the white label: staged the staff way, mirrored through the one allowlist, never `enabled` (the storefront is sold apart) */
-  assert.deepEqual(out.write.whiteLabel, { platformName: 'Solela Capital', shortName: 'Solela' }); assert.equal(out.firstRun.whiteLabel.on, true);
+  /* attribution 'none' is the written decision on the seed (2026-11-09) */
+  assert.deepEqual(out.write.whiteLabel, { platformName: 'Solela Capital', shortName: 'Solela', attribution: 'none' }); assert.equal(out.firstRun.whiteLabel.on, true);
   assert.deepEqual(out.write.tenantPublic.whiteLabel, require('../../api/_lib/whitelabel').pickPublic(out.write.whiteLabel)); assert.ok(/not written/.test(out.write.tenantPublic.status));
   assert.deepEqual(out.secondRun.whiteLabel.added, [], 'a second run adds nothing'); assert.equal(require('../../api/_lib/storefront').storefrontEntitled({}, out.write.whiteLabel), false, 'naming the platform does not open the storefront');
   var tmp = path.join(require('os').tmpdir(), 'tdiligence-seed-' + process.pid + '.json');

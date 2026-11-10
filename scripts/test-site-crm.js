@@ -1134,5 +1134,177 @@ function seed() {
     ['sitecrm-log', 'sitecrm-proforma-run'].forEach(function (x) { assert.ok(acts.indexOf(x) >= 0, 'missing audit ' + x); });
   });
 
+  console.log('\nthe CSV import updates by ID');
+  await test('a row whose External ID names a site already here updates it: non-blank cells only, never a duplicate; an ID twice in a file and a site the workbook import keeps are refused, nothing written', async function () {
+    var first = await call('POST', { action: 'site-import', rows: [
+      { name: 'Godfather Pizza', city: 'Enid', state: 'OK', serviceCapacityKw: '500', termYearsRemaining: '7.3', externalSiteIds: { import: 'FE-001' } },
+      { name: 'Homeland', city: 'Henryetta', state: 'OK', externalSiteIds: { import: 'FE-002' } }] }, PM);
+    assert.equal(first.created, 2); assert.equal(first.updated, 0);
+    var id1 = first.ids[0], n0 = 0; db.data.forEach(function (v, k) { if (/^omega_orgs\/evcs\.com\/sites\/[^/]+$/.test(k)) n0++; });
+    await call('POST', { action: 'site-tag', ids: [id1], add: ['priority'] }, PM);
+    var again = await call('POST', { action: 'site-import', rows: [
+      { name: 'Godfather Pizza', city: '', state: 'OK', serviceCapacityKw: '', transformerKva: '500', existingPeakKw: '120', portfolioPartner: 'Francis Energy', externalSiteIds: { import: 'FE-001' } },
+      { name: 'A New One', city: 'Tulsa', state: 'OK', externalSiteIds: { import: 'FE-900' } }] }, PM);
+    assert.equal(again.created, 1); assert.equal(again.updated, 1); assert.equal(again.ids[0], id1); assert.match(again.note, /1 site\(s\) added and 1 already here updated by their ID/);
+    var n1 = 0; db.data.forEach(function (v, k) { if (/^omega_orgs\/evcs\.com\/sites\/[^/]+$/.test(k)) n1++; });
+    assert.equal(n1, n0 + 1, 'one new site, no duplicate');
+    var s1 = stored(id1);
+    assert.equal(s1.transformerKva, 500); assert.equal(s1.existingPeakKw, 120); assert.equal(s1.portfolioPartner, 'Francis Energy');
+    assert.equal(s1.city, 'Enid', 'a blank cell is no change'); assert.equal(s1.serviceCapacityKw, 500, 'a blank cell never clears'); assert.equal(s1.termYearsRemaining, 7.3);
+    assert.deepEqual(s1.tags, ['priority'], 'the sheet carries no tags: they stay'); assert.equal(s1.createdBy, PM.email); assert.equal(s1.updatedBy, PM.email);
+    assert.ok(audits('sitecrm-import').some(function (x) { return x.siteId === id1 && x.updated === true && x.fields.indexOf('transformerKva') >= 0; }));
+    /* the word "clear" empties a fact on the site a row updates; never the name or a field outside the list; on a new site it is a blank */
+    var cleared = await call('POST', { action: 'site-import', rows: [
+      { name: 'Godfather Pizza', city: 'clear', serviceCapacityKw: 'clear', transformerKva: '750', termYearsRemaining: '(Clear)', externalSiteIds: { import: 'FE-001' } },
+      { name: 'Brand New', serviceCapacityKw: 'clear', externalSiteIds: { import: 'FE-901' } }] }, PM);
+    assert.equal(cleared.updated, 1); assert.equal(cleared.created, 1);
+    var c1 = stored(id1);
+    assert.equal(c1.serviceCapacityKw, null, 'cleared'); assert.equal(c1.termYearsRemaining, null); assert.equal(c1.transformerKva, 750); assert.equal(c1.existingPeakKw, 120, 'untouched');
+    assert.equal(c1.city, 'Enid', 'the city is not a clearable fact'); assert.equal(c1.name, 'Godfather Pizza');
+    assert.equal(stored(cleared.ids[1]).serviceCapacityKw, undefined, 'a new site: the word is a blank');
+    await call('POST', { action: 'site-import', rows: [{ name: 'Godfather Pizza', transformerKva: '500', externalSiteIds: { import: 'FE-001' } }] }, PM);
+    var twice = await call('POST', { action: 'site-import', rows: [{ name: 'X', externalSiteIds: { import: 'FE-7' } }, { name: 'Y', externalSiteIds: { import: 'FE-7' } }] }, PM);
+    assert.equal(twice.ok, false); assert.match(twice.errors[0].error, /on row 1 too/);
+    db.data.get(O + '/sites/' + id1).facts = { utility: { value: 'OG&E' } };
+    var kept = await call('POST', { action: 'site-import', rows: [{ name: 'Godfather Pizza', transformerKva: '750', externalSiteIds: { import: 'FE-001' } }] }, PM);
+    assert.equal(kept.ok, false); assert.match(kept.errors[0].error, /kept by the workbook import/); assert.equal(stored(id1).transformerKva, 500);
+  });
+
+  console.log('\nthe site assessment, through the door');
+  await test('Run, approve and the partner go through the one door: a member acts, a viewer and a rival are refused, the register carries the row without its tables, one site carries them all', async function () {
+    var made = await call('POST', { action: 'site-save', name: 'Yard One', city: 'Chandler', state: 'OK', address: '1812 E 1st St', transformerKva: 1500, existingPeakKw: 200, portfolioPartner: 'Francis Energy' }, PM);
+    assert.equal(made.site.transformerKva, 1500); assert.equal(made.site.portfolioPartner, 'Francis Energy');
+    assert.equal(stored(made.id).transformerKva, 1500);
+    /* a save that does not send them leaves them alone */
+    await call('POST', { action: 'site-save', id: made.id, name: 'Yard One', city: 'Chandler', state: 'OK' }, PM);
+    assert.equal(stored(made.id).transformerKva, 1500); assert.equal(stored(made.id).portfolioPartner, 'Francis Energy');
+    await rejects(call('POST', { action: 'site-save', name: 'Bad', transformerKva: -5 }, PM), 400, /Transformer/);
+    var ran = await call('POST', { action: 'assess-run', ids: [made.id] }, PM);
+    assert.equal(ran.ran, 1); assert.equal(ran.sized, 1);
+    var a = stored(made.id).assessment.result;
+    assert.equal(a.power.limitKw, 1200); assert.equal(a.power.availableKw, 1000); assert.equal(a.power.basis, 'measured'); assert.equal(a.power.transformerKva, 1500);
+    assert.equal(a.compute.chosen.key, 'm750'); assert.equal(a.compute.chosen.units, 1); assert.equal(a.compute.chosen.klassLabel, 'Nano pod'); assert.equal(a.supercharger.sizing.posts, 6); assert.equal(a.bess.sizing.kwh, 4000);   /* one right-sized pod, never two 350s */
+    await rejects(call('POST', { action: 'assess-run', ids: [made.id] }, VIEWER), 403);
+    await rejects(call('POST', { action: 'assess-run', ids: [made.id] }, RIVAL), 403);
+    var list = await call('GET', {}, PM), row = list.sites.filter(function (x) { return x.id === made.id; })[0];
+    assert.equal(row.assessment.power.availableKw, 1000); assert.equal(row.assessment.stale, false); assert.ok(!row.assessment.bess.projections); assert.equal(row.portfolioPartner, 'Francis Energy');
+    assert.equal(list.sites.filter(function (x) { return x.id === SITE; })[0].assessment, null);
+    var full = await call('GET', { site: made.id, assessment: '1' }, VIEWER);
+    assert.equal(full.assessment.result.bess.projections.length, 10); assert.equal(full.assessment.result.readiness.total, 49);
+    var ap = await call('POST', { action: 'assess-approve', site: made.id, uses: ['compute', 'supercharger'] }, PM);
+    assert.equal(ap.label, 'Compute + Fast charging'); assert.equal(stored(made.id).status, 'Pre-development'); assert.deepEqual(stored(made.id).siteScopes, ['compute', 'dcfc']);
+    var pt = await call('POST', { action: 'site-set-partner', ids: [made.id, SITE], partner: 'EVCS' }, PM);
+    assert.match(pt.note, /2 site\(s\) under EVCS/); assert.equal(stored(made.id).portfolioPartner, 'EVCS'); assert.equal(stored(SITE).portfolioPartner, 'EVCS');
+    await call('POST', { action: 'site-set-partner', ids: [SITE], partner: '' }, PM); assert.equal(stored(SITE).portfolioPartner, null);
+    var acts = audits().map(function (x) { return x.action; });
+    ['sitecrm-assess-run', 'sitecrm-assess-approve', 'sitecrm-site-set-partner'].forEach(function (x) { assert.ok(acts.indexOf(x) >= 0, 'missing audit ' + x); });
+  });
+
+  await test('a utility-side upgrade mark, the funding list and the marketplace guard through the one door: a withdrawal puts the status back; no committee, no list; with one, a site is screened, submitted, and decided by a committee member alone, and never listed on the marketplace', async function () {
+    var made = await call('POST', { action: 'site-save', name: 'Yard Two', city: 'Enid', state: 'OK', zip: '73701', address: '1 Main St', transformerKva: 750, portfolioPartner: 'Francis Energy' }, PM);
+    await call('POST', { action: 'site-set-status', ids: [made.id], status: 'Operating' }, PM);
+    await call('POST', { action: 'assess-run', ids: [made.id] }, PM);
+    /* approve, then withdraw: the status the site had comes back */
+    await call('POST', { action: 'assess-approve', site: made.id, uses: ['compute'] }, PM); assert.equal(stored(made.id).status, 'Pre-development');
+    await call('POST', { action: 'assess-approve', site: made.id, uses: [] }, PM); assert.equal(stored(made.id).status, 'Operating');
+    /* the upgrade: marked, carried on the row, never a size */
+    var up = await call('POST', { action: 'assess-upgrade', site: made.id, unit: 'm1000' }, PM);
+    assert.equal(up.upgrade.targetKw, 1200); assert.equal(up.upgrade.addKw, 600); assert.equal(up.upgrade.askedBy, 'Francis Energy'); assert.equal(up.upgrade.compute.klassLabel, 'Micro pod');
+    var row0 = (await call('GET', {}, PM)).sites.filter(function (x) { return x.id === made.id; })[0];
+    assert.equal(row0.assessment.upgrade.status, 'requested'); assert.equal(row0.assessment.power.availableKw, 600); assert.equal(row0.assessment.compute.chosen.key, 'm500'); assert.equal(row0.assessment.stale, false);
+    assert.equal(row0.assessment.compute.economics.electricity.source, 'zip');
+    await rejects(call('POST', { action: 'assess-upgrade', site: made.id, unit: 'm350' }, PM), 400, /already has 600 kW/);
+    await rejects(call('POST', { action: 'assess-upgrade', site: made.id, unit: 'm1000' }, VIEWER), 403);
+    /* no committee named: no funding list, and the marketplace is the road */
+    assert.equal((await call('GET', {}, PM)).funding, null);
+    await rejects(call('POST', { action: 'assess-fund-submit', site: made.id, uses: ['compute'] }, PM), 409, /no funding list/);
+    /* the workspace names its committee (staff-written settings) */
+    var bpath = O + '/billing/current', before = db.data.get(bpath);
+    db.seed(bpath, Object.assign({}, before || {}, { portfolioAssessment: { funding: { mode: 'committee', name: 'Finance committee', members: [{ name: 'The Boss', email: BOSS.email }] } } }));
+    try {
+      var asPm = await call('GET', {}, PM), asBoss = await call('GET', {}, BOSS);
+      assert.deepEqual(asPm.funding, { mode: 'committee', name: 'Finance committee', members: ['The Boss'], canDecide: false }); assert.equal(asBoss.funding.canDecide, true);
+      assert.equal(asPm.review, null); assert.equal(asPm.sites.filter(function (x) { return x.id === made.id; })[0].assessment.gates, null);   /* no gates and no review in these settings */
+      await rejects(call('POST', { action: 'send-to-finance', ids: [made.id] }, PM), 409, /funds its own sites/); assert.equal(stored(made.id).finProjectId, undefined);
+      await rejects(call('POST', { action: 'assess-fund-submit', site: made.id, uses: ['compute'] }, PM), 409, /Screen the site first/);
+      var cur = stored(made.id); db.seed(O + '/sites/' + made.id, Object.assign({}, cur, { assessment: Object.assign({}, cur.assessment, { screen: { complete: true, at: new Date().toISOString(), located: { usable: true }, errors: [] } }) }));
+      var sub = await call('POST', { action: 'assess-fund-submit', site: made.id, uses: ['compute'], note: 'first' }, PM);
+      assert.equal(sub.funding.status, 'submitted'); assert.equal(sub.funding.lines[0].size, '500 kW Nano pod'); assert.ok(sub.funding.amountUsd > 0);
+      await rejects(call('POST', { action: 'assess-fund-decide', site: made.id, decision: 'approved' }, PM), 403, /decided by Finance committee \(The Boss\)/);
+      await rejects(call('POST', { action: 'assess-fund-decide', site: made.id, decision: 'approved' }, STAFF), 403);
+      await rejects(call('POST', { action: 'assess-fund-decide', site: made.id, decision: 'approved' }, who('boss', ORG, { claims: {} })), 403, /Confirm your email/);
+      var dec = await call('POST', { action: 'assess-fund-decide', site: made.id, decision: 'approved', note: 'go' }, BOSS);
+      assert.equal(dec.funding.status, 'approved'); assert.equal(dec.funding.decision.name, 'The Boss');
+      var row = (await call('GET', {}, PM)).sites.filter(function (x) { return x.id === made.id; })[0]; assert.equal(row.assessment.funding.status, 'approved'); assert.equal(row.assessment.confidence.screened, true);
+      var full = await call('GET', { site: made.id, assessment: '1' }, VIEWER); assert.equal(full.assessment.funding.status, 'approved'); assert.equal(full.assessment.fundingHistory.length, 2); assert.equal(full.assessment.result.upgrade.status, 'requested');
+      var acts = audits().map(function (x) { return x.action; });
+      ['sitecrm-assess-upgrade', 'sitecrm-assess-fund-submit', 'sitecrm-assess-fund-decide'].forEach(function (x) { assert.ok(acts.indexOf(x) >= 0, 'missing audit ' + x); });
+    } finally { if (before) db.seed(bpath, before); else db.data.delete(bpath); }
+  });
+
+  await test('an approval made in a connected app: 409 where the settings name none; with one, only its server key links a request and reports a mark; the record must be the linked one, marked after the link, by a committee member; a record ties to one site; the decision says where it was made and passes the return gate', async function () {
+    var crypto = require('crypto'), KEY = 'k'.repeat(48), HASH = crypto.createHash('sha256').update(KEY).digest('hex');
+    function callH(body, caller, headers) { return siteCrm({ method: 'POST', body: Object.assign({ org: ORG }, body), query: {}, caller: caller, headers: headers || {} }, res()); }
+    var K = { 'x-register-attest': KEY };
+    async function ready(name) {
+      var m = await call('POST', { action: 'site-save', name: name, city: 'Enid', state: 'OK', zip: '73701', address: '2 Main St', transformerKva: 750 }, PM);
+      await call('POST', { action: 'assess-run', ids: [m.id] }, PM);
+      var cur = stored(m.id); db.seed(O + '/sites/' + m.id, Object.assign({}, cur, { assessment: Object.assign({}, cur.assessment, { screen: { complete: true, at: new Date().toISOString(), located: { usable: true }, errors: [] } }) }));
+      return m.id;
+    }
+    var bpath = O + '/billing/current', before = db.data.get(bpath);
+    var committee = { mode: 'committee', name: 'Finance committee', members: [{ name: 'The Boss', email: BOSS.email }] };
+    db.seed(bpath, Object.assign({}, before || {}, { portfolioAssessment: { funding: committee, gates: { minKva: 500 } } }));
+    try {
+      var a = await ready('Attest One'), b = await ready('Attest Two');
+      await call('POST', { action: 'assess-fund-submit', site: a, uses: ['compute'] }, PM);
+      await call('POST', { action: 'assess-fund-submit', site: b, uses: ['compute'] }, PM);
+      /* no connected app in the settings: the road does not exist, key or no key */
+      await rejects(callH({ action: 'assess-fund-link', site: a, ref: 'card-1001' }, PM, K), 409, /here only/);
+      assert.equal((await call('GET', {}, PM)).funding.alsoIn, undefined);
+      /* staff name the app and store the HASH of its key; a wrong shape is no setting */
+      db.seed(bpath, Object.assign({}, before || {}, { portfolioAssessment: { funding: Object.assign({}, committee, { attest: { source: 'Asana', keyHash: 'not a hash' } }), gates: { minKva: 500 } } }));
+      await rejects(callH({ action: 'assess-fund-link', site: a, ref: 'card-1001' }, PM, K), 409, /here only/);
+      db.seed(bpath, Object.assign({}, before || {}, { portfolioAssessment: { funding: Object.assign({}, committee, { attest: { source: 'Asana', keyHash: HASH } }), gates: { minKva: 500 } } }));
+      var info = (await call('GET', {}, PM)).funding; assert.equal(info.alsoIn, 'Asana'); assert.ok(JSON.stringify(info).indexOf(HASH) < 0, 'the hash never reaches a page');
+      /* a person is never the app: no key, a wrong key, staff, the committee member themself */
+      await rejects(callH({ action: 'assess-fund-link', site: a, ref: 'card-1001' }, PM, {}), 403, /Only Asana/);
+      await rejects(callH({ action: 'assess-fund-link', site: a, ref: 'card-1001' }, PM, { 'x-register-attest': 'x'.repeat(48) }), 403);
+      await rejects(callH({ action: 'assess-fund-attest', site: a, ref: 'card-1001', email: BOSS.email, completedAt: new Date().toISOString() }, BOSS, {}), 403, /Only Asana/);
+      await rejects(callH({ action: 'assess-fund-attest', site: a, ref: 'card-1001', email: BOSS.email, completedAt: new Date().toISOString() }, STAFF, {}), 403);
+      await rejects(callH({ action: 'assess-fund-link', ids: [a, b], ref: 'card-1001' }, PM, K), 400, /One site/);
+      /* a mark before any link decides nothing */
+      await rejects(callH({ action: 'assess-fund-attest', site: a, ref: 'card-1001', email: BOSS.email, completedAt: new Date().toISOString() }, PM, K), 409, /not the record/);
+      var early = new Date(Date.now() - 60000).toISOString();
+      var ln = await callH({ action: 'assess-fund-link', site: a, ref: 'card-1001' }, PM, K);
+      assert.equal(ln.funding.status, 'submitted'); assert.deepEqual(Object.keys(ln.funding.attest).sort(), ['at', 'ref', 'source']); assert.equal(ln.funding.attest.ref, 'card-1001');
+      await rejects(callH({ action: 'assess-fund-link', site: a, ref: 'bad ref!' }, PM, K), 400, /linked by the id/);
+      /* a record ties to ONE request */
+      await rejects(callH({ action: 'assess-fund-link', site: b, ref: 'card-1001' }, PM, K), 409, /already linked to another/);
+      await callH({ action: 'assess-fund-link', site: b, ref: 'card-2002' }, PM, K);
+      /* the wrong record, somebody not on the committee, a mark from before the link, a mark in the future */
+      await rejects(callH({ action: 'assess-fund-attest', site: a, ref: 'card-2002', email: BOSS.email, completedAt: new Date().toISOString() }, PM, K), 409, /not the record/);
+      await rejects(callH({ action: 'assess-fund-attest', site: a, ref: 'card-1001', email: PM.email, name: 'Pat', completedAt: new Date().toISOString() }, PM, K), 403, /Pat is not on the committee/);
+      await rejects(callH({ action: 'assess-fund-attest', site: a, ref: 'card-1001', email: BOSS.email, completedAt: early }, PM, K), 409, /before this request was linked/);
+      await rejects(callH({ action: 'assess-fund-attest', site: a, ref: 'card-1001', email: BOSS.email, completedAt: new Date(Date.now() + 3600000).toISOString() }, PM, K), 400, /future/);
+      await rejects(callH({ action: 'assess-fund-attest', site: a, ref: 'card-1001', email: BOSS.email, completedAt: 'yesterday' }, PM, K), 400, /when it was marked/);
+      assert.equal(stored(a).assessment.funding.status, 'submitted', 'every refusal left the request waiting');
+      /* the committee member's mark on the linked record, after the link: the approval, saying where it was made */
+      var ok = await callH({ action: 'assess-fund-attest', site: a, ref: 'card-1001', email: BOSS.email.toUpperCase(), completedAt: new Date().toISOString(), note: 'ticked on the board' }, PM, K);
+      assert.equal(ok.funding.status, 'approved'); assert.equal(ok.funding.decision.name, 'The Boss'); assert.equal(ok.funding.decision.by, BOSS.email); assert.equal(ok.funding.decision.via, 'Asana'); assert.match(ok.note, /marked by The Boss in Asana/);
+      var st = stored(a).assessment.funding; assert.equal(st.decision.attested.ref, 'card-1001'); assert.equal(st.decision.attested.recordedBy, PM.email); assert.ok(st.decision.attested.markedAt);
+      var row = (await call('GET', {}, PM)).sites.filter(function (x) { return x.id === a; })[0], g4 = row.assessment.gates.list.filter(function (g) { return g.key === 'G4'; })[0];
+      assert.equal(g4.state, 'pass'); assert.match(g4.words, /approved by The Boss/); assert.equal(row.assessment.funding.attest, undefined, 'a decided request carries no link');
+      /* decided is decided: a second report changes nothing, and the committee still changes its own decision here */
+      await rejects(callH({ action: 'assess-fund-attest', site: a, ref: 'card-1001', email: BOSS.email, completedAt: new Date().toISOString() }, PM, K), 409, /has decided/);
+      var back = await call('POST', { action: 'assess-fund-decide', site: a, decision: 'declined', note: 'changed my mind' }, BOSS); assert.equal(back.funding.status, 'declined'); assert.equal(back.funding.decision.via, undefined);
+      /* a new request is a new link: the old record no longer stands for it */
+      await call('POST', { action: 'assess-fund-submit', site: a, uses: ['compute'] }, PM); assert.equal(stored(a).assessment.funding.attest, undefined);
+      await rejects(callH({ action: 'assess-fund-attest', site: a, ref: 'card-1001', email: BOSS.email, completedAt: new Date().toISOString() }, PM, K), 409, /not the record/);
+      var au = audits('sitecrm-assess-fund-attest'); assert.equal(au.length, 1); assert.equal(au[0].via, 'Asana'); assert.equal(au[0].ref, 'card-1001'); assert.equal(au[0].decidedBy, BOSS.email); assert.equal(au[0].by, PM.email);
+      assert.ok(audits('sitecrm-assess-fund-link').length >= 2);
+    } finally { if (before) db.seed(bpath, before); else db.data.delete(bpath); }
+  });
+
   console.log('\n' + count + ' tests passed.');
 })().catch(function (e) { console.error('FAIL', e); process.exit(1); });

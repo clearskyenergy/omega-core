@@ -184,6 +184,11 @@ function openOmegaCore(){
      what this session knows and talks to api/helios-intake, which fills
      their own PDF and sends it. -->
 <script src="/omega-helios-intake.js"></script>
+<!-- Compute + Site Economics on the Finance tab: reads the drawing and the
+     Run, posts to /api/compute-lease action site-economics (the model is
+     api/_lib/site-economics.js, server-side like the rate card and gated
+     Standard and above). The button is an offer; the endpoint refuses. -->
+<script src="/omega-site-economics.js"></script>
 <!-- Omega-Core from the Output tab: reads the Run and the drawing, fans out
      through OmegaComputeLease.evidence (loaded above) and asks api/omega-core
      whether the site takes the skids and what the host is paid. -->

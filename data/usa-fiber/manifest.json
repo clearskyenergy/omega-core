@@ -1,11 +1,11 @@
 {
-  "builtAt": "2026-09-20T23:14:40.303Z",
-  "uniqueSegments": 30580,
-  "statesWithData": 41,
+  "builtAt": "2026-11-10T02:14:45.332Z",
+  "uniqueSegments": 44433,
+  "statesWithData": 44,
   "categoryCounts": {
-    "existing": 8195,
-    "unknown": 20728,
-    "planned": 1644,
+    "existing": 9788,
+    "unknown": 32717,
+    "planned": 1915,
     "inactive": 13
   },
   "rejectedGeometries": 26,
@@ -41,15 +41,25 @@
         -84.8940159139852,
         35.0160336144193
       ],
-      "segments": 114,
+      "segments": 1971,
       "counts": {
-        "unknown": 114
+        "unknown": 1038,
+        "existing": 774,
+        "planned": 159
       },
       "sources": [
-        "fna-member-routes-20260918"
+        "fna-member-routes-20260918",
+        "fiberlight-published-cable",
+        "uniti-kinetic-dark-fiber",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "al-aldot-fiber-utility-lines",
+        "al-adeca-awarded-middle-mile",
+        "al-flashfiber-rings",
+        "al-flashfiber-distribution"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 4910
+      "publishedLineParts": 49143
     },
     {
       "code": "AR",
@@ -60,11 +70,19 @@
         -89.6454792021885,
         36.4928111085285
       ],
-      "segments": 0,
-      "counts": {},
-      "sources": [],
-      "coverage": "No bundled route geometry; fiber availability unknown",
-      "publishedLineParts": 0
+      "segments": 519,
+      "counts": {
+        "unknown": 519
+      },
+      "sources": [
+        "uniti-kinetic-dark-fiber",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "segra-fiber-network",
+        "ar-russellville-fiber-duct"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 36953
     },
     {
       "code": "AZ",
@@ -75,20 +93,22 @@
         -109.045615023362,
         37.0039259765893
       ],
-      "segments": 82,
+      "segments": 86,
       "counts": {
         "existing": 53,
-        "unknown": 14,
+        "unknown": 18,
         "planned": 15
       },
       "sources": [
         "arcgis-40-0",
         "arcgis-89-0",
         "arcgis-32-1",
-        "fna-member-routes-20260918"
+        "fna-member-routes-20260918",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 86
+      "publishedLineParts": 91
     },
     {
       "code": "CA",
@@ -122,15 +142,17 @@
         -102.037207582423,
         41.0033750969831
       ],
-      "segments": 16,
+      "segments": 22,
       "counts": {
-        "unknown": 16
+        "unknown": 22
       },
       "sources": [
-        "arcgis-157-0"
+        "arcgis-157-0",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 16
+      "publishedLineParts": 23
     },
     {
       "code": "CT",
@@ -196,16 +218,20 @@
         -80.0509108137256,
         31.0031571978194
       ],
-      "segments": 279,
+      "segments": 296,
       "counts": {
-        "unknown": 279
+        "unknown": 293,
+        "planned": 3
       },
       "sources": [
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "al-adeca-awarded-middle-mile",
         "arcgis-227-1",
         "fna-member-routes-20260918"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 4711
+      "publishedLineParts": 4751
     },
     {
       "code": "GA",
@@ -216,19 +242,24 @@
         -80.8947535989577,
         35.0003666741748
       ],
-      "segments": 1682,
+      "segments": 1701,
       "counts": {
-        "unknown": 1682
+        "unknown": 1699,
+        "planned": 2
       },
       "sources": [
         "fna-member-routes-20260918",
+        "uniti-kinetic-dark-fiber",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "al-adeca-awarded-middle-mile",
         "arcgis-292-0",
         "ga-atlanta-16",
         "ga-atlanta-17",
         "ga-atlanta-18"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 65382
+      "publishedLineParts": 65423
     },
     {
       "code": "HI",
@@ -254,17 +285,21 @@
         -90.1427967895934,
         43.5014574178935
       ],
-      "segments": 347,
+      "segments": 358,
       "counts": {
-        "unknown": 346,
+        "unknown": 357,
         "existing": 1
       },
       "sources": [
         "arcgis-196-2",
-        "arcgis-31-0"
+        "arcgis-31-0",
+        "uniti-kinetic-dark-fiber",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "segra-fiber-network"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 1508
+      "publishedLineParts": 1524
     },
     {
       "code": "ID",
@@ -290,19 +325,25 @@
         -87.5079094805859,
         42.5093636974558
       ],
-      "segments": 466,
+      "segments": 2000,
       "counts": {
-        "existing": 1,
-        "unknown": 465
+        "existing": 287,
+        "unknown": 1713
       },
       "sources": [
         "arcgis-31-0",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "segra-fiber-network",
         "arcgis-180-1",
         "arcgis-335-1",
-        "fna-member-routes-20260918"
+        "fna-member-routes-20260918",
+        "il-kane-county-fiber",
+        "il-idot-d4-fiber-links",
+        "il-peru-city-fiber"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 18689
+      "publishedLineParts": 34877
     },
     {
       "code": "IN",
@@ -313,18 +354,20 @@
         -84.7874460945035,
         41.7655403181306
       ],
-      "segments": 44,
+      "segments": 94,
       "counts": {
-        "unknown": 35,
+        "unknown": 85,
         "existing": 9
       },
       "sources": [
         "fna-member-routes-20260918",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
         "arcgis-229-5",
         "arcgis-229-6"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 2509
+      "publishedLineParts": 2646
     },
     {
       "code": "KS",
@@ -335,19 +378,27 @@
         -94.6012243120583,
         40.0029878088467
       ],
-      "segments": 866,
+      "segments": 4948,
       "counts": {
-        "unknown": 865,
+        "unknown": 4947,
         "existing": 1
       },
       "sources": [
+        "uniti-wholesale-dark-fiber",
         "arcgis-23-1",
         "arcgis-23-2",
         "arcgis-31-0",
-        "fna-member-routes-20260918"
+        "fna-member-routes-20260918",
+        "ok-odot-broadband-lines",
+        "zayo-all-fiber",
+        "segra-fiber-network",
+        "ks-middle-mile-backbone",
+        "ks-middle-mile-lateral",
+        "ks-middle-mile-blown-fiber",
+        "ks-lawrence-leasable-fiber"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 3027
+      "publishedLineParts": 12805
     },
     {
       "code": "KY",
@@ -358,22 +409,27 @@
         -81.9595752176215,
         39.1420637812888
       ],
-      "segments": 9053,
+      "segments": 9077,
       "counts": {
+        "unknown": 2497,
         "existing": 6266,
-        "planned": 314,
-        "unknown": 2473
+        "planned": 314
       },
       "sources": [
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
         "arcgis-229-5",
         "arcgis-229-6",
         "arcgis-229-8",
         "arcgis-229-9",
         "arcgis-229-13",
-        "fna-member-routes-20260918"
+        "fna-member-routes-20260918",
+        "fiberlight-published-cable",
+        "uniti-kinetic-dark-fiber",
+        "segra-fiber-network"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 9440
+      "publishedLineParts": 9516
     },
     {
       "code": "LA",
@@ -384,15 +440,18 @@
         -89.0218029112452,
         33.0234224222938
       ],
-      "segments": 6,
+      "segments": 10,
       "counts": {
-        "unknown": 6
+        "unknown": 10
       },
       "sources": [
+        "uniti-kinetic-dark-fiber",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
         "fna-member-routes-20260918"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 6
+      "publishedLineParts": 11
     },
     {
       "code": "MA",
@@ -507,11 +566,22 @@
         -89.1050338194532,
         40.6097843751778
       ],
-      "segments": 0,
-      "counts": {},
-      "sources": [],
-      "coverage": "No bundled route geometry; fiber availability unknown",
-      "publishedLineParts": 0
+      "segments": 834,
+      "counts": {
+        "unknown": 834
+      },
+      "sources": [
+        "uniti-kinetic-dark-fiber",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "segra-fiber-network",
+        "ks-middle-mile-backbone",
+        "ok-odot-broadband-lines",
+        "mo-independence-fiber",
+        "mo-monett-fiber"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 10456
     },
     {
       "code": "MS",
@@ -522,15 +592,19 @@
         -88.090468698187,
         35.0050415743045
       ],
-      "segments": 5,
+      "segments": 15,
       "counts": {
-        "unknown": 5
+        "unknown": 13,
+        "planned": 2
       },
       "sources": [
-        "fna-member-routes-20260918"
+        "fna-member-routes-20260918",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "al-adeca-awarded-middle-mile"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 5
+      "publishedLineParts": 26
     },
     {
       "code": "MT",
@@ -602,11 +676,15 @@
         -95.3086972113208,
         43.0030623064677
       ],
-      "segments": 0,
-      "counts": {},
-      "sources": [],
-      "coverage": "No bundled route geometry; fiber availability unknown",
-      "publishedLineParts": 0
+      "segments": 1,
+      "counts": {
+        "unknown": 1
+      },
+      "sources": [
+        "zayo-all-fiber"
+      ],
+      "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
+      "publishedLineParts": 1
     },
     {
       "code": "NH",
@@ -655,17 +733,23 @@
         -102.997400997005,
         36.9997602065596
       ],
-      "segments": 6,
+      "segments": 264,
       "counts": {
-        "unknown": 5,
-        "existing": 1
+        "unknown": 260,
+        "existing": 3,
+        "planned": 1
       },
       "sources": [
         "fna-member-routes-20260918",
-        "arcgis-31-0"
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "arcgis-31-0",
+        "fiberlight-published-cable",
+        "uniti-kinetic-dark-fiber",
+        "segra-fiber-network"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 215
+      "publishedLineParts": 11584
     },
     {
       "code": "NV",
@@ -715,20 +799,32 @@
         -80.519996183897,
         41.9868720924833
       ],
-      "segments": 514,
+      "segments": 4124,
       "counts": {
-        "unknown": 503,
-        "existing": 11
+        "unknown": 3609,
+        "existing": 515
       },
       "sources": [
         "fna-member-routes-20260918",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
         "arcgis-229-5",
+        "fiberlight-published-cable",
+        "uniti-kinetic-dark-fiber",
+        "segra-fiber-network",
         "arcgis-229-13",
         "arcgis-328-1",
-        "arcgis-31-0"
+        "arcgis-31-0",
+        "oh-pickaway-horizon-fiber",
+        "oh-henry-county-telephone-fiber",
+        "oh-dublin-dublink",
+        "oh-summit-county-fiber-route",
+        "oh-hamilton-city-overhead-fiber",
+        "oh-kettering-fiber",
+        "oh-centerville-fiber"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 1549
+      "publishedLineParts": 35202
     },
     {
       "code": "OK",
@@ -739,15 +835,27 @@
         -94.4285520201746,
         37.0014780803124
       ],
-      "segments": 3,
+      "segments": 1110,
       "counts": {
-        "unknown": 3
+        "unknown": 972,
+        "planned": 111,
+        "existing": 27
       },
       "sources": [
-        "logix-public-routes-20260918"
+        "uniti-kinetic-dark-fiber",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "ok-odot-broadband-lines",
+        "ks-middle-mile-blown-fiber",
+        "logix-public-routes-20260918",
+        "ok-obo-middle-mile-projects",
+        "ok-ponca-city-fiber",
+        "ok-owasso-city-fiber",
+        "fiberlight-published-cable",
+        "segra-fiber-network"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 6
+      "publishedLineParts": 78627
     },
     {
       "code": "OR",
@@ -781,15 +889,20 @@
         -74.7000624077059,
         42.2673270918247
       ],
-      "segments": 80,
+      "segments": 105,
       "counts": {
-        "unknown": 80
+        "unknown": 105
       },
       "sources": [
-        "fna-member-routes-20260918"
+        "fna-member-routes-20260918",
+        "uniti-kinetic-dark-fiber",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "segra-fiber-network",
+        "oh-pickaway-horizon-fiber"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 559
+      "publishedLineParts": 623
     },
     {
       "code": "RI",
@@ -853,16 +966,22 @@
         -81.652272204981,
         36.6796831984548
       ],
-      "segments": 527,
+      "segments": 538,
       "counts": {
-        "unknown": 527
+        "unknown": 536,
+        "existing": 1,
+        "planned": 1
       },
       "sources": [
         "fna-member-routes-20260918",
+        "fiberlight-published-cable",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "al-adeca-awarded-middle-mile",
         "arcgis-216-4"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 6532
+      "publishedLineParts": 6563
     },
     {
       "code": "TX",
@@ -873,20 +992,24 @@
         -93.5073889086175,
         36.4939127214279
       ],
-      "segments": 1045,
+      "segments": 1077,
       "counts": {
-        "unknown": 1043,
-        "existing": 2
+        "unknown": 1072,
+        "existing": 5
       },
       "sources": [
+        "uniti-kinetic-dark-fiber",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
         "fna-member-routes-20260918",
         "arcgis-31-0",
+        "fiberlight-published-cable",
         "arcgis-210-0",
         "arcgis-219-4",
         "logix-public-routes-20260918"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 16585
+      "publishedLineParts": 16652
     },
     {
       "code": "UT",
@@ -978,15 +1101,18 @@
         -86.9677122910037,
         46.952479499975
       ],
-      "segments": 571,
+      "segments": 589,
       "counts": {
-        "unknown": 571
+        "unknown": 589
       },
       "sources": [
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "segra-fiber-network",
         "arcgis-94-5"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 571
+      "publishedLineParts": 606
     },
     {
       "code": "WV",
@@ -997,20 +1123,26 @@
         -77.7274675250574,
         40.6372032171876
       ],
-      "segments": 145,
+      "segments": 193,
       "counts": {
-        "existing": 15,
-        "unknown": 130
+        "existing": 29,
+        "unknown": 164
       },
       "sources": [
         "arcgis-229-5",
         "arcgis-229-13",
         "fna-member-routes-20260918",
+        "fiberlight-published-cable",
+        "segra-fiber-network",
         "arcgis-31-0",
+        "uniti-kinetic-dark-fiber",
+        "uniti-wholesale-dark-fiber",
+        "zayo-all-fiber",
+        "oh-pickaway-horizon-fiber",
         "arcgis-229-6"
       ],
       "coverage": "Partial published routes; statewide completeness and positional accuracy unverified",
-      "publishedLineParts": 3759
+      "publishedLineParts": 3858
     },
     {
       "code": "WY",
@@ -2045,6 +2177,696 @@
       "sourceItem": "https://www.arcgis.com/home/item.html?id=3037b92988f8450db8ce87f828c579f3",
       "status": "Operational status unverified",
       "rawSha256": "cbd35bf44299b15da6fd81e35f3de71b50062d6ac9b1fd042b07615f8bdb2b15"
+    },
+    {
+      "id": "ok-odot-broadband-lines",
+      "name": "Oklahoma DOT — Broadband Lines (provider-submitted)",
+      "url": "https://services6.arcgis.com/RBtoEUQ2lmN0K3GY/arcgis/rest/services/Broadband_Lines/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=5bb1e45aab0f4942ac660547881bd339",
+      "publisher": "Oklahoma Department of Transportation",
+      "itemModified": "2024-07-01T16:07:42.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": "Lines submitted by broadband providers and combined by ODOT. Wireless backhaul links and customer drops are not imported; civil/conduit/path duplicates of one design are not imported. A provider that states no medium (Cox) is labelled so — it may be coaxial plant.",
+      "layerDescription": "Broadband_Data_Lines",
+      "status": "Per record — see routeStatus",
+      "count": 64684,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:05:15.694Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1719850052016,
+      "includedFeatures": 432,
+      "includedLineParts": 63708,
+      "tiled": true,
+      "tileDegrees": 0.1,
+      "coordinatePrecision": 6,
+      "rawSha256": "538c2c1a838fc0df4edaab401d9125a1bdf6321b08da0bfaf6bd0a4094ec1b97"
+    },
+    {
+      "id": "ok-obo-middle-mile-projects",
+      "name": "Oklahoma Broadband Office — Middle Mile Projects",
+      "url": "https://services5.arcgis.com/YjiGkfGCdfjouFLC/arcgis/rest/services/Middle_Mile_Projects/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=8b90123f924c47e9840b913a0e211e7d",
+      "publisher": "Oklahoma Broadband Office",
+      "itemModified": "2026-01-15T21:31:57.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Middle_Mile_Projects",
+      "status": "Per record — see routeStatus",
+      "count": 19,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:06:08.488Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1787068179568,
+      "includedFeatures": 22,
+      "includedLineParts": 22,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "4a9f58c6c4a9e9f495bf5d2e0f0439ee57aa85f50d466fe54fecf14ed0b39b64"
+    },
+    {
+      "id": "ok-ponca-city-fiber",
+      "name": "Ponca City — buried fiber cables",
+      "url": "https://services6.arcgis.com/Dosymvda4OueTcnj/arcgis/rest/services/Korterra2/FeatureServer/6",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=c63f79bbfb53442d90d2df6574cefa1b",
+      "publisher": "City of Ponca City, Oklahoma",
+      "itemModified": "2026-10-13T13:25:32.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Fiber Underround",
+      "status": "Per record — see routeStatus",
+      "count": 8089,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:06:15.515Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1791897905001,
+      "includedFeatures": 4,
+      "includedLineParts": 3528,
+      "tiled": true,
+      "tileDegrees": 0.1,
+      "coordinatePrecision": 6,
+      "rawSha256": "e9397f0506647cf2ae83ec823871b94eea306b08de625d41fddabb7881cefea2"
+    },
+    {
+      "id": "ok-owasso-city-fiber",
+      "name": "City of Owasso — city fiber",
+      "url": "https://services1.arcgis.com/VJvqwZ3JnU52C9ua/arcgis/rest/services/IT_Infrastructure_UseThis_WFL1/FeatureServer/3",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=a78e1cd1ff6a472cb1a53f99f4f0102c",
+      "publisher": "City of Owasso, Oklahoma",
+      "itemModified": "2025-01-10T15:39:46.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "CityOfOwassoFiber",
+      "status": "Per record — see routeStatus",
+      "count": 224,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:06:16.266Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1770747488303,
+      "includedFeatures": 224,
+      "includedLineParts": 224,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "7ebd2f6a30f8df48662b565e05e827913f3254430d8e08e9367ded96d1423e4d"
+    },
+    {
+      "id": "fiberlight-published-cable",
+      "name": "FiberLight — fiber cable (publisher external view)",
+      "url": "https://services.arcgis.com/cmtiXjnD63zmtycz/arcgis/rest/services/FIBERCABLE_AGOL_View/FeatureServer/103",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=7beaf26a50b7417f833525291ab2ab80",
+      "publisher": "FiberLight, LLC",
+      "itemModified": "2026-06-23T15:14:03.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "FIBERCABLE_AGOL",
+      "status": "Per record — see routeStatus",
+      "count": 1927,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:10:26.869Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1790975938689,
+      "includedFeatures": 62,
+      "includedLineParts": 152,
+      "tiled": true,
+      "tileDegrees": 0.1,
+      "coordinatePrecision": 6,
+      "rawSha256": "e3d7b44a231567f10acd1d89968a8e30fa3cb7fb3676c5342c2c35dc6b45ccba"
+    },
+    {
+      "id": "uniti-kinetic-dark-fiber",
+      "name": "Uniti / Kinetic — local network dark fiber (carrier wholesale map)",
+      "url": "https://services.arcgis.com/QO7AhQX53d0m9M2s/arcgis/rest/services/Uniti_Wholesale_Map_Demo_4_WFL1/FeatureServer/26",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=74ec57bfd7514bf1aace2111b03351b8",
+      "publisher": "Uniti (Windstream / Kinetic), as published",
+      "itemModified": "2025-07-31T17:04:43.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Kinetic Dark Fiber",
+      "status": "Per record — see routeStatus",
+      "count": 88083,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:11:04.584Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1749699185517,
+      "includedFeatures": 874,
+      "includedLineParts": 56828,
+      "tiled": true,
+      "tileDegrees": 0.1,
+      "coordinatePrecision": 6,
+      "rawSha256": "f407ce3ab68854fb94ad60bc6146fb64e9cba991303f958d9e09768f2b0b9c30"
+    },
+    {
+      "id": "uniti-wholesale-dark-fiber",
+      "name": "Uniti — wholesale dark fiber routes (carrier wholesale map)",
+      "url": "https://services.arcgis.com/QO7AhQX53d0m9M2s/arcgis/rest/services/Uniti_Wholesale_Dark_Fiber/FeatureServer/74",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=47e0f23555c74350a5064e754e9de194",
+      "publisher": "Uniti, as published",
+      "itemModified": "2025-06-12T22:27:17.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Uniti Wholesale Dark Fiber",
+      "status": "Per record — see routeStatus",
+      "count": 90443,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:12:44.221Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1749767233124,
+      "includedFeatures": 1537,
+      "includedLineParts": 55682,
+      "tiled": true,
+      "tileDegrees": 0.1,
+      "coordinatePrecision": 6,
+      "rawSha256": "324321d8490fe80e275c03e42a659de55da6c669ab43dcdf42105d4051df87b5"
+    },
+    {
+      "id": "zayo-all-fiber",
+      "name": "Zayo — all fiber (carrier network map)",
+      "url": "https://services1.arcgis.com/Xj5NMYgIU2DtuS8a/arcgis/rest/services/ZayoAllFiber/FeatureServer/4",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=fa102a4d9d9c44ffb21db7f190350551",
+      "publisher": "Zayo Group, as published",
+      "itemModified": "2023-11-30T17:45:56.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Zayo All Fiber",
+      "status": "Per record — see routeStatus",
+      "count": 13817,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:14.013Z",
+      "copyrightText": "Leon Walker",
+      "layerLastEditDate": 1701363249669,
+      "includedFeatures": 1821,
+      "includedLineParts": 14995,
+      "tiled": true,
+      "tileDegrees": 0.1,
+      "coordinatePrecision": 6,
+      "rawSha256": "12f7ff2c00082946d555cf01d03d7a1dde19056e06f3919a6b20ac576ad2ac39"
+    },
+    {
+      "id": "segra-fiber-network",
+      "name": "Segra — fiber network (carrier network map)",
+      "url": "https://services2.arcgis.com/idZndEogp4LoOmcv/arcgis/rest/services/Segra_Fiber_Network_Complete/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=539e7daf09184fefb0a674cfa329922e",
+      "publisher": "Segra, as published",
+      "itemModified": "2026-10-29T13:08:45.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Fiber Network",
+      "status": "Per record — see routeStatus",
+      "count": 23016,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:28.458Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1793279322285,
+      "includedFeatures": 386,
+      "includedLineParts": 16632,
+      "tiled": true,
+      "tileDegrees": 0.1,
+      "coordinatePrecision": 6,
+      "rawSha256": "b648d1bcc2de2065777c1aa035b356e21b6471da538c6ed429331a48034f85b8"
+    },
+    {
+      "id": "ks-middle-mile-backbone",
+      "name": "Kansas middle mile — backbone conduit & fiber",
+      "url": "https://services.arcgis.com/R0IGaIgf2sox9aCY/arcgis/rest/services/KS_MiddleMile_IXP/FeatureServer/16",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=84bd44cf68e74fedbfcb4d21cd5c0578",
+      "publisher": "Connected Nation (Kansas middle-mile IXP development)",
+      "itemModified": "2026-07-29T18:33:18.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Backbone Conduit & Fiber",
+      "status": "Per record — see routeStatus",
+      "count": 2431,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:30.381Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1695651044948,
+      "includedFeatures": 2404,
+      "includedLineParts": 2404,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "5c4713b48dd4107b318bbf2eccf36b8836acf301ef224d2e2bda2bfb3bcefcda"
+    },
+    {
+      "id": "ks-middle-mile-lateral",
+      "name": "Kansas middle mile — lateral conduit & fiber",
+      "url": "https://services.arcgis.com/R0IGaIgf2sox9aCY/arcgis/rest/services/KS_MiddleMile_IXP/FeatureServer/15",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=84bd44cf68e74fedbfcb4d21cd5c0578",
+      "publisher": "Connected Nation (Kansas middle-mile IXP development)",
+      "itemModified": "2026-07-29T18:33:18.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Lateral Conduit & Fiber",
+      "status": "Per record — see routeStatus",
+      "count": 455,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:30.885Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1695651044197,
+      "includedFeatures": 452,
+      "includedLineParts": 452,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "8126d23b9396225b7ad1e0103b4fd6d3672ac4351c1f7e0170771722e03cb021"
+    },
+    {
+      "id": "ks-middle-mile-blown-fiber",
+      "name": "Kansas middle mile — backbone blown fiber",
+      "url": "https://services.arcgis.com/R0IGaIgf2sox9aCY/arcgis/rest/services/KS_MiddleMile_IXP/FeatureServer/17",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=84bd44cf68e74fedbfcb4d21cd5c0578",
+      "publisher": "Connected Nation (Kansas middle-mile IXP development)",
+      "itemModified": "2026-07-29T18:33:18.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Backbone Blow Fiber Only",
+      "status": "Per record — see routeStatus",
+      "count": 471,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:31.231Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1695651045276,
+      "includedFeatures": 471,
+      "includedLineParts": 471,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "108706eaf4da14c85c982614f37bf454f28839c06b0ed017ccf0e61a2dffaeca"
+    },
+    {
+      "id": "ks-lawrence-leasable-fiber",
+      "name": "City of Lawrence — fiber network opportunities",
+      "url": "https://services5.arcgis.com/wb2dkDj6yTkvZmS4/arcgis/rest/services/Fiber_Network/FeatureServer/1",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=93d0a7934f5748cbb9171bff195fdbc4",
+      "publisher": "Douglas County, Kansas GIS",
+      "itemModified": "2023-06-12T20:54:48.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Polylines",
+      "status": "Per record — see routeStatus",
+      "count": 389,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:31.950Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1689344825340,
+      "includedFeatures": 389,
+      "includedLineParts": 389,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "fe9613674b98e6a44a9bc74b1637e8973d881fb4733c0fc528e36dedc076bb9d"
+    },
+    {
+      "id": "al-aldot-fiber-utility-lines",
+      "name": "Alabama DOT — fiber utility lines (West Alabama Highway)",
+      "url": "https://services.arcgis.com/LZzQi3xDiclG6XvQ/arcgis/rest/services/Fiber_Optic/FeatureServer/2",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=0f8acd4960ba4df99dda488d40b6fd3c",
+      "publisher": "Alabama Department of Transportation",
+      "itemModified": "2024-04-17T21:22:59.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Fiber",
+      "status": "Per record — see routeStatus",
+      "count": 330,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:33.131Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1713388969902,
+      "includedFeatures": 326,
+      "includedLineParts": 326,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "590db3c1a718031722e22937b703c9c0d165ca77717b58b7e98296e1da1ecfdf"
+    },
+    {
+      "id": "al-adeca-awarded-middle-mile",
+      "name": "Alabama (ADECA) — Fiber Utility Network 2022 awarded middle mile",
+      "url": "https://services7.arcgis.com/ecupH7bxameyeamw/arcgis/rest/services/Fiber_Utility_Network_2022_Awarded_Middle_Mile/FeatureServer/52",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=e557ae920cc342bb836d5e0a0c11a0e6",
+      "publisher": "Alabama Department of Economic and Community Affairs",
+      "itemModified": "2026-11-04T19:21:15.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Fiber Utility Network 2022 Awarded Middle Mile",
+      "status": "Per record — see routeStatus",
+      "count": 157,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:34.092Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1723836451772,
+      "includedFeatures": 159,
+      "includedLineParts": 159,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "fc7f31b4b12ba9f99946fc926a6dc89e62c412ddd51d554bf3567676bbe254e3"
+    },
+    {
+      "id": "al-flashfiber-rings",
+      "name": "FlashFiber (Joe Wheeler EMC) — fiber rings",
+      "url": "https://services7.arcgis.com/kY8JFNt2NP4Zmqyg/arcgis/rest/services/FlashFiberFootprintp/FeatureServer/1",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=fb7c2c6fdef846218e35d04bc37ad7a4",
+      "publisher": "Joe Wheeler EMC / FlashFiber",
+      "itemModified": "2026-05-08T19:23:33.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Fiber Rings",
+      "status": "Per record — see routeStatus",
+      "count": 758,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:36.375Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1778268162716,
+      "includedFeatures": 756,
+      "includedLineParts": 756,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "7fe1844e19d5002f26bcb3961d818d9a7bf1e3ee5afb5829fa5c78fc85b117b4"
+    },
+    {
+      "id": "al-flashfiber-distribution",
+      "name": "FlashFiber (Joe Wheeler EMC) — distribution fiber",
+      "url": "https://services7.arcgis.com/kY8JFNt2NP4Zmqyg/arcgis/rest/services/FlashFiberFootprintp/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=fb7c2c6fdef846218e35d04bc37ad7a4",
+      "publisher": "Joe Wheeler EMC / FlashFiber",
+      "itemModified": "2026-05-08T19:23:33.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Distribution Fiber",
+      "status": "Per record — see routeStatus",
+      "count": 3610,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:37.702Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1778268209413,
+      "includedFeatures": 56,
+      "includedLineParts": 3606,
+      "tiled": true,
+      "tileDegrees": 0.1,
+      "coordinatePrecision": 6,
+      "rawSha256": "ae3c01a28f0f2b4fb0db222c9976ed59878e87f66973b26c93dcf877ccdc0199"
+    },
+    {
+      "id": "ar-russellville-fiber-duct",
+      "name": "Russellville (City Corporation) — fiber optic duct",
+      "url": "https://services1.arcgis.com/g2qMSCNar9dcOtYq/arcgis/rest/services/Fiber_Optic_Duct/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=7571d514030641c698ba917d1fc24657",
+      "publisher": "City Corporation, Russellville, Arkansas",
+      "itemModified": "2026-07-02T15:56:21.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Fiber_Optic_Duct",
+      "status": "Per record — see routeStatus",
+      "count": 10457,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:42.235Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1783007731169,
+      "includedFeatures": 8,
+      "includedLineParts": 12736,
+      "tiled": true,
+      "tileDegrees": 0.1,
+      "coordinatePrecision": 6,
+      "rawSha256": "add7e5135cffa393da2f209e007510ef587e4d2e475402b90286bca6edd7c20f"
+    },
+    {
+      "id": "mo-independence-fiber",
+      "name": "City of Independence — fiber optic lines",
+      "url": "https://services.arcgis.com/sbDzK061dd6DNPHv/arcgis/rest/services/electric/FeatureServer/8",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=00c6539850d84a0cba8a03f9363055ae",
+      "publisher": "City of Independence, Missouri",
+      "itemModified": "2024-04-08T20:39:20.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Fiber Optic Lines",
+      "status": "Per record — see routeStatus",
+      "count": 95,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:43.026Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1634249505358,
+      "includedFeatures": 95,
+      "includedLineParts": 95,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "7765111af5b975aef67c01f26bd272505e3948e5ccf4285f6f45d9503afccbd9"
+    },
+    {
+      "id": "mo-monett-fiber",
+      "name": "City of Monett — fiber lines",
+      "url": "https://services2.arcgis.com/JlLHmG5HZMZKIiLr/arcgis/rest/services/Fiber_Lines_view/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=4c26d45b42fb4ad0b724686ed6ae9e3f",
+      "publisher": "City of Monett, Missouri",
+      "itemModified": "2025-01-22T16:15:46.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "FiberLines",
+      "status": "Per record — see routeStatus",
+      "count": 262,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:43.869Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1737562522908,
+      "includedFeatures": 262,
+      "includedLineParts": 262,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "8b5371c6bf8e94a27419a963544260fa81fcc96ba661a158150e8b0558549957"
+    },
+    {
+      "id": "oh-pickaway-horizon-fiber",
+      "name": "Pickaway County GIS — Horizon fiber lines",
+      "url": "https://services6.arcgis.com/FhJ42byMw3LmPYCN/arcgis/rest/services/Fiber/FeatureServer/5",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=f7afebcae0bc4c84aa9699bbd87c8716",
+      "publisher": "Pickaway County GIS, Ohio",
+      "itemModified": "2019-02-20T13:17:42.000Z",
+      "license": "All maps and data posted to this site were created by Pickaway County GIS Department and are for reference use only. All data has been developed from public records that are constantly undergoing change and is not warranted for content, completeness or accuracy. Pickaway County does not warrant, guarantee or represent the data to be fit for a particular use or purpose. If detailed information is r",
+      "description": null,
+      "layerDescription": "Fiber",
+      "status": "Per record — see routeStatus",
+      "count": 4291,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:48.684Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1550609484145,
+      "includedFeatures": 427,
+      "includedLineParts": 3288,
+      "tiled": true,
+      "tileDegrees": 0.1,
+      "coordinatePrecision": 6,
+      "rawSha256": "e97876424fbe7607135698cfba29114ad0907c2c1b0a949b3676cc4da3f1e7c7"
+    },
+    {
+      "id": "oh-henry-county-telephone-fiber",
+      "name": "Henry County Engineer — telephone fiber optic lines",
+      "url": "https://services.arcgis.com/osmyvTbXDC07yFxn/arcgis/rest/services/UtilityLayers/FeatureServer/6",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=57d2984f3cae4d439055a10c18f600a6",
+      "publisher": "Henry County Engineer, Ohio",
+      "itemModified": "2024-10-09T20:05:41.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Telephone Fiber Optic Lines",
+      "status": "Per record — see routeStatus",
+      "count": 2764,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:49.884Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1728504335164,
+      "includedFeatures": 79,
+      "includedLineParts": 2155,
+      "tiled": true,
+      "tileDegrees": 0.1,
+      "coordinatePrecision": 6,
+      "rawSha256": "79d83a81758a6b7a94daf002fd97dea7d0b48c5d37b7826787c643a4711fa16b"
+    },
+    {
+      "id": "oh-dublin-dublink",
+      "name": "City of Dublin — Dublink (leasable conduit and fiber)",
+      "url": "https://services1.arcgis.com/NqY8dnPSEdMJhuRw/arcgis/rest/services/Dublink_(Revenue_Conduit_Only)/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=5afe43b6c1024d3ca41e01012a5fad74",
+      "publisher": "City of Dublin, Ohio",
+      "itemModified": "2022-12-02T16:52:06.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Dublink Edit",
+      "status": "Per record — see routeStatus",
+      "count": 319,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:50.819Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1772032528117,
+      "includedFeatures": 323,
+      "includedLineParts": 323,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "12a7be99aa39865b17dc5fb3337711168a44589f0a987dec53811e1c8b6def6b"
+    },
+    {
+      "id": "oh-summit-county-fiber-route",
+      "name": "County of Summit — fiber route",
+      "url": "https://services3.arcgis.com/3Ukh5HzAdI6WZ3KP/arcgis/rest/services/Fiber_Route_923/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=c4a476eaaaae441e9cf6413be1160c78",
+      "publisher": "County of Summit GIS, Ohio",
+      "itemModified": "2023-10-05T18:32:53.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Fiber_Route_923",
+      "status": "Per record — see routeStatus",
+      "count": 460,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:51.568Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1712932657468,
+      "includedFeatures": 518,
+      "includedLineParts": 518,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "4e156566a0ed3960e7daefb32d8d688e67dbc4f3789eb8658bbfb005ed633204"
+    },
+    {
+      "id": "oh-hamilton-city-overhead-fiber",
+      "name": "City of Hamilton — city-owned overhead fiber",
+      "url": "https://services1.arcgis.com/1pXnFsHirWAc6772/arcgis/rest/services/FiberOpticCable_Overhead_COHowned/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=15cf7ad1901d493fb0094fe2383cbf98",
+      "publisher": "City of Hamilton, Ohio",
+      "itemModified": "2026-07-20T14:58:39.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Overhead Fiber Optic Cable",
+      "status": "Per record — see routeStatus",
+      "count": 304,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:52.672Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1784559512632,
+      "includedFeatures": 303,
+      "includedLineParts": 303,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "536dbf940aaebbfede6b17658abfb91b88b93d3b707fd9b2bb35eb3d956e3779"
+    },
+    {
+      "id": "oh-kettering-fiber",
+      "name": "City of Kettering — fiber network",
+      "url": "https://services1.arcgis.com/IDg0PVR55RzXuJ5Y/arcgis/rest/services/FiberNetworkFSAGOL/FeatureServer/2",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=43d56836cdc44c4aacdccedcc6c74888",
+      "publisher": "City of Kettering, Ohio",
+      "itemModified": "2016-11-07T14:16:45.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "All Fiber",
+      "status": "Per record — see routeStatus",
+      "count": 328,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:53.330Z",
+      "copyrightText": "",
+      "layerLastEditDate": null,
+      "includedFeatures": 328,
+      "includedLineParts": 328,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "e5716a6d476543f7d43f4e2d30479b4f6efe9d99098cc6fecb74c6cff3edbcf2"
+    },
+    {
+      "id": "oh-centerville-fiber",
+      "name": "City of Centerville — fiber",
+      "url": "https://services.arcgis.com/M5UrDFRz2ZRTplQC/arcgis/rest/services/Fiber/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=3037f8268f1f48a3b44f7e997ff1aceb",
+      "publisher": "City of Centerville, Ohio",
+      "itemModified": "2021-11-30T20:33:08.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Fiber",
+      "status": "Per record — see routeStatus",
+      "count": 528,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:53.991Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1714152766042,
+      "includedFeatures": 523,
+      "includedLineParts": 523,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "e93cf6d9a3177374a2d3a5f76615d6211b0bde60056ade1b43be37bd7be63ac0"
+    },
+    {
+      "id": "il-kane-county-fiber",
+      "name": "Kane County — fiber network",
+      "url": "https://services1.arcgis.com/oRKmdBXD6EbdmVgJ/arcgis/rest/services/KaneFiber_Fiber_10012018_View_ReadOnly/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=0e7cb66e298f4bf888bed9e93e83be6d",
+      "publisher": "Kane County, Illinois",
+      "itemModified": "2020-07-20T19:46:59.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "Fiber",
+      "status": "Per record — see routeStatus",
+      "count": 350,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:54.673Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1790696419585,
+      "includedFeatures": 329,
+      "includedLineParts": 329,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "d56367c77bbecfd300a0bafce632dc074504bd6541948832e99f14db632628cd"
+    },
+    {
+      "id": "il-idot-d4-fiber-links",
+      "name": "IDOT District 4 — fiber optic cable links",
+      "url": "https://services.arcgis.com/pPTAs43AFhhk0pXQ/arcgis/rest/services/IDOT_Fiber_Connections/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=89d3186d075d42619cbc58e54a767d20",
+      "publisher": "Tri-County Regional Planning Commission (IDOT District 4 data)",
+      "itemModified": "2018-07-05T16:49:31.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "IDOT District 4 Fiber Optic Cable Links",
+      "status": "Per record — see routeStatus",
+      "count": 37,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:55.130Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1530808231489,
+      "includedFeatures": 37,
+      "includedLineParts": 37,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "3cb1f2a00b83fe451f19fd8c5d2a1296256e1528dd4acd8194239cbf118d5fa2"
+    },
+    {
+      "id": "il-peru-city-fiber",
+      "name": "City of Peru — fiber",
+      "url": "https://services8.arcgis.com/ioIHRhl9da27ORfm/arcgis/rest/services/PeruFiber_view/FeatureServer/0",
+      "itemUrl": "https://www.arcgis.com/home/item.html?id=9ea58b7d5aec478c992c68af0e7e687f",
+      "publisher": "City of Peru, Illinois",
+      "itemModified": "2023-10-24T19:56:25.000Z",
+      "license": "No explicit reuse license in item metadata; publisher attribution retained. Verify terms before redistribution.",
+      "description": null,
+      "layerDescription": "PeruFiberLine",
+      "status": "Per record — see routeStatus",
+      "count": 229,
+      "downloadStatus": "complete",
+      "retrievedAt": "2026-11-10T02:13:55.859Z",
+      "copyrightText": "",
+      "layerLastEditDate": 1739822987471,
+      "includedFeatures": 246,
+      "includedLineParts": 246,
+      "tiled": false,
+      "tileDegrees": null,
+      "coordinatePrecision": 6,
+      "rawSha256": "9240119e5c50dd128a910d7da3e5a0c444aaeb7f031003bacf76ddfbdd649c92"
     }
   ],
   "boundarySource": "US Census Bureau / Esri USA States Generalized Boundaries",
@@ -2058,8 +2880,8 @@
     "outsideStateBoundaries": 2874
   },
   "preservedBaselineRecords": 26371,
-  "publishedLineParts": 218350,
-  "integratedAt": "2026-09-20T23:25:57.539Z",
+  "publishedLineParts": 459827,
+  "integratedAt": "2026-11-10T02:14:47.067Z",
   "priorityStates": [
     "TX",
     "GA",
@@ -2072,5 +2894,51 @@
     "SC",
     "NC"
   ],
-  "preservedProductionRecords": 26371
+  "preservedProductionRecords": 26371,
+  "stateExpansion": {
+    "at": "2026-11-10T02:14:45.332Z",
+    "states": [
+      "OK",
+      "NM",
+      "MO",
+      "AL",
+      "KS",
+      "AR",
+      "OH",
+      "IL"
+    ],
+    "sources": [
+      "ok-odot-broadband-lines",
+      "ok-obo-middle-mile-projects",
+      "ok-ponca-city-fiber",
+      "ok-owasso-city-fiber",
+      "fiberlight-published-cable",
+      "uniti-kinetic-dark-fiber",
+      "uniti-wholesale-dark-fiber",
+      "zayo-all-fiber",
+      "segra-fiber-network",
+      "ks-middle-mile-backbone",
+      "ks-middle-mile-lateral",
+      "ks-middle-mile-blown-fiber",
+      "ks-lawrence-leasable-fiber",
+      "al-aldot-fiber-utility-lines",
+      "al-adeca-awarded-middle-mile",
+      "al-flashfiber-rings",
+      "al-flashfiber-distribution",
+      "ar-russellville-fiber-duct",
+      "mo-independence-fiber",
+      "mo-monett-fiber",
+      "oh-pickaway-horizon-fiber",
+      "oh-henry-county-telephone-fiber",
+      "oh-dublin-dublink",
+      "oh-summit-county-fiber-route",
+      "oh-hamilton-city-overhead-fiber",
+      "oh-kettering-fiber",
+      "oh-centerville-fiber",
+      "il-kane-county-fiber",
+      "il-idot-d4-fiber-links",
+      "il-peru-city-fiber"
+    ],
+    "note": "Vetted agency and carrier-published layers; contractor, locate and internal-plant layers excluded. See docs/FIBER-STATE-EXPANSION.md."
+  }
 }
