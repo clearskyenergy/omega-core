@@ -911,6 +911,35 @@ tenant hostname is worth doing before launch.
 
 ---
 
+## Runbook — a name-only white label (Solela Capital, 2026-11-09)
+
+Tommy: "we are making a solelacapital white label version". One codebase,
+the workspace's own name on it: no storefront, no product list, no embed.
+
+1. **The brand, in the tenant's folder.** `tenants/solelacapital/brand/`
+   holds the logo kit as it was supplied (horizontal, stacked and monogram,
+   each in white and black; one colour, vector). `white-label.json` beside
+   it is the block: the platform name and short name, the mark for dark
+   chrome (the white monogram: it also becomes the tab icon), the accent
+   (their brass, `#C4A572`) and the ink (`#08090A`), the support address,
+   and `attribution: 'powered-by'`.
+2. **Stage it**: `node scripts/set-white-label.js --org <org>` is an
+   offline dry run; `--apply --confirm-org <org>` writes
+   `omega_orgs/{org}.whiteLabel` (a key the record already holds stands
+   unless named with `--replace`) and mirrors the public subset to
+   `tenant_public/{host}` through `publicRecord()`, as a staff branding
+   save does. It refuses `enabled` and `embed` (the public storefront is a
+   separate sale), a mark that is not a file in the repo, and
+   `attribution: 'none'` without `--allow-no-attribution`.
+   `--seed tenants/solelacapital/white-label.json` puts the same brand on a
+   second workspace (chileasing.com).
+3. **Look at it** as staff with `?wlpreview=<org>` on any signed-in page.
+4. **The hostname is not this script's.** A workspace is reached at a
+   hostname on its record; attaching one (DNS, then Vercel, then
+   `domains[]`) is done by a person, and until then the white label shows
+   to its people on the shared host after they sign in, and the sign-in
+   page there still says ClearSky.
+
 ## Not built yet
 
 Listed so nobody mistakes any of it for done.
