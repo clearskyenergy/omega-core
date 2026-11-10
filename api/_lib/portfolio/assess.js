@@ -106,6 +106,10 @@ function configOf(billing) {
   }
   /* the funding list: a workspace that funds its own sites names who decides */
   var members = people(fu.members);
+  /* an outside app the committee may decide in (funding.attest): staff-written, named for what it is, and holding only the HASH of the key that app's server sends */
+  var att = obj(fu.attest), attest = /^[0-9a-f]{64}$/.test(String(att.keyHash || '')) ? { source: clean(att.source, 30) || 'a connected app', keyHash: String(att.keyHash) } : null;
+  var funding = fu.mode === 'committee' && members.length ? { mode: 'committee', name: clean(fu.name, 60) || 'Finance committee', members: members } : null;
+  if (funding && attest) funding.attest = attest;
   /* the workspace's own gates (its operating rules, never core's) and who sits on its review */
   var ga = obj(raw.gates), rv = obj(raw.review), reviewers = people(rv.members);
   var gates = { minKva: within(ga.minKva, 1, 1000000), minLeaseYears: within(ga.minLeaseYears, 0.1, 99), irrHurdlePct: within(ga.irrHurdlePct, 0, 500) };
@@ -119,7 +123,7 @@ function configOf(billing) {
       basis: c.basis === 'partner' ? 'partner' : null,
       reference: { capexUsdPerMw: within(ref.capexUsdPerMw, 1e5, 5e8), revenueUsdPerMwYear: within(ref.revenueUsdPerMwYear, 1e4, 5e8), utilityUsdPerMwYear: within(ref.utilityUsdPerMwYear, 0, 5e8),
         gpusPerMw: within(ref.gpusPerMw, 1, 1e5), racksPerMw: within(ref.racksPerMw, 1, 1000), chipset: typeof ref.chipset === 'string' && CM.chipset(ref.chipset) ? ref.chipset : null } },
-    funding: fu.mode === 'committee' && members.length ? { mode: 'committee', name: clean(fu.name, 60) || 'Finance committee', members: members } : null,
+    funding: funding,
     gates: gates.minKva != null || gates.minLeaseYears != null || gates.irrHurdlePct != null ? gates : null,
     review: reviewers.length ? { name: clean(rv.name, 60) || 'Executive Review', members: reviewers } : null,
     closing: closeYears != null ? { minLeaseYears: closeYears, agreement: clean(cl.agreement, 60) || 'site host agreement' } : null };
@@ -607,19 +611,59 @@ function fundingChange(cur, action, input, ctx) {
     if (d === 'declined' && !(note && note.length >= 3)) throw fail(400, 'Say why it is declined: the person who submitted it reads the reason');
     return Object.assign({}, cur, { status: d, decision: { status: d, by: ctx.by || null, name: member.name, at: ctx.now || null, note: note }, history: hist(d) });
   }
+  /* ── THE ATTESTED APPROVAL (2026-11-10, Tommy, of his finance committee:
+     "the committe can use the asana app to preview and review and approve
+     and it gets then show on the platform"). Where the workspace's settings
+     name a connected app (funding.attest), a submitted request is LINKED to
+     the one record that app's server made for it (its id, never its name:
+     anybody in that app can rename a card), and an approval is taken when
+     that server attests the linked record was marked done, after the link,
+     by a person whose address in that app is a committee member's. The
+     app's own sign-in stands for the verified address; the decision says
+     where it was made (via). Only an approval: a decline needs its reason
+     and is made here. The door holds the key; this is the rule. ── */
+  if (action === 'link' || action === 'attest') {
+    if (!f.attest) throw fail(409, 'This workspace takes funding decisions here only: no connected app is named in its settings');
+    var ref = String(input.ref == null ? '' : input.ref).trim();
+    if (!/^[A-Za-z0-9_.:-]{4,64}$/.test(ref)) throw fail(400, 'A request is linked by the id of its record in ' + f.attest.source);
+    if (status !== 'submitted') throw fail(409, status === 'approved' || status === 'declined' ? 'The committee has decided on this site; ' + committeeWords(cfg) + ' changes that here' : 'This site is not waiting on ' + f.name.toLowerCase());
+    if (action === 'link') {
+      return Object.assign({}, cur, { attest: { ref: ref, source: f.attest.source, at: ctx.now || null },
+        history: (Array.isArray(cur.history) ? cur.history : []).concat([{ status: 'linked', by: ctx.by || null, at: ctx.now || null, note: f.attest.source + ' ' + ref }]).slice(-30) });
+    }
+    var link = cur.attest && typeof cur.attest === 'object' ? cur.attest : null;
+    if (!link || link.ref !== ref) throw fail(409, 'That is not the record this request is linked to in ' + f.attest.source + ', so a mark on it decides nothing');
+    var who = committeeMember(cfg, input.email);
+    if (!who) throw fail(403, 'Funding is decided by ' + committeeWords(cfg) + '. ' + (clean(input.name, 80) || 'The person who marked it') + ' is not on the committee, so the mark in ' + f.attest.source + ' is not an approval');
+    var when = Date.parse(String(input.completedAt || '')), linked = Date.parse(String(link.at || '')), nowMs = Date.parse(String(ctx.now || ''));
+    if (!isFinite(when)) throw fail(400, 'An attested approval says when it was marked');
+    if (isFinite(linked) && when < linked) throw fail(409, 'That record was marked done before this request was linked to it, so it is not an approval of this request');
+    if (isFinite(nowMs) && when > nowMs + 5 * 60 * 1000) throw fail(400, 'An approval cannot be marked in the future');
+    var seen = new Date(when).toISOString();
+    return Object.assign({}, cur, { status: 'approved',
+      decision: { status: 'approved', by: who.email, name: who.name, at: ctx.now || null, note: note, via: f.attest.source, attested: { ref: ref, markedAt: seen, recordedBy: ctx.by || null } },
+      history: (Array.isArray(cur.history) ? cur.history : []).concat([{ status: 'approved', by: who.email, at: ctx.now || null, note: note, via: f.attest.source }]).slice(-30) });
+  }
   throw fail(400, 'Unknown funding action');
 }
 /* the row's and the card's view of it */
 function fundingView(fd) {
   if (!fd || typeof fd !== 'object' || FUND_STATES.indexOf(fd.status) < 0 || fd.status === 'withdrawn') return null;
   var d = fd.decision && typeof fd.decision === 'object' ? fd.decision : null;
-  return { status: fd.status, uses: fd.uses || [], label: fd.label || null, lines: Array.isArray(fd.lines) ? fd.lines : [], amountUsd: fd.amountUsd == null ? null : fd.amountUsd, words: fd.words || null, note: fd.note || null,
+  var v = { status: fd.status, uses: fd.uses || [], label: fd.label || null, lines: Array.isArray(fd.lines) ? fd.lines : [], amountUsd: fd.amountUsd == null ? null : fd.amountUsd, words: fd.words || null, note: fd.note || null,
     submittedBy: fd.submittedBy || null, submittedAt: fd.submittedAt || null, decision: d ? { status: d.status, by: d.by || null, name: d.name || null, at: d.at || null, note: d.note || null } : null };
+  /* a decision made in a connected app says so; a request still waiting carries the record it is linked to there */
+  if (d && d.via) v.decision.via = String(d.via);
+  if (fd.status === 'submitted' && fd.attest && fd.attest.ref) v.attest = { ref: String(fd.attest.ref), source: fd.attest.source || null, at: fd.attest.at || null };
+  return v;
 }
 /* what the pages may know of the list: the committee's names, never an address */
 function fundingInfo(cfg, email) {
   var f = cfg && cfg.funding;
-  return f ? { mode: f.mode, name: f.name, members: f.members.map(function (m) { return m.name; }), canDecide: !!committeeMember(cfg, email) } : null;
+  if (!f) return null;
+  var info = { mode: f.mode, name: f.name, members: f.members.map(function (m) { return m.name; }), canDecide: !!committeeMember(cfg, email) };
+  if (f.attest) info.alsoIn = f.attest.source;   /* the committee may also decide there; never the key or its hash */
+  return info;
 }
 
 /* ── CLOSING A SITE (2026-11-09, Tommy: "we buy the sites from francis and

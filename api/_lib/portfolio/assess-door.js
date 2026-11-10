@@ -40,6 +40,19 @@
           approved or declined by a member of the committee signed in on a
           VERIFIED address (403 for anybody else, staff included). Each
           site answers for itself: a refusal names the site and why.
+     POST assess-fund-link { site, ref }
+     POST assess-fund-attest { site, ref, email, name?, completedAt, note? }
+          THE ATTESTED APPROVAL, for a workspace whose settings name a
+          connected app the committee may decide in (funding.attest; 409
+          elsewhere). Neither is a person's action: each is refused (403)
+          unless the request carries that app's server key in
+          x-register-attest, compared by its sha256 against the hash in the
+          settings (the key itself is never stored here). `link` ties a
+          submitted request to the ONE record the app's server made for it,
+          and a record already tied to another site is refused; `attest`
+          records the approval when that record was marked done, after the
+          link, by a person whose address in the app is a committee
+          member's. The decision keeps who, when it was marked and `via`.
      POST assess-closing { ids[] | site, step: purchase|assignment|lease, done?, years?, note? }
           A CLOSING STEP recorded on a site (409 where the workspace's
           settings carry none): it is purchased, its host agreement is
@@ -67,9 +80,10 @@
    for each write (action sitecrm-assess-*). All Admin SDK only.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
+var crypto = require('crypto');
 var AS = require('./assess'), G = require('./grid-screen'), D = require('./diligence'), BR = require('./site-bridge');
 
-var ACTIONS = ['assess-run', 'assess-screen-start', 'assess-screen-step', 'assess-check', 'assess-approve', 'assess-upgrade', 'assess-fund-submit', 'assess-fund-withdraw', 'assess-fund-decide', 'assess-review-vote', 'assess-closing'];
+var ACTIONS = ['assess-run', 'assess-screen-start', 'assess-screen-step', 'assess-check', 'assess-approve', 'assess-upgrade', 'assess-fund-submit', 'assess-fund-withdraw', 'assess-fund-decide', 'assess-fund-link', 'assess-fund-attest', 'assess-review-vote', 'assess-closing'];
 var RUN_CAP = 50, SCREEN_IDS_CAP = 200, APPROVE_CAP = 200, MARK_CAP = 200, SCREEN_FRESH_DAYS = 7, PARCEL_TIMEOUT = 12000;
 
 function owns(action) { return ACTIONS.indexOf(String(action || '')) >= 0; }
@@ -311,7 +325,23 @@ function make(deps) {
   async function fund(c, action) {
     var ids = idsOf(c), cfg = AS.configOf(await billingOf(c.root)), names = {}, last = null;
     if (!cfg.funding) throw fail(409, 'This workspace has no funding list: it sends a site’s capital request to the finance marketplace');
-    if (action === 'decide') {
+    var attested = action === 'link' || action === 'attest';
+    if (attested) {
+      /* the connected app's server, never a person: its key against the hash in the settings, in constant time; one site a call */
+      if (!cfg.funding.attest) throw fail(409, 'This workspace takes funding decisions here only: no connected app is named in its settings');
+      var sent = String((c.req && c.req.headers && c.req.headers['x-register-attest']) || ''), want = Buffer.from(cfg.funding.attest.keyHash, 'hex');
+      var got = crypto.createHash('sha256').update(sent).digest();
+      if (sent.length < 32 || want.length !== got.length || !crypto.timingSafeEqual(got, want)) throw fail(403, 'Only ' + cfg.funding.attest.source + ', as this workspace connected it, links a request or reports a mark made there');
+      if (!c.site || Array.isArray(c.b.ids)) throw fail(400, 'One site a call');
+      if (action === 'link') {
+        /* a record ties to ONE request: a card already standing for another site never stands for this one too */
+        var ref0 = String(c.b.ref == null ? '' : c.b.ref).trim();
+        if (/^[A-Za-z0-9_.:-]{4,64}$/.test(ref0)) {
+          var taken = await c.root.collection('sites').where('assessment.funding.attest.ref', '==', ref0).limit(3).get();
+          if (taken.docs.some(function (d) { return d.id !== c.site; })) throw fail(409, 'That record is already linked to another site’s request');
+        }
+      }
+    } else if (action === 'decide') {
       /* who decides is the committee, by a VERIFIED address: a password account can be opened on any address without proving it */
       if (!AS.committeeMember(cfg, c.by)) throw fail(403, 'Funding is decided by ' + cfg.funding.name + ' (' + cfg.funding.members.map(function (m) { return m.name; }).join(', ') + '). You can submit a site; you cannot approve or decline it');
       if (!(c.caller && c.caller.claims && c.caller.claims.email_verified === true)) throw fail(403, 'Confirm your email address first: a funding decision is recorded against a verified address');
@@ -324,13 +354,18 @@ function make(deps) {
       a.funding = AS.fundingChange(a.funding || null, action, c.b, { by: c.by, now: deps.now(), config: cfg, result: fresh, screened: !!(sc && sc.complete), canEdit: c.canEdit });
       if (action === 'submit') { a.result = fresh; a.at = deps.now(); }
       tx.update(sref, { assessment: plain(a) });
-      tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-fund-' + action, orgId: c.org, siteId: sref.id, by: c.by, at: deps.now(), status: a.funding.status, was: was, uses: a.funding.uses || [], amountUsd: a.funding.amountUsd == null ? null : a.funding.amountUsd, note: typeof c.b.note === 'string' ? c.b.note.slice(0, 500) : null }));
+      var row = { action: 'sitecrm-assess-fund-' + action, orgId: c.org, siteId: sref.id, by: c.by, at: deps.now(), status: a.funding.status, was: was, uses: a.funding.uses || [], amountUsd: a.funding.amountUsd == null ? null : a.funding.amountUsd, note: typeof c.b.note === 'string' ? c.b.note.slice(0, 500) : null };
+      /* an attested write says where it came from, which record, and (for an approval) whose mark it was */
+      if (attested) { row.via = cfg.funding.attest.source; row.ref = a.funding.attest ? a.funding.attest.ref : null; if (action === 'attest') { row.decidedBy = a.funding.decision.by; row.markedAt = a.funding.decision.attested.markedAt; } }
+      tx.create(c.db.collection('omega_audit').doc(), plain(row));
       last = AS.fundingView(a.funding);
       return { status: a.funding.status };
     });
     var n = out.done.length, sites = n + ' site' + (n === 1 ? '' : 's');
     var words = action === 'submit' ? sites + ' submitted to ' + cfg.funding.name.toLowerCase() + ' for funding.'
       : action === 'withdraw' ? sites + ' taken off the funding list.'
+      : action === 'link' ? sites + ' linked to its record in ' + cfg.funding.attest.source + '.'
+      : action === 'attest' ? 'Funding approved on ' + sites + (last && last.decision ? ': marked by ' + last.decision.name + ' in ' + cfg.funding.attest.source : '') + '.'
       : 'Funding ' + String(c.b.decision || '').toLowerCase() + ' on ' + sites + '.';
     return { ok: true, action: action, count: n, done: out.done, refused: out.refused, funding: ids.length === 1 ? last : undefined, note: words + refusedWords(out.refused, names) };
   }
@@ -383,6 +418,8 @@ function make(deps) {
     if (action === 'assess-fund-submit') return fund(c, 'submit');
     if (action === 'assess-fund-withdraw') return fund(c, 'withdraw');
     if (action === 'assess-fund-decide') return fund(c, 'decide');
+    if (action === 'assess-fund-link') return fund(c, 'link');
+    if (action === 'assess-fund-attest') return fund(c, 'attest');
     if (action === 'assess-run') return run(c);
     if (action === 'assess-screen-start') return screenStart(c);
     if (action === 'assess-screen-step') return screenStep(c);

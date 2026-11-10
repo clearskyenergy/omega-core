@@ -1508,7 +1508,17 @@ import by itself (numbers first, then four screening jobs at a time, Stop
 pauses), turns its table to Site · Status · Power · Compute · Battery ·
 Charging · Ready · Capital once any site is assessed, and the side panel
 carries the card (`omega-portfolio-assess.js`, which computes nothing).
-Send to Terra is off the bar (the door's action stays). Held by
+**A funding approval made in a connected app counts** (2026-11-10, Tommy:
+"the committe can use the asana app to preview and review and approve and it
+gets then show on the platform"), where the settings name one
+(`funding.attest { source, keyHash }`, staff-written): `assess-fund-link`
+ties a submitted request to the ONE record the app's server made for it, by
+id, and `assess-fund-attest` records the approval when that record was marked
+done, after the link, by a person whose address there is a committee
+member's (`fundingChange` `link` / `attest`; the decision keeps `via`). Both
+are the app server's, never a person's: refused without its key in
+`x-register-attest`, of which the settings hold only the sha256. A decline is
+made here. Send to Terra is off the bar (the door's action stays). Held by
 `tassess.js`, `scripts/test-site-crm.js` and `check:workspace`'s
 `flow /portfolio.html (assessment)` on the real library.
 `docs/PORTFOLIO-ASSESSMENT.md` carries the design and the honest list.

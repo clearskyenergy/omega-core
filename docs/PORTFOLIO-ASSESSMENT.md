@@ -254,6 +254,41 @@ The row reads *Screen first → Not submitted → With committee → Approved or
 Declined*, and the Funding filter is the list. Every step is on
 `assessment.funding` with its history, and an `omega_audit` row.
 
+#### An approval made in a connected app (2026-11-10)
+
+Tommy, of his finance committee: "the committe can use the asana app to
+preview and review and approve and it gets then show on the platform". A
+workspace whose settings name a connected app
+(`portfolioAssessment.funding.attest { source, keyHash }`, staff-written by
+`scripts/set-portfolio-assessment.js --attest-source Asana --attest-key-hash`)
+takes an approval made there as well as one made here. Two actions, neither a
+person's:
+
+- `assess-fund-link { site, ref }` ties a submitted request to the ONE record
+  the app's server made for it, by that record's id (never its name: anybody
+  in the app can rename a card). A record already tied to another site is
+  refused. A new submission is a new request and needs a new link.
+- `assess-fund-attest { site, ref, email, name?, completedAt, note? }` records
+  the approval when the linked record was marked done, after the link, by a
+  person whose address in the app is a committee member's. The decision keeps
+  `via` (the app's name) and `attested { ref, markedAt, recordedBy }`; G4 reads
+  it as any approval.
+
+Both are refused (403) unless the request carries the app server's key in
+`x-register-attest`. The settings hold only the sha256 of that key; the key
+lives in the app server's environment. The app's own sign-in stands in for
+the verified address a decision here needs, so who may use that app as a
+committee member's address is part of the control. Only an approval travels
+this way: a decline needs its reason and is made here, and the committee
+changes any decision here.
+
+What this does not defend: a person who can edit the linked record in the app
+can change the words on it before the committee member marks it. The id ties
+the mark to the right site whatever the card says, and the decision records
+where it was made, but the committee member is trusting the card's text.
+The figures a member should rely on are the register's.
+
+
 On the site record (`site-crm.html`) the *Capital request* card becomes
 **Funding** in such a workspace: where the site stands on the list and who
 decided, with the way to the register. `GET ?site=` carries `funding` and
