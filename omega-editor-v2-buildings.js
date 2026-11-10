@@ -21,6 +21,7 @@
   var FEMA = 'https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/USA_Structures_View/FeatureServer/0/query';
   var OSM = 'https://overpass-api.de/api/interpreter';
   var FT_PER_M = 3.280839895, MAX = 200;
+  var WAIT_MS = 12000;               /* a service that has not answered by then will not */
   var G = null;
   function geom() { return G || (G = root.OmegaEditorV2Geom || (typeof require === 'function' ? require('./omega-editor-v2-geom.js') : null)); }
 
@@ -141,29 +142,40 @@
       p.then(function (v) { clearTimeout(t); resolve(v); }, function (e) { clearTimeout(t); reject(e); });
     });
   }
+  /* No resultRecordCount: since 2026-11 FEMA's service never answers a query
+     that carries one (the same box without it answers in a third of a
+     second). The layer's own limit (2,000) caps the answer and parseFema
+     keeps the first MAX. */
   function femaUrl(bb) {
     var q = { where: '1=1', geometry: [bb.w, bb.s, bb.e, bb.n].join(','), geometryType: 'esriGeometryEnvelope', inSR: '4326', spatialRel: 'esriSpatialRelIntersects',
-      outFields: 'BUILD_ID,OBJECTID,OCC_CLS,PRIM_OCC,HEIGHT,SQFEET,SOURCE,IMAGE_DATE,PROD_DATE', returnGeometry: 'true', outSR: '4326', resultRecordCount: String(MAX), f: 'json' };
+      outFields: 'BUILD_ID,OBJECTID,OCC_CLS,PRIM_OCC,HEIGHT,SQFEET,SOURCE,IMAGE_DATE,PROD_DATE', returnGeometry: 'true', outSR: '4326', f: 'json' };
     return FEMA + '?' + Object.keys(q).map(function (k) { return k + '=' + encodeURIComponent(q[k]); }).join('&');
   }
   /* The buildings on a lot (a ring of [lat, lng]): FEMA first, else OSM.
-     Resolves { buildings, source } or { buildings: [], source: null, reason } */
+     Resolves { buildings, source } or { buildings: [], source: null, reason }:
+     `reason` is 'none' when both were read and neither has a building here,
+     else a whole sentence saying who did not answer. */
   function find(lotRing) {
     if (!lotRing || lotRing.length < 3 || typeof fetch !== 'function') return Promise.resolve({ buildings: [], source: null, reason: 'No lot line to look on.' });
     var bb = bboxOf(lotRing);
-    return timed(fetch(femaUrl(bb)).then(function (r) { if (!r.ok) throw new Error('fema ' + r.status); return r.json(); }), 20000)
+    return timed(fetch(femaUrl(bb)).then(function (r) { if (!r.ok) throw new Error('fema ' + r.status); return r.json(); }), WAIT_MS)
       .then(function (j) { if (j && j.error) throw new Error('fema'); return onLot(parseFema(j), lotRing); })
       .catch(function () { return null; })
       .then(function (fema) {
         if (fema && fema.length) return { buildings: fema, source: 'FEMA USA Structures' };
         var q = '[out:json][timeout:15];way["building"](' + bb.s + ',' + bb.w + ',' + bb.n + ',' + bb.e + ');out geom;';
         return timed(fetch(OSM, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) })
-          .then(function (r) { if (!r.ok) throw new Error('osm ' + r.status); return r.json(); }), 20000)
-          .then(function (j) { var l = onLot(parseOsm(j), lotRing); return { buildings: l, source: l.length ? 'OpenStreetMap' : null, reason: l.length ? '' : (fema ? 'none' : 'FEMA did not answer') }; },
-            function () { return { buildings: [], source: null, reason: fema ? 'none' : 'Neither FEMA nor OpenStreetMap answered.' }; });
+          .then(function (r) { if (!r.ok) throw new Error('osm ' + r.status); return r.json(); }), WAIT_MS)
+          .then(function (j) {
+            var l = onLot(parseOsm(j), lotRing);
+            if (l.length) return { buildings: l, source: 'OpenStreetMap', reason: '' };
+            return { buildings: [], source: null, reason: fema ? 'none' : 'FEMA did not answer, and OpenStreetMap has no building on this lot.' };
+          }, function () {
+            return { buildings: [], source: null, reason: fema ? 'FEMA has no building on this lot, and OpenStreetMap did not answer.' : 'Neither FEMA nor OpenStreetMap answered.' };
+          });
       });
   }
 
-  root.OmegaEditorV2Buildings = { find: find, parseFema: parseFema, parseOsm: parseOsm, onLot: onLot, toEntities: toEntities, describe: describe, femaUrl: femaUrl, VERSION: 'editor-v2-buildings/1' };
+  root.OmegaEditorV2Buildings = { find: find, parseFema: parseFema, parseOsm: parseOsm, onLot: onLot, toEntities: toEntities, describe: describe, femaUrl: femaUrl, VERSION: 'editor-v2-buildings/2' };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.OmegaEditorV2Buildings;
 })(typeof window !== 'undefined' ? window : global);

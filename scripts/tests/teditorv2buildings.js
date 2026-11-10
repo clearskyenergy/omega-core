@@ -78,6 +78,10 @@ check(/1 without a height, shown at the default in 3D/.test(B.describe(f, 'FEMA 
 /* 6. the query: the lot's box, west-south-east-north, in degrees */
 var u = B.femaUrl({ s: 33.43, w: -112.18, n: 33.44, e: -112.16 });
 check(/USA_Structures_View\/FeatureServer\/0\/query\?/.test(u) && u.indexOf(encodeURIComponent('-112.18,33.43,-112.16,33.44')) > 0 && /outSR=4326/.test(u) && /returnGeometry=true/.test(u), 'FEMA is asked for the lot\'s box');
+/* 2026-11-09: FEMA's service stopped answering any query that carries
+   resultRecordCount (the same box without it answers at once), so every
+   lookup waited out its time limit and found nothing */
+check(!/resultRecordCount|resultOffset/i.test(u), 'the query carries no paging parameter, which FEMA\'s service hangs on');
 
 /* 7. 3D stands it at its height */
 var doc = { name: 'Check', anchor: anchor, entities: [ents[0], { id: 'o2', type: 'obstruction', layer: 'obstruction', closed: true, pts: [{ x: 300, y: 0 }, { x: 320, y: 0 }, { x: 320, y: 20 }, { x: 300, y: 20 }] }], layers: [] };
@@ -91,4 +95,44 @@ check(o2 && o2.h === 12, 'a hand-drawn obstruction keeps the default it always h
 var page = fs.readFileSync(path.join(ROOT, 'editor-v2.html'), 'utf8');
 check(page.indexOf('id="site-buildings"') > 0 && page.indexOf('omega-editor-v2-buildings.js') > 0 && page.indexOf('omega-editor-v2-buildings.js') < page.indexOf('omega-editor-v2-app.js'), 'the Site tab has Find buildings, and the script loads before the editor');
 
-console.log('teditorv2buildings: ' + n + ' checks passed');
+/* 9. find(): FEMA first, else OpenStreetMap, and it says who did not answer */
+var lotLL = sq(anchor.lat, anchor.lng, 600).map(function (p) { return [p[1], p[0]]; });
+var osmOne = { elements: [{ id: 7, tags: { building: 'retail', height: '6' }, geometry: sq(anchor.lat, anchor.lng, 80).map(function (p) { return { lat: p[1], lon: p[0] }; }) }] };
+function net(femaAnswer, osmAnswer) {
+  var asked = [];
+  global.fetch = function (url, opts) {
+    var isFema = String(url).indexOf('USA_Structures_View') > 0, a = isFema ? femaAnswer : osmAnswer;
+    asked.push(isFema ? 'fema' : 'osm');
+    if (isFema && /resultRecordCount/.test(url)) return new Promise(function () {});   /* as the service does: never */
+    if (!isFema && !(opts && opts.method === 'POST' && /^data=/.test(opts.body))) return Promise.reject(new Error('not Overpass\'s form'));
+    if (a === 'down') return Promise.reject(new Error('network'));
+    if (typeof a === 'number') return Promise.resolve({ ok: false, status: a, json: function () { return Promise.resolve({}); } });
+    return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(a); } });
+  };
+  return asked;
+}
+var asked1 = net(fema, osmOne);
+B.find(lotLL).then(function (r) {
+  check(r.source === 'FEMA USA Structures' && r.buildings.length === 1 && r.buildings[0].id === 'fema:11511792' && asked1.join() === 'fema', 'FEMA answers: its building on the lot, and OpenStreetMap is not asked: ' + asked1.join());
+  var a = net({ features: [] }, osmOne);
+  return B.find(lotLL).then(function (r2) {
+    check(r2.source === 'OpenStreetMap' && r2.buildings.length === 1 && r2.buildings[0].heightFt === 19.7 && a.join() === 'fema,osm', 'FEMA has none here: OpenStreetMap\'s building, 6 m is 19.7 ft');
+  });
+}).then(function () {
+  net('down', osmOne);
+  return B.find(lotLL).then(function (r) { check(r.source === 'OpenStreetMap' && r.buildings.length === 1, 'FEMA is down: OpenStreetMap\'s building still comes'); });
+}).then(function () {
+  net({ features: [] }, { elements: [] });
+  return B.find(lotLL).then(function (r) { check(r.buildings.length === 0 && r.reason === 'none' && /^No building footprints on this lot/.test(B.describe(r.buildings, '')), 'both read, neither has one: it says there is none'); });
+}).then(function () {
+  net({ features: [] }, 502);
+  return B.find(lotLL).then(function (r) { check(r.buildings.length === 0 && r.reason === 'FEMA has no building on this lot, and OpenStreetMap did not answer.', 'FEMA has none and OpenStreetMap is at capacity: it says which did not answer, never that neither has one: ' + r.reason); });
+}).then(function () {
+  net({ error: { code: 500 } }, { elements: [] });
+  return B.find(lotLL).then(function (r) { check(r.buildings.length === 0 && r.reason === 'FEMA did not answer, and OpenStreetMap has no building on this lot.', 'FEMA errors and OpenStreetMap has none: ' + r.reason); });
+}).then(function () {
+  net('down', 'down');
+  return B.find(lotLL).then(function (r) { check(r.buildings.length === 0 && r.reason === 'Neither FEMA nor OpenStreetMap answered.', 'both down: ' + r.reason); });
+}).then(function () {
+  console.log('teditorv2buildings: ' + n + ' checks passed');
+}).catch(function (e) { console.error(e && e.stack || e); process.exit(1); });
