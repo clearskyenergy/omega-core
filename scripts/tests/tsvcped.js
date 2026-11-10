@@ -56,7 +56,13 @@ console.log('\nthe Level 2 build can start from one');
   chk('a fourth Start from option, after existing / upgrade / new', Object.keys(l2).join() === 'existing,upgrade,new,pedestal');
   chk('its node is a New Service Pedestal and its note says one build per pedestal', l2.pedestal.node === 'New Service Pedestal' && /run the build once per pedestal/.test(l2.pedestal.note));
   chk('the placed service node is flagged, so the counts and the symbol know', /if\(DCFC\.level2 && DCFC\.l2Service==='pedestal'\) poi\.svcPedestal=true;/.test(ED));
-  chk('a flagged service node wears the pedestal symbol', /el\.evKind==='service' && el\.svcPedestal && ICONS\.svcped/.test(ED));
+  /* The rule moved from renderEl into omegaGearSymbol on 2026-10-29 (the ONE
+     symbol rule the map and the legend both ask, so a thing and its legend
+     row cannot be different artwork). It reads the icon table through a
+     local alias there, so accept either name — what matters is that a
+     flagged service resolves to the pedestal, not where the branch sits.
+     scripts/tests/tevmount.js §5 asserts the resolved symbol itself. */
+  chk('a flagged service node wears the pedestal symbol', /evKind==='service' && el\.svcPedestal && ICO(?:NS)?\.svcped/.test(ED));
 }
 
 console.log('\nthe counts the workbook receives');

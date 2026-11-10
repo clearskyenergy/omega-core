@@ -45,6 +45,11 @@ function chk(l, ok, x = '') { console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${l}${x ? 
 let all = true;
 
 /* ── the icon table, evaluated out of the page ───────────────────────── */
+const ICONSRC = (function () {
+  const a = ED.indexOf('const ICONS={'), b = ED.indexOf('// == EQUIPMENT LIST', a);
+  if (a < 0 || b < 0) throw new Error('ICONS is not in editor.html');
+  return ED.slice(a, b);
+})();
 const ICONS = eval('(' + bodyFrom(ED, 'const ICONS={').replace(/^const ICONS=/, '') + ')');
 
 /* ── 1. a symbol that cannot be serialised is a symbol that never exports ── */
@@ -183,13 +188,93 @@ console.log('\nthe legend says which chargers are which');
 /* ── 4. one object, one symbol ───────────────────────────────────────── */
 console.log('\nthe service pedestal wears one symbol on the whole sheet');
 {
-  chk('the map draws a flagged service with the pedestal symbol',
-    /el\.evKind==='service' && el\.svcPedestal && ICONS\.svcped/.test(ED));
+  /* the rule moved into omegaGearSymbol (§5), which is what renderEl now
+     asks — so it is asserted there, on the one copy, not on renderEl */
+  chk('a service flagged as a pedestal resolves to the pedestal symbol',
+    /el\.evKind==='service' && el\.svcPedestal && ICO\.svcped/.test(ED));
   chk('the legend now keys it the same way',
     /if\(e\.type==='evgear' && e\.evKind==='service' && e\.svcPedestal\) id='svcped';/.test(ED));
   chk('so both resolve to the same drawing', typeof ICONS.svcped === 'function');
   chk('and to the same words, merging the two placement paths into one row',
     /\{id:'svcped',\s*label:'Service Pedestal'\}/.test(ED));
+}
+
+/* ── 5. one object, one symbol, for EVERY role ───────────────────────
+   Menachem, 172 Summer St, 2026-10-29: "the outdoor panel disconnect is
+   still not the same icon". The service pedestal above was the same fault
+   one branch over, and fixing it there left the rest: renderEl ran a
+   four-way branch to pick a symbol while renderLegend reached into ICONS
+   by id, so EVERY guided-build role drew one thing on the plan and
+   another in the key. Eleven roles, eleven mismatches; two were reported.
+   The branch now lives in omegaGearSymbol and both callers ask it. */
+console.log('\nthe key draws what the map drew, for every role');
+{
+  /* the real symbol tables and the real resolver, evaluated out of the page */
+  var vis = fs.readFileSync(path.join(ROOT, 'omega-equipment-visuals.js'), 'utf8');
+  var EVRENDER = (function () {
+    var a = ED.indexOf('var EVRENDER = {'), b = ED.indexOf('/* Footprint (ft) for realistic scaling', a);
+    return ED.slice(a, b);
+  })();
+  var GEAR = (function () {
+    var open = 'function omegaGearSymbol(el, w, h){';
+    var close = 'try{ window.omegaGearSymbol = omegaGearSymbol; }catch(e){}';
+    var a = ED.indexOf(open), b = ED.indexOf(close, a);
+    if (a < 0 || b < 0) throw new Error('omegaGearSymbol is not in editor.html');
+    return ED.slice(a, b);
+  })();
+  var sandbox = { window: {}, console: console };
+  sandbox.window.window = sandbox.window;
+  /* omega-equipment-visuals.js is an IIFE that ends `})(window)`, so give
+     it a window to hang OmegaEquipmentVisuals on rather than a root arg */
+  new Function('window', vis)(sandbox.window);
+  var run = new Function('window', 'OmegaEquipmentVisuals',
+    ICONSRC + '\n' + EVRENDER + '\n' + GEAR + '\nreturn omegaGearSymbol;');
+  var gearSymbol = run(sandbox.window, sandbox.window.OmegaEquipmentVisuals);
+
+  function art(s) { return String(s).replace(/\s(?:width|height)="[^"]*"/g, ''); }
+  var ROLES = [
+    ['outdoor panel', { type: 'evgear', evKind: 'panel', label: 'Outdoor Panel / Disconnect' }],
+    ['switchgear', { type: 'evgear', evKind: 'panel', label: 'Main Switchgear' }],
+    ['meter bank', { type: 'evgear', evKind: 'meter' }],
+    ['utility service', { type: 'evgear', evKind: 'service' }],
+    ['service pedestal', { type: 'evgear', evKind: 'service', svcPedestal: true }],
+    ['transformer', { type: 'evgear', evKind: 'xfmr' }],
+    ['disconnect', { type: 'evgear', evKind: 'disco' }],
+    ['bess', { type: 'evgear', evKind: 'bess' }],
+    ['charger', { type: 'evgear', evKind: 'charger' }],
+    ['unknown role', { type: 'evgear', evKind: 'nosuchthing' }]
+  ];
+  var bad = [], blank = [];
+  ROLES.forEach(function (r) {
+    var onMap = gearSymbol(r[1], 60, 78), inKey = gearSymbol(r[1], 16, 16);
+    if (art(onMap) !== art(inKey)) bad.push(r[0]);
+    if (!onMap || onMap.length < 20) blank.push(r[0]);
+  });
+  chk('every role draws the same artwork at map size and at key size', bad.length === 0, bad.join(', '));
+  chk('and no role comes back blank', blank.length === 0, blank.join(', '));
+
+  /* the specific report: the outdoor panel is the catalogue cabinet, which
+     is NOT what ICONS.panel draws */
+  var panelSym = gearSymbol({ type: 'evgear', evKind: 'panel', label: 'Outdoor Panel / Disconnect' }, 16, 16);
+  chk("the outdoor panel is the catalogue's cabinet, not the ICONS badge",
+    art(panelSym) !== art(ICONS.panel(16)));
+  chk('a service pedestal still wears the pedestal symbol',
+    art(gearSymbol({ type: 'evgear', evKind: 'service', svcPedestal: true }, 16, 16)) === art(ICONS.svcped(16)));
+  chk('a plain service still wears the meter, not the pedestal',
+    art(gearSymbol({ type: 'evgear', evKind: 'service' }, 16, 16)) !== art(ICONS.svcped(16)));
+  chk("a charger with a product photo is drawn as that photo",
+    /<img/.test(gearSymbol({ type: 'evgear', evKind: 'charger', evImg: 'data:image/png;base64,AA' }, 16, 16)));
+
+  /* both call sites go through the one function, and nowhere else */
+  chk('renderEl asks it', /var _gearHtml=omegaGearSymbol\(el,gw,gh\);/.test(ED));
+  chk('renderLegend asks it', /ico=omegaGearSymbol\(_rel,16,16\)/.test(ED));
+  chk('the legend keeps the element each row stands for', /if\(!_rowEl\[id\]\) _rowEl\[id\]=e;/.test(ED));
+  chk('the old four-way branch is gone from renderEl',
+    !/_gearHtml=_visuals\.symbol\(_gearKind,gw,gh\)/.test(ED));
+  chk('a charger still keeps its mounting swatch in the key',
+    /if\(_mntK && window\.OmegaEVMount\) ico=OmegaEVMount\.swatch/.test(ED));
+  chk('palette equipment still falls through to ICONS, which is what renderEl draws for it',
+    /else ico=\(\(typeof ICONS!=='undefined' && ICONS\[_base\]\)/.test(ED));
 }
 
 console.log('\n' + (all ? 'OK  tevmount' : 'FAILED  tevmount') + '\n');

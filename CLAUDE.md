@@ -984,8 +984,15 @@ these … in settings a panel that allows us to hide or show the extra
 tools in the hex"): `OmegaWorkspaceHub.items` / `hidden` / `choices` read
 the person's own `dashboard_layouts/{org}__{uid}.workspace.hubTools`
 over the area's default, the panel ends with "N more tools hidden" →
-Settings › Tools in the hub (`#hub-tools`). Presentation only: the ring
-is still the plan's and All tools still lists everything. A side panel's
+Hub settings (`#hub-tools`). **The hexes are the person's to choose too**
+(2026-10-21, Tommy: "do this for all of them … put a settings tab for the
+hex right in this bottom area"): Hub settings is the last chip under the
+hub (and a row in Settings) and lists EVERY cell the plan holds, in the
+ring or not, each a switch with its tools' switches under it;
+`workspace.hubCells` (`compose`'s `ctx.hubCells`) takes a cell out or puts
+one in, never past six, never a cell the plan does not earn, a cell left
+unchosen keeping the plan's place. Presentation only: All tools still
+lists everything and every tool checks the plan. A side panel's
 page row wears the rail's own icon (`OmegaWorkspaceShell.iconFor`). Today is `omega-workspace-today.js`
 (pure, ranked, `scripts/tests/tworkspacetoday.js`): the account, to-dos,
 both ends of the Quote Desk, the referral inbox, projects ready, stalled or
@@ -1447,6 +1454,61 @@ batch. `omega-portfolio-diligence.js` draws it on `portfolio.html` and
 `site-crm.html`. `docs/PORTFOLIO-DILIGENCE.md`; held by `tdiligence.js`,
 `tgridscreen.js`, `tloipackage.js`, `tdiligencedoor.js`, `test-site-crm.js`
 and `check:workspace`.
+
+## Site assessment (2026-11-09)
+
+**Run a portfolio and see what each site carries** (Tommy: "when i upload a
+portfolio it then would run all these numbers … i should be able to select
+run … the goal is to get sites shovel ready … lock up land that is
+energized and has capacity"). `api/_lib/portfolio/assess.js` is the ONE
+rule, pure: **power** (the lower of the service and `transformerKva` × 0.8
+continuous, less a peak on file: `measured`; a figure entered: `entered`;
+no peak on file: a `ceiling`, said everywhere and never called free
+capacity; an unresolved reported peak is never subtracted and no peak is
+never a zero peak), the **compute shelf** (75 kW, 350 kW, 1 MW and 1.77 MW
+of IT at IT × PUE at the meter, the largest that fits, its return from the
+ONE contract engine `compute-contract.js` at the chip's public reference,
+marked), a **battery** (`assess-bess.js`: the grid value stack, ten years,
+taxes and the incentive-swept loan; its set is a PJM ComEd reference and
+`market.fit` says zone | market | reference, the rebate Illinois only; no
+net investment is a null IRR with the reason, never a number), **fast
+charging** (`assess-supercharger.js`: whole posts at 150 kW, never under
+four, the state's indicative price and electricity cost, XIRR at year
+ends), the **readiness checklist** (49 items, eight sections: Open,
+Screened from public data or an imported fact, Evidence on file by a
+person's mark; the shovel-ready score counts evidence alone) and the
+verifications that move the answer most. The three uses are ALTERNATIVES on
+the whole free capacity, never a stack. Both engines are pinned to the cent
+against the models they carry (`scripts/tests/tassess.js` E01, E03);
+nothing a tenant reads names a source workbook, and a workspace's own
+figures are `billing/current.portfolioAssessment`, never constants in core.
+`assess-door.js` is mounted on `api/site-crm.js`: `assess-run` (50 a call,
+the numbers from what is on file), `assess-screen-start` / `-step` (a job on
+`site_jobs`: the Grid Atlas screen's two phases by `grid-screen.js`, then
+`api/parcel.js` under the point, every handler in-process with the caller's
+headers so each keeps its own plan gate; the assessment again on what was
+found; where the diligence is on, the same screen lands on
+`diligence.screen` by its own rule), `assess-check` (a readiness mark),
+`assess-approve` (APPROVE FOR PRE-DEVELOPMENT, one use or a hybrid: the
+decision, status Pre-development, the project kinds onto `siteScopes`;
+`[]` withdraws) and `GET ?site=&assessment=1`. It writes
+`sites/{id}.assessment` only (and status and scopes on an approval), never
+the facts, revision or `updatedAt`; a row is `stale` when a fact it rests on
+changed (`inputHash`). `portfolioPartner` is who a site comes from (Francis
+Energy, EVCS): the import dialog, a column, `site-set-partner` in bulk, the
+site record; the register filters by partner, state and free capacity.
+`site-import` UPDATES a site a row names by its External ID
+(`externalSiteIds.import`; the non-blank cells only, never the tags, a
+site kept as facts refused), so a corrected sheet never duplicates.
+`portfolio.html` Runs on a selection, on every site shown and after every
+import by itself (numbers first, then four screening jobs at a time, Stop
+pauses), turns its table to Site · Status · Power · Compute · Battery ·
+Charging · Ready · Capital once any site is assessed, and the side panel
+carries the card (`omega-portfolio-assess.js`, which computes nothing).
+Send to Terra is off the bar (the door's action stays). Held by
+`tassess.js`, `scripts/test-site-crm.js` and `check:workspace`'s
+`flow /portfolio.html (assessment)` on the real library.
+`docs/PORTFOLIO-ASSESSMENT.md` carries the design and the honest list.
 
 ## Helios Intake (2026-09-30)
 
@@ -2017,6 +2079,71 @@ whole system at, never as the rate. An array stamped NextNRG's, a battery of the
 NextNRG group, and in NextNRG's own workspace every array and battery
 (`vendorOrg`, stamped by `cost-rollup.js` off the caller). The Run's lines
 ride the record (`capexLines`). `docs/NEXTNRG-MICROGRID.md`.
+
+## Grid Atlas — due diligence and fiber confirmation (2026-11-09)
+
+**A project profile is a checklist, not only a layer set** (Tommy: "upgrade
+the gridatlas to make it better for doing due dillegence on a tesla
+supercahrger site, a bess site, and a compute site use the site readiness
+checklist"). `grid-atlas-dd.js` (ES5, pure; `scripts/tests/tgridatlasdd.js`)
+holds three: Tesla Supercharger, BESS, and Data Center / Compute — the last
+IS the Solela / Francis Energy *Site Readiness Checklist, 1 MW Modular AI
+Compute*, its eight sections in its order and its own evidence wording. A
+preset carries `dd`; `analyze()` hands the pin's measurements over as one
+evidence object and draws the answer; a profile survives a manual layer
+toggle. The honesty rule is the page's own: **unknown** is a layer never
+consulted (never a zero, never averaged), **open** is evidence a person must
+produce, and pass / conditional / risk are given only on a measured reading
+— every capacity pass still says NOT confirmed. **The answer comes first**
+(Tommy: "it needs to be easy to use"): an *At a glance* card (power, fiber,
+zoning, flood, checklist, next steps) leads the pin analysis and makes no
+judgement of its own; every detail section is closed until asked for
+(`collapseSections`, `secOpen` remembered across re-renders, print opens
+all); the pin fetches grid infrastructure around ITSELF (`pinGridEnsure`)
+so the answer never depends on the zoom; `?profile=` opens on a checklist.
+`docs/GRID-ATLAS-DD.md`.
+
+**Fiber is confirmed on a ladder, never merged** (Tommy: "ways we can go and
+confirm the fiber … know on an address the fiber provider and the telecom
+details and all things needed to get fiber verification"):
+`omega-fiber-confirm.js` (ES5; `scripts/tests/tfiberconfirm.js`) — Mapped
+(route geometry), Reported (the FCC Broadband Data Collection names a
+provider with fiber in the site's census block, hex, or ~1.5 km ring),
+Quoted, Confirmed. Public data reaches Reported and no further; nothing in
+the platform marks a carrier document in hand. The same lookup reads the
+incumbent telephone company of record (FCC study areas). The panel's
+*◈ Confirm fiber* shows the telecom facts, the ordered carriers to ask with
+why, the nine-item verification package, and copies an RFI and a
+verification brief that wear no platform or tenant name.
+`scripts/fiber-confirm-portfolio.js` runs a portfolio sheet (deal data:
+output to `work/`, never committed; a town-centre geocode is marked
+APPROXIMATE). `docs/FIBER-CONFIRMATION.md`.
+
+**The route inventory grows through a vetted registry**
+(`scripts/import-state-fiber.js`, then ALWAYS
+`scripts/import-published-fiber.js`): a layer is bundled only if a public
+agency published it or it is a carrier's own published network map —
+never a contractor upload, a locate export, a design export or internal
+plant left shared ("reachable without a token is not published"), and
+never customer drops. High-volume sources are tiled per carrier, status and
+0.1° cell; geometry is the publisher's at six decimals; a line whose
+medium the provider did not state is labelled so. `docs/FIBER-STATE-EXPANSION.md`.
+
+**Zoning & legislation is REPORTED, never a legal status** (Tommy, of a
+competitor's tracker: "take this site and find out what we can use" — the
+idea was used; no compiled commercial tracker is ever a source).
+`omega-zoning-watch.js` (ES5, pure; `scripts/tests/tzoningwatch.js`) reads
+`data/zoning/measures.json` — hand-curated, a source link, publisher and
+read date on every record — for the pin's COUNTY (the FCC census block's
+first five digits) and state, by project type. The judge has **no pass**:
+rows are risk, conditional or unknown; "none on file" is conditional and
+says the coverage is incomplete; an in-force measure past its reported
+expiry reads "expiry date passed — confirm"; chamber passage is `pending`.
+The pin gives the county, never the municipality, so a city's measure is
+said to apply inside that city, and the searched address only ORDERS the
+list. Records are edited by hand with the source open;
+`scripts/check-zoning-measures.js` asks whether the links still answer.
+`docs/ZONING-LEGISLATION.md`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
