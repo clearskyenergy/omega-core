@@ -1401,7 +1401,10 @@ to the address in `TERRA_ENERGY_EMAIL` or `fin_settings/dealroom.orgs.terra`
 (never a constant; none → refused, nothing mailed), the sender in copy,
 recorded on the site (`partners.terra`) and in `partner_requests`, 25 a
 workspace a day; Terra funds its own package and is a partner, not the
-capital request. Held by `scripts/test-site-crm.js`, `npm run
+capital request. **The pages no longer offer it** (2026-11-09, Tommy:
+"remove all send to terra"): the Terra card on the site record and the
+register's Terra marks are gone; the door's `send-to-partner` and its test
+remain, uncalled by any page. Held by `scripts/test-site-crm.js`, `npm run
 test:portfolio` (the draft's T01–T35 re-homed; T26 pinned offline) and the
 workspace render check's portfolio flow. `docs/PORTFOLIO-ASSET-MANAGER-PLAN.md`
 carries the fold-in status and the go-live steps (deploy the rules by hand
@@ -1472,7 +1475,10 @@ marked), a **battery** (`assess-bess.js`: the grid value stack, ten years,
 taxes and the incentive-swept loan; its set is a PJM ComEd reference and
 `market.fit` says zone | market | reference, the rebate Illinois only; no
 net investment is a null IRR with the reason, never a number), **fast
-charging** (`assess-supercharger.js`: whole posts at 150 kW, never under
+charging** (`assess-supercharger.js`: the largest set of 4, 8 or 12 dispensers the
+free capacity carries at 150 kW each, `SIZING.sets`, since 2026-11-10 —
+Tommy: "tesla only sells things in 4,8, and 12 stalls", "they are called
+dispensers not posts"; the keys stay `posts` — never under
 four, the state's indicative price and electricity cost, XIRR at year
 ends), the **readiness checklist** (49 items, eight sections: Open,
 Screened from public data or an imported fact, Evidence on file by a
@@ -1486,7 +1492,10 @@ figures are `billing/current.portfolioAssessment`, never constants in core.
 the numbers from what is on file), `assess-screen-start` / `-step` (a job on
 `site_jobs`: the Grid Atlas screen's two phases by `grid-screen.js`, then
 `api/parcel.js` under the point, every handler in-process with the caller's
-headers so each keeps its own plan gate; the assessment again on what was
+headers so each keeps its own plan gate (each named in a LITERAL `require`
+and its data files on `api/site-crm.js` in `vercel.json`, or the deploy
+leaves it out: `scripts/tests/tscreenbundle.js`; a screen that located
+nothing is never kept as fresh); the assessment again on what was
 found; where the diligence is on, the same screen lands on
 `diligence.screen` by its own rule), `assess-check` (a readiness mark),
 `assess-approve` (APPROVE FOR PRE-DEVELOPMENT, one use or a hybrid: the
@@ -1505,10 +1514,91 @@ import by itself (numbers first, then four screening jobs at a time, Stop
 pauses), turns its table to Site · Status · Power · Compute · Battery ·
 Charging · Ready · Capital once any site is assessed, and the side panel
 carries the card (`omega-portfolio-assess.js`, which computes nothing).
-Send to Terra is off the bar (the door's action stays). Held by
+**A funding approval made in a connected app counts** (2026-11-10, Tommy:
+"the committe can use the asana app to preview and review and approve and it
+gets then show on the platform"), where the settings name one
+(`funding.attest { source, keyHash }`, staff-written): `assess-fund-link`
+ties a submitted request to the ONE record the app's server made for it, by
+id, and `assess-fund-attest` records the approval when that record was marked
+done, after the link, by a person whose address there is a committee
+member's (`fundingChange` `link` / `attest`; the decision keeps `via`). Both
+are the app server's, never a person's: refused without its key in
+`x-register-attest`, of which the settings hold only the sha256. A decline is
+made here. Send to Terra is off the bar (the door's action stays). Held by
 `tassess.js`, `scripts/test-site-crm.js` and `check:workspace`'s
 `flow /portfolio.html (assessment)` on the real library.
 `docs/PORTFOLIO-ASSESSMENT.md` carries the design and the honest list.
+
+**The site assessment** (2026-11-09, `docs/PORTFOLIO-ASSESSMENT.md`;
+`api/_lib/portfolio/assess.js` and its door `assess-door.js` on
+`api/site-crm.js`, drawn by `omega-portfolio-assess.js`) sizes compute, a
+battery and fast charging on each site's free power. Rules that came later
+the same day, each in Tommy's words in the doc:
+- **One right-sized pod a site**: 75, 150, 350, 500, 750 kW (Nano pods,
+  under 1 MW of IT) and 1 MW (the Micro pod), the largest single unit the
+  power carries, never a row of 75s; only the Micro pod repeats. The
+  chiller's power is inside the PUE and said (`compute.cooling`); the pad is
+  not modelled and says so. Beside the pod the answer carries `pairing`: a
+  battery on the kW the pod leaves, the one hybrid that is modelled.
+- **Electricity is the site's**: its own price, else the rate book for its
+  ZIP (`rateOf`), never one flat default for every site.
+- **Compute on the offtake partner's figures** only where the workspace asks
+  (`portfolioAssessment.compute.basis: 'partner'`): Lightsmith's stated
+  $35M / $26M a year / $4M utility for 1 MW is ONE record,
+  `compute-contract.js PARTNER.reference`, unverified, run through the one
+  contract engine twice (this site's electricity, and their utility figure)
+  and both shown. The revenue is a figure, never a contract.
+- **Compute by chip, on the pod maker's own sheet** (2026-11-11, Tommy:
+  "Let's base it off the chips this is the first real spec sheet we have
+  received"): `api/_lib/pod-spec.js` is the ONE record of the maker's 1 MW
+  pod (1 MW of COOLING, design pPUE 1.091, one to four stand-alone pods a
+  site) and what it carries by chip: 432 RTX PRO 6000 (430 kW of IT), 288
+  GB300 (600 kW, 680 at peak), 288 Vera Rubin (748 or 908 kW). Read only
+  where the workspace asks (`portfolioAssessment.compute.basis: 'chips'`;
+  the sheet is the maker's confidential document, never a default): every
+  configuration that fits is priced by the one contract engine on its own
+  GPUs, at the chip's public reference or the workspace's own price
+  (`compute.pod.prices`); a chip with neither shows no return, a chip the
+  library does not carry is sized only; capital is the engine's estimate
+  until the maker quotes (`compute.pod.costUsd`). The heat is the sheet's
+  table, never interpolated; the checklist reads no water, two routes, the
+  pad and the feed off it. **It is the BASELINE** (Tommy: "We need to note
+  that our baseline data comes from here"): `POD.baseline` names what it
+  covers (the physical figures) and what it does not (the pod's price, the
+  GPU-hour price, the offtake), and is the first note under every answer
+  sized on it. `tassess.js` C01 to C06.
+- **A utility-side upgrade request is a mark** (`assess-upgrade`): it sizes
+  nothing today; what it would carry rides beside the answer. Every sized
+  site under 1 MW carries the upgrade TO ASK FOR (`upgradeAdvice`, derived:
+  what 1,200 kW free is short by, and the next size up), never a mark until
+  a person makes it.
+- **The funding list** (`portfolioAssessment.funding`, a committee named by
+  staff through `scripts/set-portfolio-assessment.js`): there the finance
+  marketplace stands down (`send-to-finance` is 409), a site is screened,
+  submitted (`assess-fund-submit`) and decided by a committee member on a
+  VERIFIED address alone (`assess-fund-decide`; staff are refused too). Core
+  names nobody.
+- **The gates and the review** are a workspace's own operating rules,
+  never core's (`portfolioAssessment.gates` and `.review`): G0 to G6 are
+  DERIVED from the record (`gatesOf`), OPEN is never failed, and the
+  review's decision (own and operate, or portfolio / flip) stands only
+  when every member has voted the same way (`assess-review-vote`, a member
+  on a verified address; staff are refused too).
+- **Closing a site** (`portfolioAssessment.closing`, `assess-closing`):
+  purchased from the partner, the host agreement assigned to the workspace,
+  a lease of the years it needs, each recorded by a person; site control
+  (G0) passes when all three stand and the lease gate reads the new lease.
+  The screen's lease years and the closing lease are two questions, never
+  one number.
+- **A withdrawn approval puts the site's status back** (`statusBefore`).
+- **The diligence report** is the page's print of `GET ?assessment=1`
+  (`OmegaPortfolioAssess.report`), from a hidden frame.
+- The battery and fast-charging engines were checked against their source
+  models and against an independent evaluation of those models' formulas
+  (`tassess.js` E05, E06): a change in either engine's arithmetic fails
+  there. The three returns are on three bases, each said.
+Held by `scripts/tests/tassess.js`, `scripts/test-site-crm.js` and the
+`flow /portfolio.html (funding list)` pass of `check:workspace`.
 
 ## Helios Intake (2026-09-30)
 
@@ -1838,16 +1928,53 @@ working; only what a person reads says Omega Maximus.
   (`SITE_VIEW_FT`, 700 ft; it opened on one roof) and a drawing that moved
   with it whole; the Site tab's own **Show parcel lines** is the same layer
   as Layers' switch; Use as site boundary zooms to the lot.
-- **The photo at any zoom** (Tommy, 2026-10-20: "i cant see the map if im
-  zoomed out"): tiles are picked at the screen's own pixels (a Retina screen
-  gets the next level, sharp), and past the tiles the screen holds at their
-  own size `layoutMap` steps one level coarser at a time, down to county
-  scale (`PHOTO_MIN_Z` 12), instead of going blank (it hid the photo past 24
-  tiles: a 12-acre lot read "Zoom in"). Esri's World Imagery has nothing
-  past level 19 here (`PHOTO_MAX_Z`; level 20 answers "Map data not yet
-  available"), so closer than about 0.3 m a pixel the photo is soft; Site
-  Map is sharper there because it is Google's satellite (the browser Maps
-  key, billed per load), a decision not yet taken for Maximus.
+- **The photo is Google's satellite** (Tommy, 2026-10-20: "switch to google
+  satellite"): `omega-editor-v2-satellite.js` puts a Maps JavaScript API
+  satellite map (the browser key, `config.js googleMapsKey`, the same key
+  as Site Map's built-in default, with the Settings › API Keys override
+  `omegaMapsKey` first; one map load a page, moving it free) under the
+  drawing and moves it to the editor's own view (centre and scale,
+  `camera()`); it takes no input. Past the deepest imagery at the site
+  (`MaxZoomService`, 21 here) it is magnified by CSS one level, then hands
+  over. Esri's tiles stay under it (hidden) for the PNG export and show
+  whenever Google cannot (no key, a refused key, offline): `layoutMap` picks
+  them at the screen's own pixels and steps coarser down to county scale
+  (`PHOTO_MIN_Z` 12) instead of going blank (it hid the photo past 24
+  tiles: "i cant see the map if im zoomed out"); Esri has nothing past
+  level 19 here (`PHOTO_MAX_Z`). The scale bar sits above Google's logo;
+  nothing copies or exports Google's imagery. `teditorv2satellite.js`,
+  and `check:editor-v2` holds the offline fallback.
+- **View › Icons** (Tommy, 2026-10-21: "a function that puts the icons or
+  images of the units like we had in the first editor"): each unit keeps its
+  box, its true footprint, and gets Site Map's own icon on the middle of it
+  (the BESS's battery cabinets, the transformer, the charger, the utility
+  pole), the box's size on screen from 22 to 72 px, upright, with the name
+  under it as on Site Map. The pictures are `omega-equipment-icons.js`,
+  WRITTEN from editor.html's `const ICONS` by
+  `scripts/build-equipment-icons.js` (editor.html is not edited from here);
+  never edit it by hand: `teditorv2icons.js` runs the builder's `--check`
+  and fails when Site Map's icons move on. `omega-editor-v2-icons.js`
+  `iconOf` is the ONE map from a Maximus equipment key to a Site Map icon.
+  Off by default, remembered by this browser (`omegaMaximusIcons`).
+- **The buildings on the lot come with it** (Tommy, 2026-10-21: "generate
+  on the parcel for the address the building … useful especially for the
+  3d"): `omega-editor-v2-buildings.js` reads FEMA's USA Structures (every US
+  structure over about 450 sq ft, its use and its height) for the lot's box,
+  else OpenStreetMap's buildings, keeps those whose middle is on the lot and
+  adds each as an Obstruction with `building{ heightFt, use, areaSqFt,
+  source, year, id }`, in one step (Undo takes them back), never twice and
+  never over one already drawn. It runs by itself after Use as site
+  boundary (said after the lot line) and from the Site tab's Find
+  buildings. Guided builds keep off them; 3D stands each at its source's
+  height (the 51st Avenue warehouse: 8.85 m, 29 ft), a hand-drawn
+  obstruction at the default it always had. Read, never invented: no
+  height says so. The FEMA query carries NO paging parameter: since 2026-11
+  its service never answers one that does (`resultRecordCount`; the same box
+  without it answers in a third of a second), so every lookup waited out its
+  limit and found nothing. Each service gets 12 s, and a lookup that fails
+  says who did not answer, never that neither has a building.
+  `teditorv2buildings.js`; `check:editor-v2` runs it on a stand-in FEMA
+  answer.
 - **Names never on one another** (Tommy: "clean up how you show the guided
   build"): `drawNames` paints every name after the shapes: text, callouts,
   dimensions and array notes where they belong; a box's name inside it when
@@ -1860,6 +1987,41 @@ working; only what a person reads says Omega Maximus.
   first from the lot's south-west corner; inside the lot line, clear of the
   obstructions (by their extent) and of what is placed, beside the lot when
   there is no room (`scripts/tests/teditorv2place.js` §6).
+- **And you put it down** (Tommy, 2026-10-21: "it is just auto placing it,
+  it should work almost identical to how the other function does"): the
+  plan comes back IN HAND (`ctx.hold` → the editor's `holdBuild`), laid out
+  as the server laid it, on that clear spot; it follows the pointer a grid
+  step at a time, R or a right-click turns it a quarter about its middle,
+  a click puts it down under the pointer, Enter on the clear spot, Esc puts
+  it away and nothing is drawn; a finger (no pointer to follow) taps to move
+  it and taps it to put it down. Once moved or turned, the clear spot it was
+  offered stays drawn (white dashes on a dark edge, read on any photo), and
+  "Start with a guided build" is never painted over it. Moving and turning are the build module's
+  `movePlan` (a copy, through the geometry's own `rotateEntity`); red means
+  a unit would stand on gear, an array table or a building, judged by their
+  real outlines (`solids`, `clashes`: an L-shaped building does not claim
+  its yard; touching is not standing on); put down, it is one group,
+  selected, and the status says if it stands on something or crosses the
+  lot line. An array bound to its lot (Auto layout) goes straight down. The
+  ribbon's single unit shows the same box and icon under the pointer before
+  its click. `teditorv2place.js` §7; `check:editor-v2` holds, moves, turns,
+  drops and puts one away.
+- **The stage never scrolls** (2026-11-09, found walking a real site): the
+  photo's and the county's tiles reach past `#stage`, so under
+  `overflow: hidden` anything that scrolled a piece of it into view (a
+  keyboard focus, text selected and dragged past the edge, a tool that
+  centres a button before it clicks) slid the drawing, the photo and the
+  cards out of place until a reload. `#stage` is `overflow: clip` (no scroll
+  container at all), and the editor puts a scroll back where a browser has
+  no clip; `check:editor-v2` holds both.
+- **The ribbon and what it says**: the ribbon is one strip, longer than a
+  laptop is wide, and a mouse wheel rolls along it (View and its Icons
+  switch are at the far end). Edit (Undo, Redo, Delete, Copy, Paste) is on
+  every tab and each says what it did, so the status bar never keeps
+  "Erased." over what Undo brought back. A run's time is shown on the
+  viewer's own clock (`OmegaEditorV2Analyze.when`; the record keeps UTC, and
+  an evening run read as tomorrow at 3 am). 3D reads HIFLD's unknown voltage
+  (-999999) as a line with no figure, never "-999999 kV".
 - **Never a browser popup to confirm**: the Claude app's browser pane (and a
   kiosk) answers `window.confirm` "no" without showing it, so a button that
   asked that way did nothing (2026-10-20, the price book's Seed). Send to
@@ -1870,6 +2032,12 @@ working; only what a person reads says Omega Maximus.
   photo, the address search, the county parcel and the 3D ground are the
   public services the page calls; the parcel, planner, cost, value-stack and
   solar answers are the real server code; its figures come from the run).
+  The photo is Google's, as the page shows it, waited on through
+  `OmegaEditorV2Satellite.tilesLoaded()` and credited on the page with the
+  map's own "Imagery ©" line; Icons is on; the BESS build is put down on
+  the spot it was offered (Enter) and the DCFC build moved by hand to the
+  frontage, turned with R and clicked down, each asserted clear of the
+  building and inside the lot line.
   It needs the network, so it is retaken by running it after an editor
   change, like the Site Map guide; the cover mark is
   `scripts/guides/assets/omega-glow.jpg`.

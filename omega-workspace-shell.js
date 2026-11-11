@@ -57,6 +57,7 @@
     '.ows-rail::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,transparent 40%,var(--ows-rail) 100%);opacity:.9}.ows-rail>*{position:relative}',
     '.ows-rail .sn-head{display:flex;align-items:center;gap:10px;padding:4px 8px 16px;color:#fff}',
     '.ows-rail .sn-mark{width:34px;height:34px;border-radius:9px;background:radial-gradient(circle at 30% 30%,#17293A,#050A11);display:grid;place-items:center;font:700 20px Poppins,"DM Sans",sans-serif;color:#2FE3C8;box-shadow:inset 0 0 0 1px rgba(53,198,244,.35);flex:none}',
+    '.sn-head .sn-mark img{width:68%;height:68%;object-fit:contain;display:block}',
     '.ows-rail .sn-head b{display:block;font:600 15px/1.1 Poppins,"DM Sans",sans-serif}.ows-rail .sn-head small{font-size:11px;color:var(--ows-rail-dim)}',
     '.ows-rail .sn-section-label{padding:14px 8px 4px;font:500 10.5px "DM Mono",ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--ows-rail-dim)}',
     '.ows-rail .sn-divider{height:0;margin:6px 0}',
@@ -196,7 +197,32 @@
 
   var state = { current: 'home', opts: {}, ws: null, user: null, list: [] };
 
-  function headHtml(cls) { return '<div class="sn-head' + (cls ? ' ' + cls : '') + '"><span class="sn-mark">Ω</span><div><b id="ows-product">' + esc(productName()) + '</b><small id="ows-by">' + (productName() === PRODUCT ? 'by ClearSky' : 'Powered by ClearSky OMEGA') + '</small></div></div>'; }
+  /* Under a white label the head wears the TENANT'S platform, from the
+     first paint: the attribution line is the contract's own
+     (OmegaWhiteLabel.attribution(), '' when the agreement removes our
+     name — never a literal that flashes it), and the mark is the tenant's
+     (whiteLabel.markUrl), else the short name's initial — never the Ω,
+     which IS our mark. One rule for headHtml and every repaint. */
+  function byLine() {
+    if (productName() === PRODUCT) return 'by ClearSky';
+    try { if (global.OmegaWhiteLabel && OmegaWhiteLabel.attribution) return OmegaWhiteLabel.attribution(); } catch (e) {}
+    return '';
+  }
+  function markHtml() {
+    if (productName() !== PRODUCT) {
+      var url = '', short = '';
+      try {
+        if (global.OmegaWhiteLabel) {
+          url = OmegaWhiteLabel.markUrl ? OmegaWhiteLabel.markUrl() : '';
+          short = OmegaWhiteLabel.shortName ? OmegaWhiteLabel.shortName() : '';
+        }
+      } catch (e) {}
+      if (url) return '<span class="sn-mark wl"><img src="' + esc(url) + '" alt=""></span>';
+      return '<span class="sn-mark">' + esc((short || productName()).charAt(0).toUpperCase()) + '</span>';
+    }
+    return '<span class="sn-mark">Ω</span>';
+  }
+  function headHtml(cls) { return '<div class="sn-head' + (cls ? ' ' + cls : '') + '">' + markHtml() + '<div><b id="ows-product">' + esc(productName()) + '</b><small id="ows-by">' + esc(byLine()) + '</small></div></div>'; }
   /* opts.nav replaces NAV for this mount only. The live workspace, the
      projects page and the marketplace do not pass one, so their rail stays
      the list above. A preview page (workspace-v2) passes its own. */
@@ -288,7 +314,11 @@
     var name = ws.clientName || ws.name || (ws.orgId || '').split('.')[0] || 'Workspace';
     var role = ws.role || 'member', tier = o.plan || ws.accountTier || '';
     var pn = byId('ows-product'); if (pn) pn.textContent = productName();
-    var by = byId('ows-by'); if (by) by.textContent = productName() === PRODUCT ? 'by ClearSky' : (global.OmegaWhiteLabel && OmegaWhiteLabel.attribution ? OmegaWhiteLabel.attribution() : '');
+    var by = byId('ows-by'); if (by) by.textContent = byLine();
+    /* the mark and the tab title follow the same answer (the white label can
+       arrive after the first paint, on omega:entitlements) */
+    Array.prototype.forEach.call(doc.querySelectorAll('.sn-head .sn-mark'), function (m) { m.outerHTML = markHtml(); });
+    if (productName() !== PRODUCT && doc.title && doc.title.indexOf(PRODUCT) >= 0) doc.title = doc.title.split(PRODUCT).join(productName());
     var co = byId('ows-co'); if (co) co.innerHTML = ws.logo ? '<img src="' + esc(ws.logo) + '" alt="" onerror="this.parentNode.textContent=\'' + esc(initials(name)) + '\'">' : esc(initials(name));
     var cn = byId('ows-co-name'); if (cn) cn.textContent = name;
     var cs = byId('ows-co-sub'); if (cs) cs.textContent = (ws.orgId || '') + (role ? ' · ' + role : '') + (tier ? ' · ' + tier : '');

@@ -24,13 +24,55 @@
           APPROVE FOR PRE-DEVELOPMENT (one use or a hybrid): the decision on
           the site, its status to Pre-development, the project kinds the
           Site Map project will open on; uses: [] withdraws the approval
+     POST assess-upgrade { ids[] | site, status?: requested|granted|declined|
+          withdrawn, unit? | targetKw?, askedBy?, note? }
+          A UTILITY-SIDE UPGRADE REQUEST marked on the site: the power asked
+          for at the meter (a shelf unit's, or a figure), who is asking (the
+          site's portfolio partner unless named), and where it stands. It
+          never changes what is sized today; the answer carries what the
+          upgrade would carry beside it.
+     POST assess-fund-submit { ids[] | site, uses[], note? }
+     POST assess-fund-withdraw { ids[] | site }
+     POST assess-fund-decide { ids[] | site, decision: approved|declined, note? }
+          THE FUNDING LIST, for a workspace whose settings name a finance
+          committee (portfolioAssessment.funding; 409 elsewhere): a site is
+          SCREENED first, then submitted with what the funding is for, then
+          approved or declined by a member of the committee signed in on a
+          VERIFIED address (403 for anybody else, staff included). Each
+          site answers for itself: a refusal names the site and why.
+     POST assess-fund-link { site, ref }
+     POST assess-fund-attest { site, ref, email, name?, completedAt, note? }
+          THE ATTESTED APPROVAL, for a workspace whose settings name a
+          connected app the committee may decide in (funding.attest; 409
+          elsewhere). Neither is a person's action: each is refused (403)
+          unless the request carries that app's server key in
+          x-register-attest, compared by its sha256 against the hash in the
+          settings (the key itself is never stored here). `link` ties a
+          submitted request to the ONE record the app's server made for it,
+          and a record already tied to another site is refused; `attest`
+          records the approval when that record was marked done, after the
+          link, by a person whose address in the app is a committee
+          member's. The decision keeps who, when it was marked and `via`.
+     POST assess-closing { ids[] | site, step: purchase|assignment|lease, done?, years?, note? }
+          A CLOSING STEP recorded on a site (409 where the workspace's
+          settings carry none): it is purchased, its host agreement is
+          assigned to the workspace, a lease of the years typed is in
+          place. An editor's; done: false takes a step back. A record of
+          what was done, never the doing of it.
+     POST assess-review-vote { ids[] | site, vote: own|flip|clear, note? }
+          THE REVIEW, for a workspace whose settings name one
+          (portfolioAssessment.review; 409 elsewhere): one member's vote on
+          a site, own and operate or portfolio / flip, on a VERIFIED
+          address (403 for anybody else, staff included). The decision is
+          DERIVED: it stands when every member has voted the same way.
      GET  (one site, &assessment=1)  fullView(): the whole answer, with the
           yearly tables and the checklist
      GET  (register)  listJoin(): the row a site, without the tables
 
    Writes: omega_orgs/{org}/sites/{id}.assessment { result, screen, parcel,
-   checklist, decision, at, by } — and, for an approval, status and
-   siteScopes — never the site's facts, revision or updatedAt (an
+   checklist, decision, statusBefore, upgrade, funding, at, by } — and, for
+   an approval, status and siteScopes (a withdrawal puts back the status the
+   site had: statusBefore) — never the site's facts, revision or updatedAt (an
    assessment is not a fact change: the compute model must not run again on
    it). Where the compute-site diligence is switched on for the workspace,
    the same screen also lands on diligence.screen by the diligence's own
@@ -38,10 +80,11 @@
    for each write (action sitecrm-assess-*). All Admin SDK only.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
+var crypto = require('crypto');
 var AS = require('./assess'), G = require('./grid-screen'), D = require('./diligence'), BR = require('./site-bridge');
 
-var ACTIONS = ['assess-run', 'assess-screen-start', 'assess-screen-step', 'assess-check', 'assess-approve'];
-var RUN_CAP = 50, SCREEN_IDS_CAP = 200, APPROVE_CAP = 200, SCREEN_FRESH_DAYS = 7, PARCEL_TIMEOUT = 12000;
+var ACTIONS = ['assess-run', 'assess-screen-start', 'assess-screen-step', 'assess-check', 'assess-approve', 'assess-upgrade', 'assess-fund-submit', 'assess-fund-withdraw', 'assess-fund-decide', 'assess-fund-link', 'assess-fund-attest', 'assess-review-vote', 'assess-closing'];
+var RUN_CAP = 50, SCREEN_IDS_CAP = 200, APPROVE_CAP = 200, MARK_CAP = 200, SCREEN_FRESH_DAYS = 7, PARCEL_TIMEOUT = 12000;
 
 function owns(action) { return ACTIONS.indexOf(String(action || '')) >= 0; }
 function day(now) { return String(now).slice(0, 10); }
@@ -71,7 +114,7 @@ function make(deps) {
   function screenOf(data) { var a = data && data.assessment, d = data && data.diligence; return (a && a.screen) || (d && d.screen && d.screen.complete ? d.screen : null) || null; }
   function compute(id, data, cfg) {
     var a = (data && data.assessment) || {};
-    return AS.assess(flat(id, data), { screen: screenOf(data), parcel: a.parcel || null, marks: a.checklist || null, config: cfg, now: deps.now() });
+    return AS.assess(flat(id, data), { screen: screenOf(data), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, config: cfg, now: deps.now() });
   }
   function mustEdit(c) { if (c.canEdit === false) throw fail(403, 'Your role in this workspace can read the assessment but not run it'); }
 
@@ -109,7 +152,7 @@ function make(deps) {
     snaps.forEach(function (s) {
       if (!s.exists) throw fail(404, 'Not in this workspace’s register: ' + s.id);
       var sc = (s.data().assessment || {}).screen;
-      if (sc && sc.complete && sc.at && sc.at > cutoff && c.b.force !== true) { fresh.push(s.id); return; }
+      if (sc && sc.complete && sc.located && sc.at && sc.at > cutoff && c.b.force !== true) { fresh.push(s.id); return; }
       items[s.id] = { status: 'pending' };
     });
     var keys = Object.keys(items), jid = 'ascr_' + day(deps.now()).replace(/-/g, '') + '_' + hash(keys.sort().join(',') + '|' + c.by), jref = c.root.collection('site_jobs').doc(jid), ex = await jref.get();
@@ -156,7 +199,7 @@ function make(deps) {
         var st = BR.normalize(id, d2), ch = D.change(st.diligence, 'screen', { screen: r.screen }, { site: st, config: D.configOf(billing), role: 'member', canEdit: true, by: c.by, now: deps.now() });
         patch.diligence = plain(ch.diligence); moved = ch.event.moved || []; d2 = Object.assign({}, d2, { diligence: ch.diligence });
       }
-      a.result = AS.assess(flat(id, Object.assign({}, d2, { assessment: a })), { screen: a.screen, parcel: a.parcel || null, marks: a.checklist || null, config: cfg, now: deps.now() });
+      a.result = AS.assess(flat(id, Object.assign({}, d2, { assessment: a })), { screen: a.screen, parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, config: cfg, now: deps.now() });
       a.at = deps.now(); a.by = c.by; patch.assessment = plain(a);
       tx.update(sref, patch);
       tx.create(c.db.collection('omega_audit').doc(), { action: 'sitecrm-assess-screen', orgId: c.org, siteId: id, by: c.by, at: deps.now(), jobId: job.id, located: !!(loc && loc.usable), parcel: !!(parcel && parcel.ok), errors: (r.screen.errors || []).length, moved: moved });
@@ -187,7 +230,7 @@ function make(deps) {
       var data = cur.data() || {}, a = Object.assign({}, data.assessment || {}), marks = Object.assign({}, a.checklist || {}), was = marks[item] ? marks[item].state : 'open';
       if (state === 'open' && !note) delete marks[item]; else marks[item] = { state: state, note: note || null, by: c.by, at: deps.now() };
       a.checklist = marks;
-      a.result = AS.assess(flat(c.site, data), { screen: screenOf(data), parcel: a.parcel || null, marks: marks, config: cfg, now: deps.now() });
+      a.result = AS.assess(flat(c.site, data), { screen: screenOf(data), parcel: a.parcel || null, marks: marks, upgrade: a.upgrade || null, config: cfg, now: deps.now() });
       a.at = deps.now(); a.by = a.by || c.by;
       tx.update(sref, { assessment: plain(a) });
       tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-check', orgId: c.org, siteId: c.site, by: c.by, at: deps.now(), item: item, from: was, to: state, note: note || null }));
@@ -207,6 +250,12 @@ function make(deps) {
       if (!s.exists) { missing.push(s.id); continue; }
       var data = s.data() || {}, a = Object.assign({}, data.assessment || {}), was = a.decision && a.decision.status === 'approved' ? a.decision.label : null;
       a.decision = plain(dec);
+      /* the status the site had before it was approved, so a withdrawal puts it
+         back (2026-11-09, Tommy: "why doesnt this say operational after i
+         withdrew an approval": the approval wrote Pre-development over
+         Operational and the withdrawal could only blank it) */
+      var before = a.statusBefore != null ? a.statusBefore : (data.status && data.status !== AS.PREDEV_STATUS ? data.status : '');
+      if (dec.status === 'approved') a.statusBefore = before; else delete a.statusBefore;
       var patch = { assessment: plain(a) };
       if (dec.status === 'approved') {
         patch.status = AS.PREDEV_STATUS;
@@ -215,7 +264,7 @@ function make(deps) {
         patch.siteScopes = scopes.slice(0, 7);
         var rec = a.result && a.result.recommend, fits = rec ? rec.fits.map(function (f) { return f.use; }) : null;
         if (fits) dec.uses.forEach(function (u) { if (fits.indexOf(u) < 0) notFitting.push({ siteId: s.id, name: data.name || s.id, use: u }); });
-      } else if (data.status === AS.PREDEV_STATUS) patch.status = '';
+      } else if (data.status === AS.PREDEV_STATUS) patch.status = before;
       batch.update(s.ref, patch);
       batch.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-approve', orgId: c.org, siteId: s.id, by: c.by, at: deps.now(), status: dec.status, uses: dec.uses, was: was, note: dec.note }));
       done.push(s.id); n += 2;
@@ -227,8 +276,150 @@ function make(deps) {
     return { ok: true, status: dec.status, uses: dec.uses, label: dec.label, count: done.length, ids: done, missing: missing, notFitting: notFitting, note: words };
   }
 
+  /* ── one transaction a site: read, change by the library's rule, assess again where the answer moves ── */
+  function idsOf(c) { return c.site && !Array.isArray(c.b.ids) ? [c.site] : idList(c.b.ids, MARK_CAP, fail); }
+  async function each(c, ids, fn) {
+    var done = [], refused = [];
+    for (var i = 0; i < ids.length; i++) {
+      var sref = c.root.collection('sites').doc(ids[i]);
+      try {
+        var r = await c.db.runTransaction(async function (tx) {
+          var cur = await tx.get(sref); if (!cur.exists) throw fail(404, 'Not in this workspace’s register');
+          return fn(tx, sref, cur.data() || {});
+        });
+        done.push(Object.assign({ siteId: ids[i] }, r || {}));
+      } catch (e) {
+        if (ids.length === 1 || !(e && e.status >= 400 && e.status < 500)) throw e;   /* one site: its own refusal; many: each answers for itself */
+        refused.push({ siteId: ids[i], status: e.status, reason: e.message });
+      }
+    }
+    return { done: done, refused: refused };
+  }
+  function refusedWords(refused, names) {
+    if (!refused.length) return '';
+    return ' ' + refused.length + ' not changed: ' + refused.slice(0, 3).map(function (r) { return (names[r.siteId] || r.siteId) + ' (' + r.reason + ')'; }).join('; ') + (refused.length > 3 ? ' and ' + (refused.length - 3) + ' more' : '') + '.';
+  }
+
+  /* ── a utility-side upgrade request, marked ──────────────────────────── */
+  async function upgrade(c) {
+    mustEdit(c);
+    var ids = idsOf(c), cfg = AS.configOf(await billingOf(c.root)), names = {}, last = null;
+    var out = await each(c, ids, function (tx, sref, data) {
+      names[sref.id] = data.name || sref.id;
+      var a = Object.assign({}, data.assessment || {}), site = flat(sref.id, data), pw = AS.powerOf(site, screenOf(data)), was = a.upgrade ? a.upgrade.status : null;
+      a.upgrade = AS.upgradeOf(a.upgrade || null, c.b, { by: c.by, now: deps.now(), limitKw: pw.limitKw, availableKw: pw.availableKw, partner: site.portfolioPartner || data.portfolioPartner || null, pue: cfg.compute.pue, config: cfg });
+      a.result = AS.assess(site, { screen: screenOf(data), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade, config: cfg, now: deps.now() });
+      a.at = deps.now(); a.by = a.by || c.by;
+      tx.update(sref, { assessment: plain(a) });
+      tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-upgrade', orgId: c.org, siteId: sref.id, by: c.by, at: deps.now(), status: a.upgrade.status, was: was, targetKw: a.upgrade.targetKw, askedBy: a.upgrade.askedBy, note: a.upgrade.note }));
+      last = a.result.upgrade;
+      return { status: a.upgrade.status, targetKw: a.upgrade.targetKw };
+    });
+    var n = out.done.length, st = n ? out.done[0].status : String(c.b.status || 'requested');
+    var words = { requested: 'Utility-side upgrade marked as requested on ', granted: 'Upgrade marked granted on ', declined: 'Upgrade marked declined on ', withdrawn: 'Upgrade request withdrawn on ' }[st] + n + ' site' + (n === 1 ? '' : 's') + '.' +
+      (st === 'granted' && n ? ' Record the new service on each site so its sizes follow.' : '');
+    return { ok: true, status: st, count: n, done: out.done, refused: out.refused, upgrade: ids.length === 1 ? last : undefined, note: words + refusedWords(out.refused, names) };
+  }
+
+  /* ── the funding list: submitted by an editor, decided by the committee ── */
+  async function fund(c, action) {
+    var ids = idsOf(c), cfg = AS.configOf(await billingOf(c.root)), names = {}, last = null;
+    if (!cfg.funding) throw fail(409, 'This workspace has no funding list: it sends a site’s capital request to the finance marketplace');
+    var attested = action === 'link' || action === 'attest';
+    if (attested) {
+      /* the connected app's server, never a person: its key against the hash in the settings, in constant time; one site a call */
+      if (!cfg.funding.attest) throw fail(409, 'This workspace takes funding decisions here only: no connected app is named in its settings');
+      var sent = String((c.req && c.req.headers && c.req.headers['x-register-attest']) || ''), want = Buffer.from(cfg.funding.attest.keyHash, 'hex');
+      var got = crypto.createHash('sha256').update(sent).digest();
+      if (sent.length < 32 || want.length !== got.length || !crypto.timingSafeEqual(got, want)) throw fail(403, 'Only ' + cfg.funding.attest.source + ', as this workspace connected it, links a request or reports a mark made there');
+      if (!c.site || Array.isArray(c.b.ids)) throw fail(400, 'One site a call');
+      if (action === 'link') {
+        /* a record ties to ONE request: a card already standing for another site never stands for this one too */
+        var ref0 = String(c.b.ref == null ? '' : c.b.ref).trim();
+        if (/^[A-Za-z0-9_.:-]{4,64}$/.test(ref0)) {
+          var taken = await c.root.collection('sites').where('assessment.funding.attest.ref', '==', ref0).limit(3).get();
+          if (taken.docs.some(function (d) { return d.id !== c.site; })) throw fail(409, 'That record is already linked to another site’s request');
+        }
+      }
+    } else if (action === 'decide') {
+      /* who decides is the committee, by a VERIFIED address: a password account can be opened on any address without proving it */
+      if (!AS.committeeMember(cfg, c.by)) throw fail(403, 'Funding is decided by ' + cfg.funding.name + ' (' + cfg.funding.members.map(function (m) { return m.name; }).join(', ') + '). You can submit a site; you cannot approve or decline it');
+      if (!(c.caller && c.caller.claims && c.caller.claims.email_verified === true)) throw fail(403, 'Confirm your email address first: a funding decision is recorded against a verified address');
+    } else mustEdit(c);
+    var out = await each(c, ids, function (tx, sref, data) {
+      names[sref.id] = data.name || sref.id;
+      var a = Object.assign({}, data.assessment || {}), sc = screenOf(data), was = a.funding ? a.funding.status : null;
+      /* what is submitted is what is on file NOW: assessed again, so a stale figure never reaches the committee */
+      var fresh = a.result ? AS.assess(flat(sref.id, data), { screen: sc, parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, config: cfg, now: deps.now() }) : null;
+      a.funding = AS.fundingChange(a.funding || null, action, c.b, { by: c.by, now: deps.now(), config: cfg, result: fresh, screened: !!(sc && sc.complete), canEdit: c.canEdit });
+      if (action === 'submit') { a.result = fresh; a.at = deps.now(); }
+      tx.update(sref, { assessment: plain(a) });
+      var row = { action: 'sitecrm-assess-fund-' + action, orgId: c.org, siteId: sref.id, by: c.by, at: deps.now(), status: a.funding.status, was: was, uses: a.funding.uses || [], amountUsd: a.funding.amountUsd == null ? null : a.funding.amountUsd, note: typeof c.b.note === 'string' ? c.b.note.slice(0, 500) : null };
+      /* an attested write says where it came from, which record, and (for an approval) whose mark it was */
+      if (attested) { row.via = cfg.funding.attest.source; row.ref = a.funding.attest ? a.funding.attest.ref : null; if (action === 'attest') { row.decidedBy = a.funding.decision.by; row.markedAt = a.funding.decision.attested.markedAt; } }
+      tx.create(c.db.collection('omega_audit').doc(), plain(row));
+      last = AS.fundingView(a.funding);
+      return { status: a.funding.status };
+    });
+    var n = out.done.length, sites = n + ' site' + (n === 1 ? '' : 's');
+    var words = action === 'submit' ? sites + ' submitted to ' + cfg.funding.name.toLowerCase() + ' for funding.'
+      : action === 'withdraw' ? sites + ' taken off the funding list.'
+      : action === 'link' ? sites + ' linked to its record in ' + cfg.funding.attest.source + '.'
+      : action === 'attest' ? 'Funding approved on ' + sites + (last && last.decision ? ': marked by ' + last.decision.name + ' in ' + cfg.funding.attest.source : '') + '.'
+      : 'Funding ' + String(c.b.decision || '').toLowerCase() + ' on ' + sites + '.';
+    return { ok: true, action: action, count: n, done: out.done, refused: out.refused, funding: ids.length === 1 ? last : undefined, note: words + refusedWords(out.refused, names) };
+  }
+
+  /* ── a closing step, recorded ────────────────────────────────────────── */
+  async function closing(c) {
+    mustEdit(c);
+    var ids = idsOf(c), cfg = AS.configOf(await billingOf(c.root)), names = {}, last = null;
+    if (!cfg.closing) throw fail(409, 'This workspace has no closing steps in its settings');
+    var out = await each(c, ids, function (tx, sref, data) {
+      names[sref.id] = data.name || sref.id;
+      var a = Object.assign({}, data.assessment || {});
+      a.closing = AS.closingChange(a.closing || null, c.b, { by: c.by, now: deps.now(), config: cfg, canEdit: c.canEdit });
+      tx.update(sref, { assessment: plain(a) });
+      last = AS.closingView(a.closing, cfg, flat(sref.id, data));
+      tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-closing', orgId: c.org, siteId: sref.id, by: c.by, at: deps.now(), step: String(c.b.step || ''), done: c.b.done !== false && c.b.done !== 'false', years: c.b.years == null ? null : Number(c.b.years), complete: last.complete, note: typeof c.b.note === 'string' ? c.b.note.slice(0, 500) : null }));
+      return { complete: last.complete };
+    });
+    var n = out.done.length, step = String(c.b.step || ''), undo = c.b.done === false || c.b.done === 'false';
+    var word = { purchase: 'the purchase', assignment: 'the ' + cfg.closing.agreement + ' assignment', lease: 'the lease' + (c.b.years != null && !undo ? ' (' + Number(c.b.years) + ' years)' : '') }[step] || 'the step';
+    return { ok: true, count: n, done: out.done, refused: out.refused, closing: ids.length === 1 ? last : undefined,
+      note: (undo ? 'Took back ' : 'Recorded ') + word + ' on ' + n + ' site' + (n === 1 ? '' : 's') + '.' + (ids.length === 1 && last ? ' ' + last.words + '.' : '') + refusedWords(out.refused, names) };
+  }
+
+  /* ── the review: one member's vote; the decision is every member's, derived ── */
+  async function review(c) {
+    var ids = idsOf(c), cfg = AS.configOf(await billingOf(c.root)), names = {}, last = null;
+    if (!cfg.review) throw fail(409, 'This workspace has no review board in its settings');
+    if (!AS.reviewer(cfg, c.by)) throw fail(403, cfg.review.name + ' is ' + cfg.review.members.map(function (m) { return m.name; }).join(', ') + '. Only they vote');
+    if (!(c.caller && c.caller.claims && c.caller.claims.email_verified === true)) throw fail(403, 'Confirm your email address first: a vote is recorded against a verified address');
+    var out = await each(c, ids, function (tx, sref, data) {
+      names[sref.id] = data.name || sref.id;
+      var a = Object.assign({}, data.assessment || {});
+      a.review = AS.reviewChange(a.review || null, c.b, { by: c.by, now: deps.now(), config: cfg });
+      tx.update(sref, { assessment: plain(a) });
+      last = AS.reviewView(a.review, cfg);
+      tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-review-vote', orgId: c.org, siteId: sref.id, by: c.by, at: deps.now(), vote: String(c.b.vote || ''), outcome: last.outcome, note: typeof c.b.note === 'string' ? c.b.note.slice(0, 500) : null }));
+      return { outcome: last.outcome };
+    });
+    var n = out.done.length, v = String(c.b.vote || '').toLowerCase();
+    return { ok: true, count: n, done: out.done, refused: out.refused, review: ids.length === 1 ? last : undefined,
+      note: (v === 'clear' ? 'Your vote is withdrawn on ' : 'Your vote (' + (v === 'own' ? 'own and operate' : 'portfolio / flip') + ') is recorded on ') + n + ' site' + (n === 1 ? '' : 's') + '.' + (ids.length === 1 && last ? ' ' + last.words + '.' : '') + refusedWords(out.refused, names) };
+  }
+
   async function post(c) {
     var action = String(c.b.action || '');
+    if (action === 'assess-review-vote') return review(c);
+    if (action === 'assess-closing') return closing(c);
+    if (action === 'assess-upgrade') return upgrade(c);
+    if (action === 'assess-fund-submit') return fund(c, 'submit');
+    if (action === 'assess-fund-withdraw') return fund(c, 'withdraw');
+    if (action === 'assess-fund-decide') return fund(c, 'decide');
+    if (action === 'assess-fund-link') return fund(c, 'link');
+    if (action === 'assess-fund-attest') return fund(c, 'attest');
     if (action === 'assess-run') return run(c);
     if (action === 'assess-screen-start') return screenStart(c);
     if (action === 'assess-screen-step') return screenStep(c);
@@ -241,15 +432,22 @@ function make(deps) {
     var cfg = AS.configOf(await billingOf(c.root)), a = (data && data.assessment) || {};
     var result = compute(ref.id, data, cfg);
     return { result: result, ranAt: a.at || null, ranBy: a.by || null, stored: !!a.result, stale: !!a.result && a.result.inputHash !== result.inputHash,
-      screen: screenOf(data), parcel: a.parcel || null, decision: a.decision && a.decision.status === 'approved' ? a.decision : null, uses: AS.USES };
+      screen: screenOf(data), parcel: a.parcel || null, decision: a.decision && a.decision.status === 'approved' ? a.decision : null, uses: AS.USES,
+      funding: AS.fundingView(a.funding), fundingHistory: a.funding && Array.isArray(a.funding.history) ? a.funding.history : [], upgradeHistory: a.upgrade && Array.isArray(a.upgrade.history) ? a.upgrade.history : [],
+      gates: AS.gatesOf(flat(ref.id, data), result, cfg, a), review: AS.reviewView(a.review, cfg), closing: AS.closingView(a.closing, cfg, flat(ref.id, data)), closingHistory: a.closing && Array.isArray(a.closing.history) ? a.closing.history : [] };
   }
+  /* the workspace's review board, as the pages may know it (null where there is none) */
+  async function reviewInfo(c) { return AS.reviewInfo(AS.configOf(await billingOf(c.root)), c.caller && c.caller.claims && c.caller.claims.email_verified === true ? c.by : null); }
+  /* what the pages may know of the funding list: the committee's names and whether this caller decides; null where there is none */
+  async function info(c) { return AS.fundingInfo(AS.configOf(await billingOf(c.root)), c.caller && c.caller.claims && c.caller.claims.email_verified === true ? c.by : null); }
+  async function fundingMode(c) { return !!AS.configOf(await billingOf(c.root)).funding; }
   /* the register: a row a site */
   async function listJoin(c, docs) {
     var cfg = AS.configOf(await billingOf(c.root)), rows = {};
     docs.forEach(function (d) { var data = typeof d.data === 'function' ? d.data() : d; rows[d.id] = AS.listView(data && data.assessment, flat(d.id, data), { config: cfg }); });
     return rows;
   }
-  return { post: post, fullView: fullView, listJoin: listJoin, parcelOf: parcelOf };
+  return { post: post, fullView: fullView, listJoin: listJoin, parcelOf: parcelOf, info: info, fundingMode: fundingMode, reviewInfo: reviewInfo };
 }
 
 function live() {
@@ -257,11 +455,15 @@ function live() {
   return make({ A: A, now: function () { return new Date().toISOString(); }, env: process.env,
     handlers: function (req) {
       var headers = (req && req.headers) || {};
-      function bind(path, timeout) { return function (body) { return G.invoke(require(path), { method: 'POST', headers: headers, body: body, query: {} }, timeout); }; }
-      return { atlas: bind('../../grid-atlas', G.TIMEOUT.grid), network: bind('../../network-proximity', G.TIMEOUT.network), hosting: bind('../../hosting-capacity', G.TIMEOUT.hosting), parcel: bind('../../parcel', PARCEL_TIMEOUT) };
+      /* each handler is named in a LITERAL require: the deploy bundles a function from the requires it can read,
+         and a path held in a variable is not one (2026-11-09: every production screen answered "Cannot find module") */
+      function bind(load, timeout) { return function (body) { return G.invoke(load(), { method: 'POST', headers: headers, body: body, query: {} }, timeout); }; }
+      return { atlas: bind(function () { return require('../../grid-atlas'); }, G.TIMEOUT.grid), network: bind(function () { return require('../../network-proximity'); }, G.TIMEOUT.network),
+        hosting: bind(function () { return require('../../hosting-capacity'); }, G.TIMEOUT.hosting), parcel: bind(function () { return require('../../parcel'); }, PARCEL_TIMEOUT) };
     } });
 }
 var instance = null;
 function get() { if (!instance) instance = live(); return instance; }
 module.exports = { ACTIONS: ACTIONS, RUN_CAP: RUN_CAP, owns: owns, make: make, parcelOf: parcelOf,
-  post: function (c) { return get().post(c); }, fullView: function (c, ref, data) { return get().fullView(c, ref, data); }, listJoin: function (c, docs) { return get().listJoin(c, docs); } };
+  post: function (c) { return get().post(c); }, fullView: function (c, ref, data) { return get().fullView(c, ref, data); }, listJoin: function (c, docs) { return get().listJoin(c, docs); },
+  info: function (c) { return get().info(c); }, fundingMode: function (c) { return get().fundingMode(c); }, reviewInfo: function (c) { return get().reviewInfo(c); } };

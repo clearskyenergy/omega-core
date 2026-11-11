@@ -30,7 +30,7 @@
                    public reference price, marked as such
      bess          a grid-participation battery on the same free power
                    (assess-bess.js): size, capital, ten years, IRR and NPV
-     supercharger  fast-charging posts on the same free power
+     supercharger  fast-charging dispensers on the same free power
                    (assess-supercharger.js): posts, capital, fifteen years
      readiness     the compute site-readiness checklist (eight sections),
                    each item Open, Screened (public data or an imported
@@ -49,19 +49,38 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var B = require('./assess-bess'), T = require('./assess-supercharger');
-var CM = require('../omega-compute-model'), CC = require('../compute-contract'), D = require('./diligence');
+var CM = require('../omega-compute-model'), CC = require('../compute-contract'), D = require('./diligence'), UR = require('../utility-rates'), PS = require('../pod-spec');
 
 var VERSION = 1, CONFIG_KEY = 'portfolioAssessment', CONTINUOUS = 0.8;
 /* the modular shelf, by IT load. The 75 kW unit is the Omega-Core skid as the
    platform records it; the larger ones are whole nodes of the chosen chip in
-   that IT budget, priced at the engine's chipset-scaled midpoint. */
+   that IT budget, priced at the engine's chipset-scaled midpoint.
+   ONE POD A SITE, RIGHT-SIZED (2026-11-09, Tommy: "i dont want to do a model
+   of putting more 75 pods on their i want it to be sized by 75, 150, 350,
+   500, 750, and 1mW primairly this is because of spacing and we need to
+   alo account for chillers"): the largest single unit the power carries is
+   the answer, never a row of small ones — every pod brings its own chiller
+   and service clearances, so four 75s are four pads where one 350 is one.
+   Only the 1 MW Micro pod repeats, in whole megawatts, on a site that
+   carries more than one. The chiller's power is inside the PUE: what is
+   checked against the free power is IT × PUE at the meter, and the answer
+   says how much of that is cooling. The pad itself (the pod, its chiller,
+   the clearances) is the maker's figure and is not on file: said, never
+   guessed. */
 var MODULARS = [
   { key: 'm75', itKw: 75, label: '75 kW', skid: true },
+  { key: 'm150', itKw: 150, label: '150 kW' },
   { key: 'm350', itKw: 350, label: '350 kW' },
-  { key: 'm1000', itKw: 1000, label: '1 MW' },
-  { key: 'm1770', itKw: 1770, label: '1.77 MW' }
+  { key: 'm500', itKw: 500, label: '500 kW' },
+  { key: 'm750', itKw: 750, label: '750 kW' },
+  { key: 'm1000', itKw: 1000, label: '1 MW', repeats: true }
 ];
 var COMPUTE_TERM_MONTHS = 72;
+/* NANO AND MICRO (2026-11-09, Tommy: "we have Nano Pods which are anything
+   sub 1mW and then 1mW and up are micro"): the class is the unit's IT load,
+   nothing else. */
+var MICRO_FROM_KW = 1000;
+function klassOf(itKw) { return itKw < MICRO_FROM_KW ? { key: 'nano', label: 'Nano pod' } : { key: 'micro', label: 'Micro pod' }; }
 
 function num(v) { return v == null || v === '' || !isFinite(Number(v)) ? null : Number(v); }
 function r2(v) { return v == null ? null : Math.round(v * 100) / 100; }
@@ -73,12 +92,47 @@ function stateOf(site) { var a = site.address && typeof site.address === 'object
 /* the workspace's own settings (billing/current.portfolioAssessment): read
    leniently — a wrong shape is no setting */
 function configOf(billing) {
-  var raw = obj(billing && billing[CONFIG_KEY]), c = obj(raw.compute);
+  var raw = obj(billing && billing[CONFIG_KEY]), c = obj(raw.compute), ref = obj(c.reference), fu = obj(raw.funding);
+  function within(v, lo, hi) { var n = num(v); return n != null && n >= lo && n <= hi ? n : null; }
+  /* the people a workspace names: each by the address they sign in on, once */
+  function people(list) {
+    var out = [];
+    (Array.isArray(list) ? list : []).slice(0, 20).forEach(function (m) {
+      m = obj(m); var email = String(m.email || '').toLowerCase().trim();
+      if (!/^[^@\s<>"']+@[^@\s<>"']+\.[a-z]{2,}$/.test(email) || out.some(function (x) { return x.email === email; })) return;
+      out.push({ name: clean(m.name, 80) || email.split('@')[0], email: email });
+    });
+    return out;
+  }
+  /* the funding list: a workspace that funds its own sites names who decides */
+  var members = people(fu.members);
+  /* an outside app the committee may decide in (funding.attest): staff-written, named for what it is, and holding only the HASH of the key that app's server sends */
+  var att = obj(fu.attest), attest = /^[0-9a-f]{64}$/.test(String(att.keyHash || '')) ? { source: clean(att.source, 30) || 'a connected app', keyHash: String(att.keyHash) } : null;
+  var funding = fu.mode === 'committee' && members.length ? { mode: 'committee', name: clean(fu.name, 60) || 'Finance committee', members: members } : null;
+  if (funding && attest) funding.attest = attest;
+  /* the workspace's own gates (its operating rules, never core's) and who sits on its review */
+  var ga = obj(raw.gates), rv = obj(raw.review), reviewers = people(rv.members);
+  var gates = { minKva: within(ga.minKva, 1, 1000000), minLeaseYears: within(ga.minLeaseYears, 0.1, 99), irrHurdlePct: within(ga.irrHurdlePct, 0, 500) };
+  /* what must be true before a site is the workspace's own: bought, the host agreement assigned, a lease of the length it needs */
+  var cl = obj(raw.closing), closeYears = within(cl.minLeaseYears, 1, 99);
   return { bess: obj(raw.bess), supercharger: { assumptions: obj(obj(raw.supercharger).assumptions), sizing: obj(obj(raw.supercharger).sizing) },
     compute: { chipset: typeof c.chipset === 'string' ? c.chipset : null, pue: num(c.pue) > 1 && num(c.pue) < 2.5 ? num(c.pue) : null,
       partnerName: typeof c.partnerName === 'string' ? c.partnerName.slice(0, 80) : null, partnerFeePct: num(c.partnerFeePct) >= 0 && num(c.partnerFeePct) <= 50 ? num(c.partnerFeePct) : null,
-      termMonths: num(c.termMonths) >= 12 && num(c.termMonths) <= 240 ? Math.floor(num(c.termMonths)) : null } };
+      termMonths: num(c.termMonths) >= 12 && num(c.termMonths) <= 240 ? Math.floor(num(c.termMonths)) : null,
+      /* 'partner': a Nano or Micro pod is priced on the offtake partner's stated per-megawatt figures (compute-contract.js PARTNER.reference), each replaceable here */
+      basis: c.basis === 'partner' ? 'partner' : c.basis === 'chips' ? 'chips' : null,
+      /* 'chips': the pod as its maker specifies it, sized and priced by the chip racked in it (pod-spec.js). The workspace's own
+         figures for it, by the pod's platform key: a price a GPU-hour where the chip has no public one, the pod's cost once the maker quotes */
+      pod: { prices: podFigures(obj(c.pod).prices, 0.05, 100), costUsd: podFigures(obj(c.pod).costUsd, 1e5, 5e8) },
+      reference: { capexUsdPerMw: within(ref.capexUsdPerMw, 1e5, 5e8), revenueUsdPerMwYear: within(ref.revenueUsdPerMwYear, 1e4, 5e8), utilityUsdPerMwYear: within(ref.utilityUsdPerMwYear, 0, 5e8),
+        gpusPerMw: within(ref.gpusPerMw, 1, 1e5), racksPerMw: within(ref.racksPerMw, 1, 1000), chipset: typeof ref.chipset === 'string' && CM.chipset(ref.chipset) ? ref.chipset : null } },
+    funding: funding,
+    gates: gates.minKva != null || gates.minLeaseYears != null || gates.irrHurdlePct != null ? gates : null,
+    review: reviewers.length ? { name: clean(rv.name, 60) || 'Executive Review', members: reviewers } : null,
+    closing: closeYears != null ? { minLeaseYears: closeYears, agreement: clean(cl.agreement, 60) || 'site host agreement' } : null };
 }
+function podFigures(raw, lo, hi) { var out = {}; raw = obj(raw); PS.PLATFORMS.forEach(function (p) { var n = num(raw[p.key]); if (n != null && n >= lo && n <= hi) out[p.key] = n; }); return out; }
+function clean(v, n) { return typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n) || null : null; }
 
 /* ── power: the limit, the peak, what is free ──────────────────────────── */
 function powerOf(site, screen) {
@@ -123,6 +177,25 @@ function powerOf(site, screen) {
   return out;
 }
 
+/* ── what electricity costs HERE (2026-11-09, Tommy: "that utility cost is
+   different for every zip code"): the site's own price where one is on
+   file, else the rate book's planning figures for its ZIP (else its state)
+   on a flat load — energy plus the demand charge spread over every hour.
+   null where nothing places the site: the engine's own default is then
+   used and said. ── */
+function zipOf(site) { var a = site && site.address && typeof site.address === 'object' ? site.address : {}, z = String(a.zip || (site && site.zip) || '').trim(); return /^\d{5}/.test(z) ? z.slice(0, 5) : null; }
+function rateOf(site) {
+  var own = num(site && site.powerPricePerKwh);
+  if (own != null && own > 0) return { perKwh: own, source: 'site', utility: null, words: 'the site’s own power price, $' + own + ' a kWh' };
+  var zip = zipOf(site), st = stateOf(site), rec = null, by = null;
+  try { if (zip) { rec = UR.lookup(zip); by = 'zip'; } if (!rec && st) { rec = UR.fromState(st); by = 'state'; } } catch (e) { rec = null; }
+  var energy = rec ? num(rec.energyRate) : null, demand = rec ? num(rec.demandRate) || 0 : 0;
+  if (!(energy > 0)) return null;
+  var per = Math.round((energy + demand * 12 / 8760) * 10000) / 10000;
+  return { perKwh: per, source: by, utility: rec.name || null, energyRate: energy, demandRate: demand,
+    words: (rec.name || 'The serving utility') + '’s planning rates for ' + (by === 'zip' ? 'ZIP ' + zip : st) + ': $' + energy + ' a kWh plus $' + demand + ' a kW-month of demand, $' + per + ' a kWh on a flat load. A planning figure, not the site’s tariff' };
+}
+
 /* ── compute: the shelf on the free power, and the chosen unit's return ── */
 var econCache = {};
 function unitFor(m, chip, pue) {
@@ -130,39 +203,187 @@ function unitFor(m, chip, pue) {
   var nodes = Math.floor(m.itKw * (1 - overhead) / chip.nodeKw + 1e-9), gpus = nodes * chip.gpusPerNode, installed = nodes * chip.nodeKw;
   return { label: m.label + ' modular', word: 'modular', kw: r2(installed * pue), itKw: r2(installed), gpus: gpus, costUsd: CM.dynamicCapex(chip, gpus).mid };
 }
+/* the offtake partner's reference, per megawatt of IT: the stated figures, each replaceable by the workspace's own */
+function referenceOf(cfg) {
+  var P = CC.PARTNER, b = P.reference.perMw, o = cfg.compute.reference || {};
+  return { name: cfg.compute.partnerName || P.name, feePct: cfg.compute.partnerFeePct != null ? cfg.compute.partnerFeePct : P.feePct, verified: false,
+    capexUsdPerMw: o.capexUsdPerMw || b.capexUsd, revenueUsdPerMwYear: o.revenueUsdPerMwYear || b.revenueUsdYear, utilityUsdPerMwYear: o.utilityUsdPerMwYear != null ? o.utilityUsdPerMwYear : b.utilityUsdYear,
+    gpusPerMw: o.gpusPerMw || b.gpus, racksPerMw: o.racksPerMw || (o.gpusPerMw ? null : b.racks), chipset: o.chipset || b.chipset,
+    own: ['capexUsdPerMw', 'revenueUsdPerMwYear', 'utilityUsdPerMwYear', 'gpusPerMw'].filter(function (k) { return o[k] != null; }) };
+}
+function musd(n) { return '$' + (Math.round(n / 1e4) / 100) + 'M'; }
+/* A COMPUTE PRO FORMA ON WHAT THE OFFTAKE PARTNER SHOWED (2026-11-09, Tommy:
+   "a compute pro forma that goes off of what lightsmith energy showed us …
+   for 1mW of compute its a 35m investement and … about 26m a year and cost
+   4m in utility … but that utility cost is diffeernt for every zip code and
+   we need to understand what the offtake is"). The unit is that reference
+   scaled by its IT load; the revenue is the stated figure as a take-or-pay
+   price a GPU-hour, so the ONE contract engine runs it (its monthly cash,
+   its partner fee, its other operating lines, its IRR). It runs twice: on
+   this site's electricity, and on the partner's own utility figure, and
+   both are answered. Nothing here is a contract or a quote. */
+function partnerCase(m, units, cfg, REF, rate, term) {
+  var chip = CM.chipset(REF.chipset) || CM.chipset(CM.DEFAULTS.chipset), pue = cfg.compute.pue || CM.DEFAULTS.pue, up = CM.readInputs({ chipset: chip.key }).uptime;
+  var mw = m.itKw / 1000, k = klassOf(m.itKw), gpus = Math.floor(REF.gpusPerMw * mw + 1e-9), kw = r2(m.itKw * pue), cost = Math.round(REF.capexUsdPerMw * mw), revenue = REF.revenueUsdPerMwYear * mw;
+  if (!(gpus >= 1) || !(cost > 0) || !(revenue > 0)) return { ok: false, reason: 'The partner reference does not size a ' + m.label + ' unit' };
+  var unit = { label: m.label + ' ' + k.label, word: 'pod', kw: kw, itKw: m.itKw, gpus: gpus, costUsd: cost }, racks = REF.racksPerMw ? REF.racksPerMw * mw : null;
+  if (racks && Math.abs(racks - Math.round(racks)) < 1e-9) { unit.racks = Math.round(racks); unit.rackCostUsd = cost / unit.racks; }
+  var kwhYear = kw * 8760 * up, price = revenue / (gpus * 8760 * up), statedElec = REF.utilityUsdPerMwYear * mw / kwhYear;
+  function run(elec) {
+    var input = { chipset: chip.key, units: units, unit: unit, contract: { termMonths: term, pricePerGpuHour: price, partner: REF.feePct > 0 ? { name: REF.name, feePct: REF.feePct } : false }, site: { route: 'own' }, operating: { electricity: elec } };
+    var out; try { out = CC.contractCase(input, {}); } catch (e) { out = null; }
+    return out && out.ok !== false && out.priced && out.returns && out.lines && out.lines.length ? out : null;
+  }
+  var here = rate ? run(rate.perKwh) : null, stated = run(statedElec), main = here || stated;
+  if (!main) return { ok: false, reason: 'The compute engine could not price this unit on the partner’s figures' };
+  var y1 = main.lines[0], sy = stated ? stated.lines[0] : null, notes = [];
+  notes.push(REF.name + '’s figures are as stated and unverified: ' + musd(REF.capexUsdPerMw) + ' of capital and about ' + musd(REF.revenueUsdPerMwYear) + ' of revenue a year for 1 MW of compute, with about ' + musd(REF.utilityUsdPerMwYear) + ' a year of utility' +
+    (REF.own.length ? ' (' + REF.own.length + ' of those figures are this workspace’s own).' : '.'));
+  if (mw !== 1) notes.push('This ' + m.label + ' ' + k.label + ' is that 1 MW reference scaled by its IT load (× ' + mw + '): ' + musd(cost) + ' of capital' + (unit.racks ? '' : ', not whole racks') + '. Its own price is not on file.');
+  notes.push('Revenue is the stated figure, not a contract: the offtake (who buys, at what price, for how long) is not confirmed. It is the same as $' + price.toFixed(2) + ' a GPU-hour, take-or-pay, on ' + fmt(gpus * units) + ' ' + chip.name + ' GPUs.');
+  notes.push(here ? 'Utility is this site’s own: ' + fmt(kwhYear * units) + ' kWh a year at $' + rate.perKwh + ' a kWh (' + rate.words + '), rising 3% a year. ' + REF.name + '’s ' + musd(REF.utilityUsdPerMwYear * mw * units) + ' would be $' + statedElec.toFixed(3) + ' a kWh on the same energy: either a dearer market or more than energy. Ask what it covers.'
+    : 'Utility is ' + REF.name + '’s stated figure (' + musd(REF.utilityUsdPerMwYear * mw * units) + ' a year, $' + statedElec.toFixed(3) + ' a kWh on this unit’s energy): no ZIP, state or power price is on file to price this site’s own.');
+  notes.push('Beyond the stated figures the engine counts network and storage, other variable costs, fixed operating costs and a maintenance reserve (' + musd(y1.opex) + ' in year one)' + (REF.feePct > 0 ? ', and ' + REF.name + '’s ' + REF.feePct + '% of compute revenue (' + musd(y1.partnerFee) + ' a year).' : '.'));
+  notes.push('The return is the project IRR on monthly cash over the ' + term + '-month term, annualised, before tax and without debt. No site rent, purchase or host share is in the case.');
+  return { ok: true, basis: 'partner', chipset: { key: chip.key, name: chip.name }, gpus: main.sizing.gpus, itKw: main.sizing.itKw, capexUsd: main.totals.capital, termMonths: term,
+    irrPct: main.returns.projectIrrPct, irrBasis: 'project IRR over ' + term + ' months on ' + REF.name + '’s stated figures' + (here ? ', electricity at this site’s rate' : ', utility as stated'),
+    pricePerGpuHour: Math.round(price * 10000) / 10000, priceBasis: 'partner ref', paybackMonths: main.returns.paybackMonths,
+    proforma: { partner: REF.name, verified: false, reference: { capexUsdPerMw: REF.capexUsdPerMw, revenueUsdPerMwYear: REF.revenueUsdPerMwYear, utilityUsdPerMwYear: REF.utilityUsdPerMwYear, feePct: REF.feePct },
+      capexUsd: main.totals.capital, revenuePerYear: y1.revenue, partnerFeePerYear: y1.partnerFee, utilityPerYear: y1.power, utilityBasis: here ? 'site' : 'stated', kwhPerYear: Math.round(kwhYear * units),
+      otherOperatingPerYear: y1.opex, ebitdaPerYear: y1.ebitda, irrWithoutFeePct: main.returns.irrWithoutFeePct,
+      asStated: stated ? { utilityPerYear: sy.power, electricityPerKwh: Math.round(statedElec * 10000) / 10000, ebitdaPerYear: sy.ebitda, irrPct: stated.returns.projectIrrPct, paybackMonths: stated.returns.paybackMonths } : null },
+    notes: notes };
+}
 function computeEconomics(m, units, cfg, site) {
+  var rate = rateOf(site), term = cfg.compute.termMonths || COMPUTE_TERM_MONTHS, partner = cfg.compute.basis === 'partner' && !m.skid, REF = partner ? referenceOf(cfg) : null;
   var chip = CM.chipset(cfg.compute.chipset || CM.DEFAULTS.chipset) || CM.chipset(CM.DEFAULTS.chipset), pue = cfg.compute.pue || CM.DEFAULTS.pue;
-  var elec = num(site && site.powerPricePerKwh), term = cfg.compute.termMonths || COMPUTE_TERM_MONTHS;
-  var key = [m.key, units, chip.key, pue, elec, term, cfg.compute.partnerFeePct, cfg.compute.partnerName].join('|');
+  var key = [m.key, units, chip.key, pue, rate ? rate.perKwh + rate.words : null, term, cfg.compute.partnerFeePct, cfg.compute.partnerName, REF ? JSON.stringify(REF) : ''].join('|');
   if (econCache[key]) return econCache[key];
-  var input = { chipset: chip.key, units: units, contract: { termMonths: term, partner: cfg.compute.partnerFeePct != null ? { name: cfg.compute.partnerName || 'the offtake partner', feePct: cfg.compute.partnerFeePct } : false }, site: { route: 'own' }, operating: {} };
-  if (cfg.compute.pue) input.operating.pue = cfg.compute.pue;
-  if (elec != null && elec > 0) input.operating.electricity = elec;
-  if (!m.skid) input.unit = unitFor(m, chip, pue);
-  var out; try { out = CC.contractCase(input, {}); } catch (e) { out = null; }
-  if (!out || out.ok === false) return { ok: false, reason: 'The compute engine could not price this unit' };
-  var e = D.economicsFromCase(out, input, null), at = e.irrAt, notes = [];
-  notes.push(m.skid ? 'The 75 kW unit is the Omega-Core skid at its recorded system cost.' : 'Capital is the engine’s chipset-scaled midpoint for ' + fmt(e.gpus) + ' ' + chip.name + ' GPUs, an estimate, not a quote.');
-  notes.push(at ? 'Priced at the chip’s public ' + at.basis + ' reference ($' + at.price + ' a GPU-hour): no contract price is set, so this is a screening figure.' : 'The chip has no public reference price, so no return is shown until a contract price is set.');
-  notes.push('No site rent, purchase or host share is in the case' + (cfg.compute.partnerFeePct != null ? '; the offtake partner’s ' + cfg.compute.partnerFeePct + '% fee is.' : ', and no partner fee.'));
-  var res = { ok: true, chipset: { key: chip.key, name: chip.name }, gpus: e.gpus, itKw: e.computeKw, capexUsd: e.capexUsd, termMonths: term,
-    irrPct: at ? at.pct : null, irrBasis: at ? 'project IRR at the public ' + at.basis + ' reference, $' + at.price + ' a GPU-hour' : null, pricePerGpuHour: at ? at.price : null, priceBasis: at ? at.basis : null,
-    paybackMonths: at ? at.paybackMonths : null, notes: notes };
+  var res;
+  if (partner) res = partnerCase(m, units, cfg, REF, rate, term);
+  else {
+    var input = { chipset: chip.key, units: units, contract: { termMonths: term, partner: cfg.compute.partnerFeePct != null ? { name: cfg.compute.partnerName || 'the offtake partner', feePct: cfg.compute.partnerFeePct } : false }, site: { route: 'own' }, operating: {} };
+    if (cfg.compute.pue) input.operating.pue = cfg.compute.pue;
+    if (rate) input.operating.electricity = rate.perKwh;
+    if (!m.skid) input.unit = unitFor(m, chip, pue);
+    var out; try { out = CC.contractCase(input, {}); } catch (e) { out = null; }
+    if (!out || out.ok === false) return { ok: false, reason: 'The compute engine could not price this unit' };
+    var e = D.economicsFromCase(out, input, null), at = e.irrAt, notes = [];
+    notes.push(m.skid ? 'The 75 kW unit is the Omega-Core skid at its recorded system cost.' : 'Capital is the engine’s chipset-scaled midpoint for ' + fmt(e.gpus) + ' ' + chip.name + ' GPUs, an estimate, not a quote.');
+    notes.push(at ? 'Priced at the chip’s public ' + at.basis + ' reference ($' + at.price + ' a GPU-hour): no contract price is set, so this is a screening figure.' : 'The chip has no public reference price, so no return is shown until a contract price is set.');
+    notes.push(rate ? 'Electricity: ' + rate.words + '.' : 'Electricity is the engine’s default ($' + CM.DEFAULTS.electricity + ' a kWh): no ZIP, state or power price is on file for this site.');
+    notes.push('The return is the project IRR on monthly cash over the ' + term + '-month term, annualised, before tax and without debt.');
+    notes.push('No site rent, purchase or host share is in the case' + (cfg.compute.partnerFeePct != null ? '; the offtake partner’s ' + cfg.compute.partnerFeePct + '% fee is.' : ', and no partner fee.'));
+    res = { ok: true, basis: 'spot', chipset: { key: chip.key, name: chip.name }, gpus: e.gpus, itKw: e.computeKw, capexUsd: e.capexUsd, termMonths: term,
+      irrPct: at ? at.pct : null, irrBasis: at ? 'project IRR at the public ' + at.basis + ' reference, $' + at.price + ' a GPU-hour' : null, pricePerGpuHour: at ? at.price : null, priceBasis: at ? at.basis : null,
+      paybackMonths: at ? at.paybackMonths : null, notes: notes };
+  }
+  if (res.ok) res.electricity = rate ? { perKwh: rate.perKwh, source: rate.source, utility: rate.utility } : { perKwh: null, source: 'default', utility: null };
   if (Object.keys(econCache).length > 400) econCache = {};   /* a site's own power price is in the key */
   econCache[key] = res;
   return res;
 }
-function computeOf(power, cfg, site) {
+/* ── BY CHIP (2026-11-11, Tommy, of the pod maker's product overview: "Let's
+   base it off the chips this is the first real spec sheet we have received
+   and it's very detailed"). Where a workspace's settings ask for it
+   (compute.basis 'chips'), the unit is the maker's 1 MW pod and the shelf
+   is what that pod carries BY CHIP (pod-spec.js, the one record): the GPUs,
+   the usable IT and the power at the meter are the sheet's, at the pod's
+   own design pPUE. One to four stand-alone pods a site, as the maker sites
+   them. Every configuration that fits is priced by the ONE contract engine
+   on its own GPUs: at the chip's public reference price, else a price the
+   workspace set, else no return is shown. The answer is the workspace's own
+   chip where it fits, else the configuration with the highest screening
+   return, else the largest. The sheet carries no price: capital is the
+   engine's estimate until the maker quotes, and says so. ── */
+function chipsBasis(cfg) { return !!(cfg && cfg.compute && cfg.compute.basis === 'chips'); }
+function unitName(u) { return u.chip ? u.label + ' ' + u.chip + ' pod' : u.label + ' ' + u.klassLabel; }
+/* the units a workspace's compute is sized in, smallest at the meter first: each with what must be free for one */
+function unitsOf(cfg, pue) {
+  if (chipsBasis(cfg)) return PS.PLATFORMS.map(function (p) { var m = PS.atMeter(p); return { key: p.key, label: fmt(p.itKw) + ' kW', itKw: p.itKw, needKw: m.needKw, chip: p.short }; }).sort(function (a, b) { return a.needKw - b.needKw; });
+  pue = pue || (cfg && cfg.compute && cfg.compute.pue) || CM.DEFAULTS.pue;
+  return MODULARS.map(function (m) { return { key: m.key, label: m.label, itKw: m.itKw, needKw: Math.round(m.itKw * pue), chip: null }; });
+}
+function podEconomics(p, units, cfg, site) {
+  var rate = rateOf(site), term = cfg.compute.termMonths || COMPUTE_TERM_MONTHS, chip = p.chipset ? CM.chipset(p.chipset) : null, own = cfg.compute.pod || { prices: {}, costUsd: {} };
+  var price = own.prices[p.key] != null ? own.prices[p.key] : null, quoted = own.costUsd[p.key] != null ? own.costUsd[p.key] : null, m = PS.atMeter(p), pod = PS.POD;
+  if (!chip) return { ok: false, sized: true, gpus: p.gpus * units, itKw: p.itKw * units, chipset: { key: null, name: p.name },
+    reason: p.name + ' is not in the chip price library yet: the pod is sized on the maker’s figures, and no capital or return is shown' };
+  var key = ['pod', PS.VERSION, p.key, units, rate ? rate.perKwh + rate.words : null, term, price, quoted, cfg.compute.partnerFeePct, cfg.compute.partnerName].join('|');
+  if (econCache[key]) return econCache[key];
+  var cost = quoted != null ? quoted : CM.dynamicCapex(chip, p.gpus).mid;
+  var unit = { label: pod.label + ' (' + p.short + ')', word: 'pod', kw: m.drawKw, itKw: p.itKw, gpus: p.gpus, costUsd: cost }; if (p.racks) unit.racks = p.racks;
+  var input = { chipset: chip.key, units: units, unit: unit, contract: { termMonths: term, partner: cfg.compute.partnerFeePct != null ? { name: cfg.compute.partnerName || 'the offtake partner', feePct: cfg.compute.partnerFeePct } : false }, site: { route: 'own' }, operating: {} };
+  if (price != null) input.contract.pricePerGpuHour = price;
+  if (rate) input.operating.electricity = rate.perKwh;
+  var out; try { out = CC.contractCase(input, {}); } catch (e) { out = null; }
+  if (!out || out.ok === false) return { ok: false, reason: 'The compute engine could not price this pod' };
+  var e = D.economicsFromCase(out, input, null), at = price != null ? null : e.irrAt, set = price != null && e.priced, notes = [];
+  notes.push(pod.baseline.words + '.');
+  notes.push('The pod is the ' + pod.label + ' as its maker specifies it (' + pod.sheet.title + ', ' + pod.sheet.dated + '). ' + pod.sheet.standing + '.');
+  notes.push('By chip: one pod carries ' + fmt(p.gpus) + ' ' + p.name + ' GPUs (' + p.hardware + '), ' + fmt(p.itKw) + ' kW of usable IT' + (p.peakItKw > p.itKw ? ' rated and ' + fmt(p.peakItKw) + ' kW at peak' : '') + ', inside 1 MW of liquid cooling' + (p.estimate ? '; ' + p.estimate : '') + '.');
+  notes.push('At the meter: ' + fmt(m.needKw) + ' kW free a pod (' + (p.peakItKw > p.itKw ? 'the peak' : 'the IT') + ' at the pod’s design pPUE of ' + pod.ppue + ', stated at 1 MW full load). The site’s own transformer losses are not in it.');
+  notes.push(quoted != null ? 'Capital is this workspace’s own figure for the pod, $' + fmt(quoted) + ' a pod.' : 'Capital is the engine’s chipset-scaled midpoint for ' + fmt(p.gpus) + ' ' + chip.name + ' GPUs, an estimate, not a quote: the maker’s sheet carries no price, so the enclosure and cooling are the engine’s allowance, not the pod’s.');
+  notes.push(set ? 'Priced at $' + price + ' a GPU-hour, this workspace’s own figure: not a contract.' : at ? 'Priced at the chip’s public ' + at.basis + ' reference ($' + at.price + ' a GPU-hour): no contract price is set, so this is a screening figure.' : 'The chip has no public reference price, so no return is shown until a price is set for it.');
+  notes.push(rate ? 'Electricity: ' + rate.words + '.' : 'Electricity is the engine’s default ($' + CM.DEFAULTS.electricity + ' a kWh): no ZIP, state or power price is on file for this site.');
+  notes.push('The return is the project IRR on monthly cash over the ' + term + '-month term, annualised, before tax and without debt' + (term < pod.commercial.minTermMonths ? '' : '; the maker’s own minimum term is ' + pod.commercial.minTermMonths + ' months') + '. No site rent, the maker’s operating fee or hours capped by heat are in the case.');
+  var irr = set ? e.irrPct : at ? at.pct : null;
+  var res = { ok: true, basis: 'chips', chipset: { key: chip.key, name: p.name }, gpus: e.gpus, itKw: e.computeKw, capexUsd: e.capexUsd, capexBasis: quoted != null ? 'entered' : 'estimate', termMonths: term,
+    irrPct: irr, irrBasis: irr == null ? null : set ? 'project IRR at $' + price + ' a GPU-hour, the workspace’s own price' : 'project IRR at the public ' + at.basis + ' reference, $' + at.price + ' a GPU-hour',
+    pricePerGpuHour: set ? price : at ? at.price : null, priceBasis: set ? 'workspace price' : at ? at.basis : null, paybackMonths: set ? e.paybackMonths : at ? at.paybackMonths : null, notes: notes,
+    electricity: rate ? { perKwh: rate.perKwh, source: rate.source, utility: rate.utility } : { perKwh: null, source: 'default', utility: null } };
+  if (Object.keys(econCache).length > 400) econCache = {};
+  econCache[key] = res;
+  return res;
+}
+function podCompute(power, cfg, site, want) {
+  var pod = PS.POD, kw = power.availableKw, max = pod.site.maxPods;
+  var shelf = PS.PLATFORMS.map(function (p) {
+    var m = PS.atMeter(p), n = kw != null ? Math.min(max, Math.floor(kw / m.needKw + 1e-9)) : 0;
+    return { key: p.key, label: fmt(p.itKw) + ' kW', chip: p.short, klass: 'micro', klassLabel: 'Micro pod', itKw: p.itKw, gpus: p.gpus, meterKw: m.needKw, coolingKw: m.overheadKw, fits: n >= 1, units: n };
+  }).sort(function (a, b) { return a.meterKw - b.meterKw; });
+  var out = { pue: pod.ppue, byChip: true, shelf: shelf, chosen: null, fits: false, basis: power.basis, words: null,
+    pod: { maker: pod.maker, name: pod.name, label: pod.label, sheet: pod.sheet.title + ', ' + pod.sheet.dated, standing: pod.sheet.standing, baseline: pod.baseline.words, coolingKw: pod.coolingKw, maxPods: max } };
+  if (kw == null) { out.words = 'No power figure to size compute on'; return out; }
+  shelf.forEach(function (u) {
+    if (!u.fits) return;
+    var e = podEconomics(PS.platform(u.key), u.units, cfg, site);
+    u.irrPct = e.ok ? e.irrPct : null; u.priceBasis = e.ok ? e.priceBasis : null; u.capexUsd = e.ok ? e.capexUsd : null; u.priced = !!e.ok;
+  });
+  var fitting = shelf.filter(function (u) { return u.fits; }), pick = null, why = null;
+  if (!fitting.length) { out.words = fmt(kw) + ' kW does not carry a pod: the lightest configuration (' + shelf[0].chip + ', ' + shelf[0].label + ' of IT) needs ' + fmt(shelf[0].meterKw) + ' kW at the meter'; out.needKw = shelf[0].meterKw; return out; }
+  var named = want ? PS.platform(want) : PS.platformFor(cfg.compute.chipset);
+  if (named) { pick = fitting.filter(function (u) { return u.key === named.key; })[0] || null; if (pick) why = want ? 'the unit asked for' : 'this workspace’s chip'; }
+  if (!pick) { fitting.forEach(function (u) { if (u.irrPct != null && (!pick || u.irrPct > pick.irrPct)) pick = u; }); if (pick) why = 'the highest screening return of the configurations that fit'; }
+  if (!pick) { pick = fitting[fitting.length - 1]; why = 'the largest configuration that fits; none of them has a price on file'; }
+  var p = PS.platform(pick.key), units = pick.units;
+  out.fits = true;
+  out.chosen = { key: pick.key, label: pick.label, chip: pick.chip, klass: pick.klass, klassLabel: pick.klassLabel, units: units, itKw: pick.itKw * units, gpus: pick.gpus * units, meterKw: pick.meterKw * units, coolingKw: pick.coolingKw * units, leftKw: r2(kw - pick.meterKw * units), why: why };
+  out.words = (units > 1 ? units + ' pods' : 'One pod') + ' of ' + fmt(pick.gpus) + ' ' + pick.chip + ' GPUs' + (units > 1 ? ' each' : '') + ' (' + fmt(out.chosen.itKw) + ' kW of IT, ' + fmt(out.chosen.meterKw) + ' kW at the meter at pPUE ' + pod.ppue + ') on ' + fmt(kw) + ' kW' +
+    (power.basis === 'ceiling' ? ', a ceiling' : power.basis === 'upgrade' ? ' after the upgrade' : ' free') + ': ' + why;
+  out.cooling = { kw: out.chosen.coolingKw, words: fmt(out.chosen.coolingKw) + ' kW of the ' + fmt(out.chosen.meterKw) + ' kW at the meter is the dry cooler’s fans, the pumps and the air units (design pPUE ' + pod.ppue + ' at full load). The loop is closed and rejects to outdoor air: no chiller and no water' };
+  out.space = { pods: units, words: (units > 1 ? units + ' pads, each' : 'One pad') + ' at least ' + pod.pad.lengthFt + ' × ' + pod.pad.widthFt + ' ft and rated ' + pod.pad.ratedTonnes + ' metric tons' + (units > 1 ? ', ' + pod.pad.betweenPodsM + ' m (' + pod.pad.betweenPodsFt + ' ft) between pods' : '') + ', with truck and crane access: the maker’s figures. Confirm the site has it before the site is approved' };
+  out.thermal = PS.thermalOf(p);
+  out.requirements = PS.requirements(units);
+  if (kw >= shelf[0].meterKw * (max + 1)) out.more = 'The maker sites one to ' + max + ' stand-alone pods; more than that on one site is its cluster design (five pods to a unit, two feeds a pod), which is not sized here.';
+  out.economics = podEconomics(p, units, cfg, site);
+  return out;
+}
+function computeOf(power, cfg, site, want) {
+  if (chipsBasis(cfg)) return podCompute(power, cfg, site, want);
   var pue = cfg.compute.pue || CM.DEFAULTS.pue, kw = power.availableKw;
-  var shelf = MODULARS.map(function (m) { var need = Math.round(m.itKw * pue); return { key: m.key, label: m.label, itKw: m.itKw, meterKw: need, fits: kw != null && kw >= need, units: kw != null ? Math.floor(kw / need + 1e-9) : 0 }; });
+  var shelf = MODULARS.map(function (m) { var need = Math.round(m.itKw * pue), k = klassOf(m.itKw), n = kw != null ? Math.floor(kw / need + 1e-9) : 0; return { key: m.key, label: m.label, klass: k.key, klassLabel: k.label, itKw: m.itKw, meterKw: need, coolingKw: need - m.itKw, fits: kw != null && kw >= need, units: m.repeats ? n : Math.min(n, 1) }; });
   var out = { pue: pue, shelf: shelf, chosen: null, fits: false, basis: power.basis, words: null };
   if (kw == null) { out.words = 'No power figure to size compute on'; return out; }
   var pick = null; shelf.forEach(function (s) { if (s.fits) pick = s; });
   if (!pick) { out.words = fmt(kw) + ' kW does not carry the smallest unit (' + shelf[0].label + ' of IT needs ' + fmt(shelf[0].meterKw) + ' kW at the meter)'; out.needKw = shelf[0].meterKw; return out; }
   var m = MODULARS.filter(function (x) { return x.key === pick.key; })[0], units = pick.units;
   out.fits = true;
-  out.chosen = { key: pick.key, label: pick.label, units: units, itKw: pick.itKw * units, meterKw: pick.meterKw * units, leftKw: r2(kw - pick.meterKw * units) };
-  out.words = (units > 1 ? units + ' × ' : '') + pick.label + ' of IT (' + fmt(out.chosen.meterKw) + ' kW at the meter at PUE ' + pue + ') on ' + fmt(kw) + ' kW' + (power.basis === 'ceiling' ? ', a ceiling' : ' free');
+  out.chosen = { key: pick.key, label: pick.label, klass: pick.klass, klassLabel: pick.klassLabel, units: units, itKw: pick.itKw * units, meterKw: pick.meterKw * units, coolingKw: pick.coolingKw * units, leftKw: r2(kw - pick.meterKw * units) };
+  out.words = (units > 1 ? units + ' × ' : '') + pick.label + ' of IT (' + fmt(out.chosen.meterKw) + ' kW at the meter at PUE ' + pue + ') on ' + fmt(kw) + ' kW' + (power.basis === 'ceiling' ? ', a ceiling' : power.basis === 'upgrade' ? ' after the upgrade' : ' free');
+  /* the chiller, in power and in space */
+  out.cooling = { kw: out.chosen.coolingKw, words: fmt(out.chosen.coolingKw) + ' kW of the ' + fmt(out.chosen.meterKw) + ' kW at the meter is the chiller, pumps and losses (PUE ' + pue + '); ' + fmt(out.chosen.itKw) + ' kW reaches the IT' };
+  out.space = { pods: units, words: (units > 1 ? units + ' pods, each with its own chiller' : 'One pod and its chiller') + ' on the site: the pad (the pod, the chiller and the service clearances) is the maker’s figure and is not on file. Confirm it fits before the site is approved' };
   out.economics = computeEconomics(m, units, cfg, site);
   return out;
 }
@@ -244,15 +465,25 @@ function evidenceFor(key, c) {
     if (p.availableKw != null) return hint(c.compute.words);
     return hint(p.words);
   }
+  if (key === 'power-interconnection' && c.upgrade && c.upgrade.status === 'requested') return scr('A utility-side upgrade to ' + fmt(c.upgrade.targetKw) + ' kW is requested' + (c.upgrade.askedBy ? ' through ' + c.upgrade.askedBy : '') + '; the utility’s answer is not on file', 'Site record');
   if (key === 'power-interconnection' && p.hosting) return scr('The utility publishes ' + fmt(p.hosting.loadKw) + ' kW of load hosting' + (p.hosting.circuit ? ' on circuit ' + p.hosting.circuit : '') + '; no application is on file', p.hosting.source || 'Utility hosting capacity');
   if (key === 'power-net' && p.transformerKva) return scr(fmt(p.transformerKva) + ' kVA × ' + CONTINUOUS + ' continuous = ' + fmt(p.transformerKva * CONTINUOUS) + ' kW, before the site’s own load', 'Site record');
   if (key === 'power-evidence' && p.substation && p.substation.name) return scr('Nearest substation: ' + p.substation.name + (p.substation.kv ? ', ' + p.substation.kv + ' kV' : '') + (p.substation.distanceMi != null ? ', ' + p.substation.distanceMi + ' mi' : '') + (p.utility ? ' · ' + p.utility : '') + '; a will-serve letter is the evidence', 'Grid Atlas');
+  if (key === 'physical-area' && num(pa.acres) == null && c.compute.fits && c.compute.space) return hint(c.compute.space.words);
   if (key === 'physical-area' && num(pa.acres) != null) return scr('Parcel of ' + r2(num(pa.acres)) + ' acres on the parcel record; a level pad is not confirmed', 'Parcel record');
   if (f) {
     if (key === 'conn-fiber') { if (f.carriersRead && f.carriers && f.carriers.length) return scr(f.carriers.length + ' carrier' + (f.carriers.length === 1 ? '' : 's') + ' at the address' + (f.symmetric1g === true ? ', 1 Gbps symmetric offered' : f.symmetric1g === false ? ', no 1 Gbps symmetric service read' : ''), 'FCC broadband data'); if (f.carriersNote) return hint('Fiber not read: ' + f.carriersNote + (f.lateralMi != null ? ' · lateral estimate ' + f.lateralMi + ' mi' : '')); }
     if (key === 'conn-bandwidth' && f.symmetric1g === true) return scr('1 Gbps symmetric is offered at the address; the 5–10 Gbps target needs a carrier quote', 'FCC broadband data');
     if (key === 'conn-providers' && f.carriersRead && f.carriers && f.carriers.length) return scr(f.carriers.slice(0, 4).join(', ') + (f.carriers.length > 4 ? ' and ' + (f.carriers.length - 4) + ' more' : ''), 'FCC broadband data');
     if (key === 'conn-latency' && f.carrierHotel) return scr('Nearest carrier hotel: ' + f.carrierHotel + (f.carrierHotelMi != null ? ', ' + f.carrierHotelMi + ' mi' : ''), 'PeeringDB');
+  }
+  if (c.compute.byChip) {
+    var P = PS.POD;
+    if (key === 'physical-cooling') return scr('The pod is a closed loop that rejects heat to outdoor air: no water supply or discharge. Coolant is topped up at maintenance', 'Pod specification');
+    if (key === 'conn-diversity') return f && f.carriersRead && f.carriers && f.carriers.length > 1 ? scr(f.carriers.length + ' carriers at the address; the pod’s maker asks for ' + P.connectivity + ', and separate routes are not confirmed', 'FCC broadband data') : hint('The pod’s maker asks for ' + P.connectivity);
+    if (key === 'physical-access') return hint('Each pod ships as two ' + P.shipping.container + ' container sections (about ' + (P.shipping.coolingSectionKg / 1000) + ' and up to ' + (P.shipping.computeSectionKg / 1000) + ' metric tons): road access for the trucks and room for a crane');
+    if (key === 'power-oneline') return hint('Each pod takes one feed of ' + P.electrical.connectionsPerPod + ' three-phase connections at ' + P.electrical.voltage + '; no UPS or generator in this model');
+    if (key === 'package-liquid' && c.compute.fits && c.compute.thermal) return hint(c.compute.thermal.words);
   }
   if (key === 'package-alignment' && c.compute.fits) return scr('Sized: ' + c.compute.words, 'This assessment');
   return null;
@@ -277,12 +508,18 @@ function readinessOf(c, marks) {
 /* the verifications that would move the answer most, power first */
 function verificationsOf(c, readiness) {
   var out = c.power.verify.slice(), sc = c.screen || null, pa = c.parcel || null, f = sc && sc.fiber;
+  if (c.upgrade && c.upgrade.status === 'requested') out.unshift({ key: 'upgrade', label: 'Follow the utility-side upgrade request (' + fmt(c.upgrade.targetKw) + ' kW' + (c.upgrade.askedBy ? ', asked for by ' + c.upgrade.askedBy : '') + '): get the utility’s written answer, its cost and its schedule' });
+  if (c.upgrade && c.upgrade.status === 'granted') out.unshift({ key: 'upgrade-record', label: 'The upgrade to ' + fmt(c.upgrade.targetKw) + ' kW is marked granted: record the new service or transformer on the site so every size follows' });
   function open(key) { var hit = null; readiness.sections.forEach(function (s) { s.items.forEach(function (i) { if (i.key === key) hit = i; }); }); return hit && hit.state !== 'done' && hit.state !== 'na'; }
   if (sc && sc.located && sc.located.approximate) out.push({ key: 'address', label: 'Confirm the address: it matched only approximately, so nothing was screened on it' });
   if (open('power-evidence')) out.push({ key: 'will-serve', label: 'Ask the utility for a will-serve letter for the load' + (c.power.utility ? ' (' + c.power.utility + ')' : '') });
   if (open('control-evidence')) out.push({ key: 'control', label: 'Put the site-control document on file (deed, lease, option or the host agreement and its amendment)' });
   if (open('zoning-use')) out.push({ key: 'zoning', label: 'Confirm with the jurisdiction that compute is a permitted use' + (pa && pa.zoning ? ' in ' + pa.zoning : '') });
   if (open('conn-fiber') && !(f && f.carriersRead && f.carriers && f.carriers.length)) out.push({ key: 'fiber', label: 'Get a carrier’s quote for dedicated symmetrical fiber to the site' });
+  if (c.compute.byChip && c.compute.fits) {
+    if (c.compute.thermal && c.compute.thermal.derates) out.push({ key: 'pod-ambient', label: 'Get the site’s design ambient (its hottest-hour dry bulb) and the maker’s derate for it: ' + c.compute.thermal.words.split('. ')[0].replace(/^Full power/, 'the chosen racks hold full power') });
+    if (open('conn-diversity')) out.push({ key: 'pod-routes', label: 'Confirm ' + PS.POD.connectivity + ' to the site: the pod’s maker asks for it' });
+  }
   if (!sc) out.push({ key: 'screen', label: 'Run the Grid Atlas and parcel screens: the substation, the utility, fiber and zoning are not read yet' });
   return out.slice(0, 8);
 }
@@ -298,9 +535,9 @@ var PREDEV_STATUS = 'Pre-development';
    returns are on different bases (said), so this ranks a screen, not a deal */
 function recommendOf(compute, bess, sup) {
   var fits = [];
-  if (compute && compute.fits) fits.push({ use: 'compute', label: 'Compute', size: compute.chosen ? (compute.chosen.units > 1 ? compute.chosen.units + ' × ' : '') + compute.chosen.label : null, irrPct: compute.economics && compute.economics.ok ? compute.economics.irrPct : null });
+  if (compute && compute.fits) fits.push({ use: 'compute', label: 'Compute', size: compute.chosen ? (compute.chosen.units > 1 ? compute.chosen.units + ' × ' : '') + compute.chosen.label + (compute.chosen.chip ? ' ' + compute.chosen.chip : '') : null, irrPct: compute.economics && compute.economics.ok ? compute.economics.irrPct : null });
   if (bess && bess.ok) fits.push({ use: 'bess', label: 'Battery storage', size: fmt(bess.sizing.kw) + ' kW / ' + fmt(bess.sizing.kwh) + ' kWh', irrPct: bess.returns.irrPct, noNetInvestment: bess.returns.noNetInvestment === true });
-  if (sup && sup.ok) fits.push({ use: 'supercharger', label: 'Fast charging', size: sup.sizing.posts + ' posts', irrPct: sup.returns.irrPct });
+  if (sup && sup.ok) fits.push({ use: 'supercharger', label: 'Fast charging', size: sup.sizing.posts + ' dispensers', irrPct: sup.returns.irrPct });
   var best = null; fits.forEach(function (f) { if (f.irrPct != null && (!best || f.irrPct > best.irrPct)) best = f; });
   return { fits: fits, best: best ? best.use : null,
     words: !fits.length ? 'Nothing fits the power on file' : best ? best.label + ' shows the highest screening return (' + best.irrPct + '%); the three are on different bases, so compare them in the detail' : fits.map(function (f) { return f.label; }).join(', ') + ' fit' };
@@ -318,14 +555,372 @@ function decisionOf(input, ctx) {
     by: ctx.by || null, at: ctx.now || null, note: note || null };
 }
 
-/* the facts the answer rests on: a change in any of them makes it stale */
-function inputHashOf(site, screen, parcel, cfg) {
-  site = site || {};
-  return hash(JSON.stringify([VERSION, B.VERSION, T.VERSION, num(site.transformerKva), num(site.serviceCapacityKw), num(site.existingPeakKw), num(site.reportedPeakKw), site.peakUnresolved === true,
-    num(site.availablePowerMw), stateOf(site), num(site.powerPricePerKwh), num(site.termYearsRemaining), screen ? screen.at || null : null, parcel ? parcel.at || null : null, cfg || null]));
+/* ── A UTILITY-SIDE UPGRADE REQUEST (2026-11-09, Tommy: "a way to mark the
+   site that we are requesting a utiltiy side upgrade to support the larger
+   compute offtake. meaning that we are going to have our partner ask for
+   more power"). A mark a person makes: the power asked for at the meter,
+   who is asking, and where it stands (requested, granted, declined). It
+   never changes what is sized today: the free power stays the fact on
+   file, and the compute the upgrade WOULD carry rides beside it, said as
+   such. Granted is still a mark: the new service is recorded on the site,
+   and the sizes follow from that fact. ── */
+var UPGRADE_STATES = ['requested', 'granted', 'declined', 'withdrawn'];
+function fail(status, message) { var e = new Error(message); e.status = status; return e; }
+/* cur: the stored record or null. input: { status?, targetKw?, unit?, askedBy?, note? }. ctx: { by, now, limitKw, partner, pue, config } */
+function upgradeOf(cur, input, ctx) {
+  input = input || {}; ctx = ctx || {}; cur = cur && typeof cur === 'object' ? cur : null;
+  var status = String(input.status || 'requested').toLowerCase().trim();
+  if (UPGRADE_STATES.indexOf(status) < 0) throw fail(400, 'An upgrade request is requested, granted, declined or withdrawn');
+  var live = cur && cur.status !== 'withdrawn' ? cur : null, target = null, unit = null;
+  if (status !== 'requested' && !live) throw fail(409, 'There is no upgrade request on this site to mark ' + status);
+  if (status === 'requested') {
+    if (input.unit != null && input.unit !== '') {
+      var m = unitsOf(ctx.config, ctx.pue).filter(function (x) { return x.key === String(input.unit); })[0];
+      if (!m) throw fail(400, 'That is not a unit on the compute shelf');
+      var need = m.needKw;
+      /* the unit needs `need` kW FREE: where the site's own load already takes part of the limit, the ask is the limit plus what is short */
+      target = ctx.limitKw != null && ctx.availableKw != null ? Math.max(need, Math.round(ctx.limitKw + Math.max(0, need - ctx.availableKw))) : need; unit = m.key;
+    } else target = num(input.targetKw);
+    if (target == null && live) { target = live.targetKw; unit = live.unit || null; }
+    if (!(target >= 1 && target <= 200000)) throw fail(400, 'Say how much power is being asked for at the meter (kW), or pick the unit it is for');
+    if (ctx.limitKw != null && target <= ctx.limitKw) throw fail(400, 'The site already has ' + fmt(ctx.limitKw) + ' kW on file: an upgrade asks for more than that');
+  } else { target = live.targetKw; unit = live.unit || null; }
+  var note = clean(input.note, 500), askedBy = clean(input.askedBy, 80) || (live && live.askedBy) || clean(ctx.partner, 80) || null;
+  var history = (cur && Array.isArray(cur.history) ? cur.history : []).concat([{ status: status, targetKw: target, by: ctx.by || null, at: ctx.now || null, note: note }]).slice(-20);
+  return { status: status, targetKw: target, unit: unit, askedBy: askedBy, note: note || (status === 'requested' && live ? live.note || null : null),
+    requestedBy: status === 'requested' && !live ? ctx.by || null : (live && live.requestedBy) || ctx.by || null, requestedAt: status === 'requested' && !live ? ctx.now || null : (live && live.requestedAt) || ctx.now || null,
+    by: ctx.by || null, at: ctx.now || null, history: history };
+}
+/* what the answer says of it: the request, and the compute it would carry */
+function upgradeView(u, power, cfg, site) {
+  if (!u || typeof u !== 'object' || u.status === 'withdrawn' || !(num(u.targetKw) > 0)) return null;
+  var target = num(u.targetKw), from = power.limitKw, add = from != null ? Math.max(0, r2(target - from)) : null;
+  /* what it would carry is judged on what would be FREE: the new service less the load the site already puts on it */
+  var used = from != null && power.availableKw != null ? Math.max(0, from - power.availableKw) : 0;
+  var c = computeOf({ availableKw: Math.max(0, r2(target - used)), basis: 'upgrade' }, cfg, site, chipsBasis(cfg) ? u.unit || null : null), e = c.economics || {};
+  var ask = 'a utility-side upgrade to ' + fmt(target) + ' kW' + (add != null ? ' (' + fmt(add) + ' kW more than the ' + fmt(from) + ' kW limit on file)' : ''), who = u.askedBy ? ', asked for by ' + u.askedBy : '';
+  var words = u.status === 'requested' ? 'Requested: ' + ask + who + '. Nothing is sized on it until the utility grants it.'
+    : u.status === 'granted' ? 'Granted: ' + ask + who + '. Record the new service on the site so every size follows from it.'
+    : 'Declined: ' + ask + who + '. The site stays on the power it has.';
+  return { status: u.status, targetKw: target, fromKw: from, addKw: add, unit: u.unit || null, askedBy: u.askedBy || null, note: u.note || null, requestedBy: u.requestedBy || null, requestedAt: u.requestedAt || null, by: u.by || null, at: u.at || null, words: words,
+    compute: c.fits && c.chosen ? { label: (c.chosen.units > 1 ? c.chosen.units + ' × ' : '') + c.chosen.label + (c.chosen.chip ? ' ' + c.chosen.chip : ''), klass: c.chosen.klass, klassLabel: c.chosen.klassLabel, meterKw: c.chosen.meterKw, words: c.words,
+      irrPct: e.ok ? e.irrPct : null, priceBasis: e.ok ? e.priceBasis : null, capexUsd: e.ok ? e.capexUsd : null } : null };
 }
 
-/* site: the flat record (site-bridge flatten). ctx: { screen, parcel, marks, config, now } */
+/* BESIDE THE POD: A BATTERY ON WHAT IT LEAVES (2026-11-09, Tommy, of a
+   400 kW site that had read four 75 kW skids: "it should just be a 150kW
+   compute and then allow us to maybe put a bess on their or request for
+   more xfrmr power"). One right-sized pod seldom uses the whole free power;
+   the same battery engine answers a battery of the kW left, so the pod and
+   that battery together are a pair that fits, where the three whole-capacity
+   uses stay alternatives. Under PAIR_MIN_KW there is nothing worth a pad. */
+var PAIR_MIN_KW = 50;
+function pairingOf(compute, site, st, power, cfg) {
+  var ch = compute && compute.fits ? compute.chosen : null;
+  if (!ch || !(ch.leftKw >= PAIR_MIN_KW)) return null;
+  var b = B.bessCase({ powerKw: ch.leftKw, state: st, utility: power.utility || site.utility || null, assumptions: cfg.bess });
+  if (!b.ok) return null;
+  var pod = (ch.units > 1 ? ch.units + ' × ' : '') + unitName(ch), ret = b.returns.noNetInvestment ? 'no net capital' : b.returns.irrPct != null ? b.returns.irrPct + '%' : 'no return shown';
+  return { leftKw: ch.leftKw, pod: pod,
+    bess: { kw: b.sizing.kw, kwh: b.sizing.kwh, capexUsd: b.capex.total, netCapexUsd: b.capex.net, irrPct: b.returns.irrPct, noNetInvestment: b.returns.noNetInvestment === true, irrBasis: b.returns.irrBasis, npv: b.returns.npv, marketFit: b.market.fit },
+    words: 'Beside the ' + pod + ', the ' + fmt(ch.leftKw) + ' kW it leaves carries a ' + fmt(b.sizing.kw) + ' kW / ' + fmt(b.sizing.kwh) + ' kWh battery (' + ret + (b.market.fit !== 'zone' ? ', at reference rates' : '') + '). The pod and this battery together fit the free power; the battery above is sized on all of it by itself.' };
+}
+
+/* THE UPGRADE TO ASK FOR (2026-11-09, Tommy: "we should also be requesting
+   for anything not 1mW for a utility upgrade"): a site that is sized and
+   does not carry the 1 MW Micro pod says what the utility would have to add
+   for it, and what the next size up needs, with the compute that would
+   follow. It is advice, DERIVED, never a mark: nothing has been asked of
+   anybody until a person marks the request (assess-upgrade), one site or
+   the whole selection at once. A site with no power figure has none: it
+   needs its power on file first. */
+function upgradeAdviceOf(power, compute, cfg, site, mark) {
+  if (mark || power.availableKw == null) return null;
+  /* the goal: the 1 MW Micro pod; by chip, the workspace's own chip in a pod, else the pod's heaviest configuration */
+  var defs = unitsOf(cfg), named = chipsBasis(cfg) ? PS.platformFor(cfg.compute.chipset) : null;
+  var goal = named ? defs.filter(function (d) { return d.key === named.key; })[0] : defs[defs.length - 1], chosen = compute.chosen || null;
+  if (chosen && chosen.key === goal.key) return null;
+  var shelf = compute.shelf || [], g = shelf.filter(function (u) { return u.key === goal.key; })[0]; if (!g) return null;
+  if (g.fits) return null;
+  var free = power.availableKw, short = Math.max(0, r2(g.meterKw - free)), target = power.limitKw != null ? Math.round(power.limitKw + short) : g.meterKw;
+  var next = shelf.filter(function (u) { return !u.fits && u.key !== goal.key && u.meterKw < g.meterKw; })[0] || null, nextShort = next ? Math.max(0, r2(next.meterKw - free)) : null;
+  var c = computeOf({ availableKw: g.meterKw, basis: 'upgrade' }, cfg, site, chipsBasis(cfg) ? goal.key : null), e = c.economics || {};
+  var has = chosen ? 'carries a ' + unitName(chosen) + ' today' : 'carries no pod today';
+  return { unit: goal.key, label: unitName(g), needKw: g.meterKw, shortKw: short, targetKw: target,
+    next: next && nextShort > 0 ? { unit: next.key, label: unitName(next), needKw: next.meterKw, shortKw: nextShort } : null,
+    compute: e.ok ? { irrPct: e.irrPct, priceBasis: e.priceBasis, capexUsd: e.capexUsd } : null,
+    words: 'To request: ' + fmt(free) + ' kW ' + has + '. A ' + unitName(g) + ' needs ' + fmt(g.meterKw) + ' kW free at the meter, ' + fmt(short) + ' kW more' + (power.limitKw != null ? ' (a ' + fmt(target) + ' kW service)' : '') +
+      (next && nextShort > 0 ? '; ' + fmt(nextShort) + ' kW more would already carry a ' + unitName(next) : '') + '. Nothing has been asked of the utility yet.' };
+}
+
+/* ── THE FUNDING LIST (2026-11-09, Tommy: "we dont need to send to the
+   marketplace we are funding these sites so we essentially need to send
+   this to a list that we can approve for funding or not and it needs to be
+   screened first then approved by our finance committe"). A workspace that
+   funds its own sites names its committee in its settings
+   (portfolioAssessment.funding); there the finance marketplace stands down
+   and a site goes: screened → submitted → approved or declined by a member
+   of the committee. Pure: the door reads the record and the settings and
+   enforces who may do what. ── */
+var FUND_STATES = ['submitted', 'approved', 'declined', 'withdrawn'];
+function committeeMember(cfg, email) {
+  var f = cfg && cfg.funding, e = String(email || '').toLowerCase().trim();
+  if (!f || !e) return null;
+  return f.members.filter(function (m) { return m.email === e; })[0] || null;
+}
+function committeeWords(cfg) { var f = cfg && cfg.funding; return f ? f.name + ' (' + f.members.map(function (m) { return m.name; }).join(', ') + ')' : 'the finance committee'; }
+/* what is asked for: the uses named, each with its size, capital and screening return off the assessment */
+function fundingRequest(result, usesIn) {
+  var keys = USES.map(function (u) { return u.key; }), raw = Array.isArray(usesIn) ? usesIn : (usesIn == null || usesIn === '' ? [] : String(usesIn).split(',')), uses = [];
+  raw.forEach(function (u) { u = String(u).trim().toLowerCase(); if (!u) return; if (keys.indexOf(u) < 0) throw fail(400, '"' + u + '" is not compute, bess or supercharger'); if (uses.indexOf(u) < 0) uses.push(u); });
+  if (!uses.length) throw fail(400, 'Say what the funding is for: compute, a battery, fast charging, or more than one');
+  uses.sort(function (a, b) { return keys.indexOf(a) - keys.indexOf(b); });
+  var r = result || {}, c = r.compute || {}, ce = c.economics || {}, b = r.bess || {}, s = r.supercharger || {}, lines = [];
+  /* compute with a battery, and nothing else: the pod and the battery on what it leaves, a pair that fits and so has one amount */
+  var pair = uses.length === 2 && uses[0] === 'compute' && uses[1] === 'bess' && r.pairing ? r.pairing : null;
+  uses.forEach(function (u) {
+    if (u === 'compute') { if (!(c.fits && c.chosen && ce.ok)) throw fail(400, 'Compute does not fit this site on the power on file, so there is no figure to fund'); lines.push({ use: u, label: 'Compute', size: (c.chosen.units > 1 ? c.chosen.units + ' × ' : '') + c.chosen.label + ' ' + (c.chosen.klassLabel || ''), capexUsd: ce.capexUsd, irrPct: ce.irrPct, irrBasis: ce.irrBasis || null }); }
+    if (u === 'bess' && pair) { lines.push({ use: u, label: 'Battery storage', size: fmt(pair.bess.kw) + ' kW / ' + fmt(pair.bess.kwh) + ' kWh on the ' + fmt(pair.leftKw) + ' kW the pod leaves', capexUsd: pair.bess.capexUsd, irrPct: pair.bess.irrPct, irrBasis: pair.bess.irrBasis || null }); return; }
+    if (u === 'bess') { if (!b.ok) throw fail(400, 'A battery does not fit this site on the power on file, so there is no figure to fund'); lines.push({ use: u, label: 'Battery storage', size: fmt(b.sizing.kw) + ' kW / ' + fmt(b.sizing.kwh) + ' kWh', capexUsd: b.capex.total, irrPct: b.returns.irrPct, irrBasis: b.returns.irrBasis || null }); }
+    if (u === 'supercharger') { if (!s.ok) throw fail(400, 'Fast charging does not fit this site on the power on file, so there is no figure to fund'); lines.push({ use: u, label: 'Fast charging', size: s.sizing.posts + ' dispensers', capexUsd: s.capex.total, irrPct: s.returns.irrPct, irrBasis: s.returns.irrBasis || null }); }
+  });
+  var one = lines.length === 1;
+  return { uses: uses, hybrid: !one, paired: !!pair, label: lines.map(function (l) { return l.label; }).join(' + '), lines: lines, amountUsd: one ? lines[0].capexUsd : pair ? Math.round(lines[0].capexUsd + lines[1].capexUsd) : null,
+    words: one ? null : pair ? 'The pod, and a battery on the ' + fmt(pair.leftKw) + ' kW it leaves: the two fit the free power together, so this is one amount.' : 'Each use is sized on the whole free capacity by itself, so a hybrid has no single amount: the committee sees each line.' };
+}
+/* action: submit | decide | withdraw. ctx: { by, now, config, result, screened, canEdit } */
+function fundingChange(cur, action, input, ctx) {
+  input = input || {}; ctx = ctx || {}; cur = cur && typeof cur === 'object' ? cur : null;
+  var cfg = ctx.config, f = cfg && cfg.funding, status = cur ? cur.status : null, note = clean(input.note, 500);
+  if (!f) throw fail(409, 'This workspace has no funding list: it sends a site’s capital request to the finance marketplace');
+  function hist(st) { return (cur && Array.isArray(cur.history) ? cur.history : []).concat([{ status: st, by: ctx.by || null, at: ctx.now || null, note: note }]).slice(-30); }
+  if (action === 'submit') {
+    if (ctx.canEdit === false) throw fail(403, 'Your role in this workspace can read the funding list but not submit to it');
+    if (!ctx.result) throw fail(409, 'Run the assessment first: there is nothing to put in front of ' + f.name.toLowerCase());
+    if (!ctx.screened) throw fail(409, 'Screen the site first: the Grid Atlas and parcel screens have not finished on it, and ' + f.name.toLowerCase() + ' sees screened sites only');
+    if (status === 'approved') throw fail(409, 'Funding is already approved on this site; ' + f.name.toLowerCase() + ' changes its own decision');
+    var req = fundingRequest(ctx.result, input.uses);
+    return { status: 'submitted', uses: req.uses, hybrid: req.hybrid, label: req.label, lines: req.lines, amountUsd: req.amountUsd, words: req.words, note: note,
+      submittedBy: ctx.by || null, submittedAt: ctx.now || null, decision: null, history: hist('submitted') };
+  }
+  if (action === 'withdraw') {
+    if (ctx.canEdit === false) throw fail(403, 'Your role in this workspace can read the funding list but not change it');
+    if (status !== 'submitted') throw fail(409, status === 'approved' || status === 'declined' ? 'The committee has decided on this site; only ' + committeeWords(cfg) + ' changes that' : 'This site is not on the funding list');
+    return Object.assign({}, cur, { status: 'withdrawn', decision: null, history: hist('withdrawn') });
+  }
+  if (action === 'decide') {
+    var member = committeeMember(cfg, ctx.by);
+    if (!member) throw fail(403, 'Funding is decided by ' + committeeWords(cfg) + '. You can submit a site; you cannot approve or decline it');
+    var d = String(input.decision || '').toLowerCase().trim();
+    if (d !== 'approved' && d !== 'declined') throw fail(400, 'A decision is approved or declined');
+    if (status !== 'submitted' && status !== 'approved' && status !== 'declined') throw fail(409, 'This site has not been submitted for funding');
+    if (d === 'declined' && !(note && note.length >= 3)) throw fail(400, 'Say why it is declined: the person who submitted it reads the reason');
+    return Object.assign({}, cur, { status: d, decision: { status: d, by: ctx.by || null, name: member.name, at: ctx.now || null, note: note }, history: hist(d) });
+  }
+  /* ── THE ATTESTED APPROVAL (2026-11-10, Tommy, of his finance committee:
+     "the committe can use the asana app to preview and review and approve
+     and it gets then show on the platform"). Where the workspace's settings
+     name a connected app (funding.attest), a submitted request is LINKED to
+     the one record that app's server made for it (its id, never its name:
+     anybody in that app can rename a card), and an approval is taken when
+     that server attests the linked record was marked done, after the link,
+     by a person whose address in that app is a committee member's. The
+     app's own sign-in stands for the verified address; the decision says
+     where it was made (via). Only an approval: a decline needs its reason
+     and is made here. The door holds the key; this is the rule. ── */
+  if (action === 'link' || action === 'attest') {
+    if (!f.attest) throw fail(409, 'This workspace takes funding decisions here only: no connected app is named in its settings');
+    var ref = String(input.ref == null ? '' : input.ref).trim();
+    if (!/^[A-Za-z0-9_.:-]{4,64}$/.test(ref)) throw fail(400, 'A request is linked by the id of its record in ' + f.attest.source);
+    if (status !== 'submitted') throw fail(409, status === 'approved' || status === 'declined' ? 'The committee has decided on this site; ' + committeeWords(cfg) + ' changes that here' : 'This site is not waiting on ' + f.name.toLowerCase());
+    if (action === 'link') {
+      return Object.assign({}, cur, { attest: { ref: ref, source: f.attest.source, at: ctx.now || null },
+        history: (Array.isArray(cur.history) ? cur.history : []).concat([{ status: 'linked', by: ctx.by || null, at: ctx.now || null, note: f.attest.source + ' ' + ref }]).slice(-30) });
+    }
+    var link = cur.attest && typeof cur.attest === 'object' ? cur.attest : null;
+    if (!link || link.ref !== ref) throw fail(409, 'That is not the record this request is linked to in ' + f.attest.source + ', so a mark on it decides nothing');
+    var who = committeeMember(cfg, input.email);
+    if (!who) throw fail(403, 'Funding is decided by ' + committeeWords(cfg) + '. ' + (clean(input.name, 80) || 'The person who marked it') + ' is not on the committee, so the mark in ' + f.attest.source + ' is not an approval');
+    var when = Date.parse(String(input.completedAt || '')), linked = Date.parse(String(link.at || '')), nowMs = Date.parse(String(ctx.now || ''));
+    if (!isFinite(when)) throw fail(400, 'An attested approval says when it was marked');
+    if (isFinite(linked) && when < linked) throw fail(409, 'That record was marked done before this request was linked to it, so it is not an approval of this request');
+    if (isFinite(nowMs) && when > nowMs + 5 * 60 * 1000) throw fail(400, 'An approval cannot be marked in the future');
+    var seen = new Date(when).toISOString();
+    return Object.assign({}, cur, { status: 'approved',
+      decision: { status: 'approved', by: who.email, name: who.name, at: ctx.now || null, note: note, via: f.attest.source, attested: { ref: ref, markedAt: seen, recordedBy: ctx.by || null } },
+      history: (Array.isArray(cur.history) ? cur.history : []).concat([{ status: 'approved', by: who.email, at: ctx.now || null, note: note, via: f.attest.source }]).slice(-30) });
+  }
+  throw fail(400, 'Unknown funding action');
+}
+/* the row's and the card's view of it */
+function fundingView(fd) {
+  if (!fd || typeof fd !== 'object' || FUND_STATES.indexOf(fd.status) < 0 || fd.status === 'withdrawn') return null;
+  var d = fd.decision && typeof fd.decision === 'object' ? fd.decision : null;
+  var v = { status: fd.status, uses: fd.uses || [], label: fd.label || null, lines: Array.isArray(fd.lines) ? fd.lines : [], amountUsd: fd.amountUsd == null ? null : fd.amountUsd, words: fd.words || null, note: fd.note || null,
+    submittedBy: fd.submittedBy || null, submittedAt: fd.submittedAt || null, decision: d ? { status: d.status, by: d.by || null, name: d.name || null, at: d.at || null, note: d.note || null } : null };
+  /* a decision made in a connected app says so; a request still waiting carries the record it is linked to there */
+  if (d && d.via) v.decision.via = String(d.via);
+  if (fd.status === 'submitted' && fd.attest && fd.attest.ref) v.attest = { ref: String(fd.attest.ref), source: fd.attest.source || null, at: fd.attest.at || null };
+  return v;
+}
+/* what the pages may know of the list: the committee's names, never an address */
+function fundingInfo(cfg, email) {
+  var f = cfg && cfg.funding;
+  if (!f) return null;
+  var info = { mode: f.mode, name: f.name, members: f.members.map(function (m) { return m.name; }), canDecide: !!committeeMember(cfg, email) };
+  if (f.attest) info.alsoIn = f.attest.source;   /* the committee may also decide there; never the key or its hash */
+  return info;
+}
+
+/* ── CLOSING A SITE (2026-11-09, Tommy: "we buy the sites from francis and
+   they have to then go get the SHA signed over to us and there needs to be
+   a 15 or 20 year lease on the site"). Three things a person records on a
+   site, each with who and when: it is PURCHASED from the partner, its host
+   agreement is ASSIGNED to the workspace, and a LEASE of the length the
+   workspace needs is in place (the years typed; shorter is recorded and
+   said, never rounded up). Only where the workspace's settings carry the
+   length (portfolioAssessment.closing.minLeaseYears). Site control is
+   closed when all three stand. Nothing here buys, assigns or signs
+   anything: it is the record of what was done. ── */
+var CLOSING_STEPS = ['purchase', 'assignment', 'lease'];
+/* input: { step, done: true|false, years?, note? }. ctx: { by, now, config, canEdit } */
+function closingChange(cur, input, ctx) {
+  input = input || {}; ctx = ctx || {}; cur = cur && typeof cur === 'object' ? cur : {};
+  var cfg = ctx.config, C = cfg && cfg.closing;
+  if (!C) throw fail(409, 'This workspace has no closing steps in its settings');
+  if (ctx.canEdit === false) throw fail(403, 'Your role in this workspace can read the closing steps but not mark them');
+  var step = String(input.step || '').toLowerCase().trim(), done = input.done !== false && input.done !== 'false', note = clean(input.note, 500);
+  if (CLOSING_STEPS.indexOf(step) < 0) throw fail(400, 'A closing step is purchase, assignment or lease');
+  var out = { purchase: cur.purchase || null, assignment: cur.assignment || null, lease: cur.lease || null, history: Array.isArray(cur.history) ? cur.history.slice() : [] }, years = null;
+  if (!done) out[step] = null;
+  else {
+    if (step === 'lease') { years = num(input.years); if (!(years >= 1 && years <= 99)) throw fail(400, 'Say how many years the lease runs (the workspace needs ' + C.minLeaseYears + ' or more)'); }
+    out[step] = step === 'lease' ? { years: years, by: ctx.by || null, at: ctx.now || null, note: note } : { by: ctx.by || null, at: ctx.now || null, note: note };
+  }
+  out.history = out.history.concat([{ step: step, done: done, years: years, by: ctx.by || null, at: ctx.now || null, note: note }]).slice(-40);
+  return out;
+}
+function closingView(cl, cfg, site) {
+  var C = cfg && cfg.closing; if (!C) return null;
+  cl = cl && typeof cl === 'object' ? cl : {};
+  var partner = clean(site && site.portfolioPartner, 80), le = cl.lease && num(cl.lease.years) != null ? cl.lease : null, leaseOk = !!le && le.years >= C.minLeaseYears, cur = num(site && site.termYearsRemaining);
+  function st(x) { return x ? { done: true, by: x.by || null, at: x.at || null, note: x.note || null } : { done: false }; }
+  var steps = [
+    Object.assign({ key: 'purchase', label: 'Purchased' + (partner ? ' from ' + partner : ''), words: cl.purchase ? 'Recorded' : 'Not recorded' }, st(cl.purchase)),
+    Object.assign({ key: 'assignment', label: 'The ' + C.agreement + ' assigned to us', words: cl.assignment ? 'Recorded' : 'Not on file' + (partner ? ': ' + partner + ' has to get it signed over' : '') }, st(cl.assignment)),
+    Object.assign({ key: 'lease', label: 'A lease of ' + C.minLeaseYears + ' years or more', years: le ? le.years : null, short: !!le && !leaseOk,
+      words: le ? le.years + ' years' + (leaseOk ? '' : ': under the ' + C.minLeaseYears + ' needed') : 'Not in place' + (cur != null ? ' (' + cur + ' years are left on the agreement on file)' : '') }, st(le), { done: leaseOk })
+  ];
+  var open = steps.filter(function (x) { return !x.done; }).map(function (x) { return x.key; });
+  return { steps: steps, done: steps.length - open.length, of: steps.length, complete: !open.length, waiting: open, minLeaseYears: C.minLeaseYears, leaseYears: le ? le.years : null,
+    words: !open.length ? 'Closed: purchased, the ' + C.agreement + ' assigned, a ' + le.years + '-year lease in place' : (steps.length - open.length) + ' of ' + steps.length + ' closing steps done; waiting on ' + open.map(function (k) { return { purchase: 'the purchase', assignment: 'the ' + C.agreement + ' being assigned', lease: le ? 'a longer lease (' + le.years + ' of ' + C.minLeaseYears + ' years)' : 'the ' + C.minLeaseYears + '-year lease' }[k]; }).join(', ') };
+}
+
+/* ── THE GATES AND THE REVIEW (2026-11-09, Tommy, of his company's operating
+   system: "this is our company how we work see that this is supported by
+   what we are doing here"). A workspace's own pipeline, read off what is
+   already on the site, in its own order:
+     G0 intake and site control   G1 power (a transformer of at least the
+     size it prefers)   G2 lease (the years it wants left)   G3 the pathway
+     picked   G4 the return (its hurdle, and its committee's approval)
+     G5 shovel ready (the checklist)   G6 the review's decision
+   Each is pass, fail or OPEN: open means not known or not done yet, never
+   failed. The thresholds and the people are the workspace's settings
+   (portfolioAssessment.gates and .review); core carries none, and a
+   workspace with neither has no gates. DERIVED at read time from the
+   record: nothing here is stored but a reviewer's own vote. ── */
+var REVIEW_VOTES = ['own', 'flip'], VOTE_WORD = { own: 'Own and operate', flip: 'Portfolio / flip' };
+function reviewer(cfg, email) {
+  var r = cfg && cfg.review, e = String(email || '').toLowerCase().trim();
+  return r && e ? r.members.filter(function (m) { return m.email === e; })[0] || null : null;
+}
+/* the review as the pages read it: who has voted, who has not, and the decision when EVERY member has voted the same way */
+function reviewView(rv, cfg) {
+  var r = cfg && cfg.review; if (!r) return null;
+  var votes = rv && rv.votes && typeof rv.votes === 'object' ? rv.votes : {};
+  var rows = r.members.map(function (m) { var v = votes[m.email.replace(/\./g, '_')] || null; return { name: m.name, vote: v && REVIEW_VOTES.indexOf(v.vote) >= 0 ? v.vote : null, at: v ? v.at || null : null, note: v ? v.note || null : null }; });
+  var cast = rows.filter(function (x) { return x.vote; }), waiting = rows.filter(function (x) { return !x.vote; }).map(function (x) { return x.name; });
+  var same = cast.length > 0 && cast.every(function (x) { return x.vote === cast[0].vote; }), outcome = same && !waiting.length ? cast[0].vote : null, split = cast.length > 1 && !same;
+  var last = cast.map(function (x) { return x.at || ''; }).sort().pop() || null;
+  return { name: r.name, votes: rows, cast: cast.length, of: rows.length, waiting: waiting, split: split, outcome: outcome, outcomeLabel: outcome ? VOTE_WORD[outcome] : null, decidedAt: outcome ? last : null,
+    words: outcome ? r.name + ': ' + VOTE_WORD[outcome] + ', all ' + rows.length + ' agreed' : split ? r.name + ' is split: ' + cast.map(function (x) { return x.name + ' ' + VOTE_WORD[x.vote].toLowerCase(); }).join(', ') + (waiting.length ? '; waiting on ' + waiting.join(', ') : '')
+      : cast.length ? cast.length + ' of ' + rows.length + ' for ' + VOTE_WORD[cast[0].vote].toLowerCase() + '; waiting on ' + waiting.join(', ') : 'Not reviewed: waiting on ' + waiting.join(', ') };
+}
+/* one reviewer's vote, or its withdrawal. ctx: { by, now, config } */
+function reviewChange(cur, input, ctx) {
+  input = input || {}; ctx = ctx || {}; cur = cur && typeof cur === 'object' ? cur : {};
+  var cfg = ctx.config, r = cfg && cfg.review;
+  if (!r) throw fail(409, 'This workspace has no review board in its settings');
+  var m = reviewer(cfg, ctx.by);
+  if (!m) throw fail(403, r.name + ' is ' + r.members.map(function (x) { return x.name; }).join(', ') + '. Only they vote');
+  var vote = String(input.vote || '').toLowerCase().trim(), note = clean(input.note, 500);
+  if (vote !== 'clear' && REVIEW_VOTES.indexOf(vote) < 0) throw fail(400, 'A vote is own (own and operate) or flip (portfolio / flip); clear withdraws it');
+  var votes = Object.assign({}, cur.votes && typeof cur.votes === 'object' ? cur.votes : {}), key = m.email.replace(/\./g, '_');   /* a dot in a map key is a path to Firestore */
+  if (vote === 'clear') delete votes[key]; else votes[key] = { vote: vote, name: m.name, by: m.email, at: ctx.now || null, note: note };
+  return { votes: votes, history: (Array.isArray(cur.history) ? cur.history : []).concat([{ vote: vote, by: m.email, name: m.name, at: ctx.now || null, note: note }]).slice(-40) };
+}
+/* site: the flat record. res: the assessment's answer. a: the stored assessment (decision, funding, review) */
+function gatesOf(site, res, cfg, a) {
+  cfg = cfg || {}; var G = cfg.gates, R = cfg.review; if (!G && !R && !cfg.closing) return null;
+  site = site || {}; res = res || {}; a = a || {}; G = G || {};
+  var out = [], rd = res.readiness || {}, p = res.power || {};
+  function item(key) { var hit = null; (rd.sections || []).forEach(function (s) { (s.items || []).forEach(function (i) { if (i.key === key) hit = i; }); }); return hit; }
+  function add(key, label, state, words) { out.push({ key: key, label: label, state: state, words: words }); }
+  /* G0 */
+  var ctl = item('control-evidence'), ctlSec = (rd.sections || []).filter(function (s) { return s.key === 'control'; })[0];
+  var ctlDone = ctl ? ctl.state === 'done' : !!(ctlSec && ctlSec.done > 0);
+  var clv = closingView(a.closing, cfg, site);
+  if (clv) add('G0', 'Intake & site control', clv.complete ? 'pass' : 'open', clv.words);
+  else add('G0', 'Intake & site control', ctlDone ? 'pass' : 'open', ctlDone ? 'On the register, with site-control evidence on file' : 'On the register; the site-control document is not on file');
+  /* G1: the transformer, else the service as its kVA at the continuous rating */
+  if (G.minKva != null) {
+    var kva = num(p.transformerKva), svc = num(p.serviceCapacityKw), eq = kva != null ? kva : svc != null ? svc / CONTINUOUS : null;
+    add('G1', 'Power', eq == null ? 'open' : eq >= G.minKva ? 'pass' : 'fail', eq == null ? 'No transformer or service size on file to judge against the ' + fmt(G.minKva) + ' kVA preferred'
+      : (kva != null ? fmt(kva) + ' kVA' : fmt(svc) + ' kW of service (about ' + fmt(eq) + ' kVA)') + (eq >= G.minKva ? ': at or over the ' + fmt(G.minKva) + ' kVA preferred' : ': under the ' + fmt(G.minKva) + ' kVA preferred'));
+  }
+  /* G2 */
+  if (G.minLeaseYears != null) {
+    /* the new lease, once one is recorded at closing, is the lease; until then the term left on the agreement on file */
+    var nl = clv && clv.leaseYears != null ? clv.leaseYears : null, t = nl != null ? nl : num(site.termYearsRemaining);
+    add('G2', 'Lease', t == null ? 'open' : t >= G.minLeaseYears ? 'pass' : 'fail', t == null ? 'No lease term on file to judge against the ' + G.minLeaseYears + ' years wanted' : t + (nl != null ? '-year lease recorded at closing: ' : ' years left: ') + (t >= G.minLeaseYears ? 'at or over' : 'under') + ' the ' + G.minLeaseYears + ' years wanted');
+  }
+  /* G3: the pathway a person picked */
+  var dec = a.decision && a.decision.status === 'approved' ? a.decision : null, fd = a.funding && FUND_STATES.indexOf(a.funding.status) >= 0 && a.funding.status !== 'withdrawn' ? a.funding : null;
+  var picked = dec ? dec.uses || [] : fd ? fd.uses || [] : [], pickLabel = dec ? dec.label : fd ? fd.label : null, rec = res.recommend || {};
+  add('G3', 'Pathway', picked.length ? 'pass' : 'open', picked.length ? pickLabel + (dec ? ', approved for pre-development' : ', submitted for funding') : rec.best ? 'No pathway picked yet; ' + (rec.fits.filter(function (f) { return f.use === rec.best; })[0] || {}).label + ' shows the highest screening return' : 'No pathway picked; nothing fits the power on file');
+  /* G4: the hurdle on the pathway (the best use until one is picked), and the committee's approval where there is one */
+  var irrOf = { compute: res.compute && res.compute.economics && res.compute.economics.ok ? res.compute.economics.irrPct : null, bess: res.bess && res.bess.ok ? res.bess.returns.irrPct : null, supercharger: res.supercharger && res.supercharger.ok ? res.supercharger.returns.irrPct : null };
+  var judged = picked.length ? picked : rec.best ? [rec.best] : [], irrs = judged.map(function (u) { return irrOf[u]; }), known = irrs.filter(function (x) { return x != null; });
+  var low = known.length ? Math.min.apply(null, known) : null, hasFund = !!cfg.funding, approved = fd && fd.status === 'approved', declined = fd && fd.status === 'declined';
+  if (G.irrHurdlePct != null || hasFund) {
+    var hs = G.irrHurdlePct == null ? null : low == null || known.length < irrs.length ? 'open' : low >= G.irrHurdlePct ? 'pass' : 'fail';
+    var hw = G.irrHurdlePct == null ? 'No hurdle rate is set' : low == null ? 'No return to judge against the ' + G.irrHurdlePct + '% hurdle' : (judged.length > 1 ? 'the lowest of the pathway’s returns, ' : '') + low + '% ' + (low >= G.irrHurdlePct ? 'clears' : 'is under') + ' the ' + G.irrHurdlePct + '% hurdle' + (picked.length ? '' : ' (on the highest-returning use; no pathway is picked)');
+    var st = declined || hs === 'fail' ? 'fail' : (hs === 'pass' || hs == null) && (!hasFund || approved) && (hs != null || hasFund) ? 'pass' : 'open';
+    add('G4', 'Return', st, hw.charAt(0).toUpperCase() + hw.slice(1) + (hasFund ? '; ' + (approved ? 'approved by ' + (fd.decision && fd.decision.name || cfg.funding.name) : declined ? 'declined by ' + (fd.decision && fd.decision.name || cfg.funding.name) : fd ? 'with ' + cfg.funding.name.toLowerCase() : 'not yet submitted to ' + cfg.funding.name.toLowerCase()) : '') + '. A screening return, not the investment model');
+  }
+  /* G5 */
+  add('G5', 'Shovel ready', rd.applicable && rd.done === rd.applicable ? 'pass' : 'open', (rd.done || 0) + ' of ' + (rd.applicable || 0) + ' checklist items with evidence on file');
+  /* G6 */
+  if (R) { var rv = reviewView(a.review, cfg); add('G6', R.name, rv.outcome ? 'pass' : 'open', rv.words); }
+  var screen = out.filter(function (g) { return g.key === 'G1' || g.key === 'G2'; });
+  return { list: out, passed: out.filter(function (g) { return g.state === 'pass'; }).length, failed: out.filter(function (g) { return g.state === 'fail'; }).map(function (g) { return g.key; }), of: out.length,
+    screen: !screen.length ? null : screen.some(function (g) { return g.state === 'fail'; }) ? 'fail' : screen.every(function (g) { return g.state === 'pass'; }) ? 'pass' : 'open',
+    rules: { minKva: G.minKva == null ? null : G.minKva, minLeaseYears: G.minLeaseYears == null ? null : G.minLeaseYears, irrHurdlePct: G.irrHurdlePct == null ? null : G.irrHurdlePct } };
+}
+/* what the pages may know of the review: its name, its members' names and whether this caller votes */
+function reviewInfo(cfg, email) { var r = cfg && cfg.review; return r ? { name: r.name, members: r.members.map(function (m) { return m.name; }), canVote: !!reviewer(cfg, email), me: (reviewer(cfg, email) || {}).name || null } : null; }
+
+/* the facts the answer rests on: a change in any of them makes it stale */
+function inputHashOf(site, screen, parcel, cfg, upgrade) {
+  site = site || {};
+  var up = upgrade && typeof upgrade === 'object' && upgrade.status !== 'withdrawn' ? [upgrade.status, num(upgrade.targetKw), upgrade.askedBy || null] : null;
+  var facts = [VERSION, B.VERSION, T.VERSION, num(site.transformerKva), num(site.serviceCapacityKw), num(site.existingPeakKw), num(site.reportedPeakKw), site.peakUnresolved === true,
+    num(site.availablePowerMw), stateOf(site), zipOf(site), num(site.powerPricePerKwh), num(site.termYearsRemaining), screen ? screen.at || null : null, parcel ? parcel.at || null : null, cfg || null, up];
+  if (chipsBasis(cfg)) facts.push(PS.VERSION);   /* the pod's sheet, only where it is read: every other workspace's answers keep their hash */
+  return hash(JSON.stringify(facts));
+}
+
+/* site: the flat record (site-bridge flatten). ctx: { screen, parcel, marks, config, now, upgrade } */
 function assess(site, ctx) {
   site = site || {}; ctx = ctx || {};
   var cfg = ctx.config || configOf(null), screen = ctx.screen || null, parcel = ctx.parcel || null, st = stateOf(site);
@@ -333,11 +928,13 @@ function assess(site, ctx) {
   var bess = power.availableKw > 0 ? B.bessCase({ powerKw: power.availableKw, state: st, utility: power.utility || site.utility || null, assumptions: cfg.bess }) : { ok: false, reason: power.availableKw === 0 ? 'Nothing is free on the limit and peak on file' : 'No power figure to size a battery on' };
   var year = ctx.now ? Number(String(ctx.now).slice(0, 4)) + 1 : null;
   var sup = power.availableKw != null ? T.superchargerCase({ state: st, availableKw: power.availableKw, startYear: year, assumptions: cfg.supercharger.assumptions, sizing: cfg.supercharger.sizing }) : { ok: false, reason: 'No power figure to size posts on' };
-  var c = { site: site, power: power, compute: compute, screen: screen, parcel: parcel };
+  var upgrade = upgradeView(ctx.upgrade, power, cfg, site), upgradeAdvice = upgradeAdviceOf(power, compute, cfg, site, upgrade);
+  var pairing = pairingOf(compute, site, st, power, cfg);
+  var c = { site: site, power: power, compute: compute, screen: screen, parcel: parcel, upgrade: upgrade };
   var readiness = readinessOf(c, ctx.marks), verify = verificationsOf(c, readiness);
   var grade = { A: 'Sized on a limit and a peak on file', B: 'Sized on a figure entered by hand', C: 'Sized on a ceiling: the site’s peak is not on file', D: 'Not sized: no power figure on file' }[power.grade];
-  return { v: VERSION, at: ctx.now || null, inputHash: inputHashOf(site, screen, parcel, cfg),
-    power: power, compute: compute, bess: bess, supercharger: sup, recommend: recommendOf(compute, bess, sup), readiness: readiness, verify: verify,
+  return { v: VERSION, at: ctx.now || null, inputHash: inputHashOf(site, screen, parcel, cfg, ctx.upgrade),
+    power: power, compute: compute, pairing: pairing, upgrade: upgrade, upgradeAdvice: upgradeAdvice, bess: bess, supercharger: sup, recommend: recommendOf(compute, bess, sup), readiness: readiness, verify: verify,
     confidence: { grade: power.grade, words: grade, screened: !!(screen && screen.complete), parcel: !!(parcel && parcel.ok) },
     note: 'Compute, the battery and fast charging are each sized on the whole free capacity by itself: they are alternatives, not a stack.' };
 }
@@ -350,10 +947,14 @@ function listView(a, site, ctx) {
   /* only what the row and the card draw: the notes, the streams, the loan, the shelf and the limits ride on the one-site view */
   if (r.bess) { delete r.bess.projections; delete r.bess.notes; delete r.bess.revenue; delete r.bess.debt; delete r.bess.energyAtEnd; }
   if (r.supercharger) { delete r.supercharger.projections; delete r.supercharger.notes; }
-  if (r.compute) { delete r.compute.shelf; if (r.compute.economics) delete r.compute.economics.notes; }
+  if (r.compute) { r.compute.shelf = (r.compute.shelf || []).map(function (u) { var row = { key: u.key, label: u.label, klassLabel: u.klassLabel, meterKw: u.meterKw, fits: u.fits }; if (u.chip) { row.chip = u.chip; row.gpus = u.gpus; row.units = u.units; row.irrPct = u.irrPct == null ? null : u.irrPct; } return row; }); delete r.compute.requirements; if (r.compute.economics) delete r.compute.economics.notes; if (r.compute.space) delete r.compute.space; }
+  if (r.upgrade && r.upgrade.compute) delete r.upgrade.compute.words;
   if (r.power) { delete r.power.limits; delete r.power.verify; }
   if (r.readiness) r.readiness.sections = r.readiness.sections.map(function (s) { return { key: s.key, label: s.label, done: s.done, of: s.of }; });
-  r.stale = r.inputHash !== inputHashOf(site, a.screen || null, a.parcel || null, cfg);
+  r.stale = r.inputHash !== inputHashOf(site, a.screen || null, a.parcel || null, cfg, a.upgrade || null);
+  r.funding = fundingView(a.funding);
+  /* the gates read the STORED answer whole (the checklist's items), not the thinned row */
+  r.gates = gatesOf(site, a.result, cfg, a); r.review = reviewView(a.review, cfg); r.closing = closingView(a.closing, cfg, site);
   r.decision = a.decision && a.decision.status === 'approved' ? { status: 'approved', uses: a.decision.uses || [], label: a.decision.label || null, by: a.decision.by || null, at: a.decision.at || null, note: a.decision.note || null } : null;
   r.screenAt = a.screen && a.screen.at || null; r.parcelAt = a.parcel && a.parcel.at || null; r.by = a.by || null;
   r.located = a.screen && a.screen.located ? { precision: a.screen.located.precision || null, approximate: a.screen.located.approximate === true } : null;
@@ -362,5 +963,9 @@ function listView(a, site, ctx) {
 }
 
 module.exports = { VERSION: VERSION, CONFIG_KEY: CONFIG_KEY, CONTINUOUS: CONTINUOUS, MODULARS: MODULARS, CHECKLIST: CHECKLIST, ITEM_KEYS: ITEM_KEYS, CHECK_STATES: CHECK_STATES,
-  USES: USES, PREDEV_STATUS: PREDEV_STATUS, recommendOf: recommendOf, decisionOf: decisionOf,
-  configOf: configOf, powerOf: powerOf, computeOf: computeOf, readinessOf: readinessOf, verificationsOf: verificationsOf, inputHashOf: inputHashOf, assess: assess, listView: listView, stateOf: stateOf };
+  USES: USES, PREDEV_STATUS: PREDEV_STATUS, recommendOf: recommendOf, decisionOf: decisionOf, klassOf: klassOf, rateOf: rateOf, referenceOf: referenceOf,
+  PAIR_MIN_KW: PAIR_MIN_KW, pairingOf: pairingOf, UPGRADE_STATES: UPGRADE_STATES, upgradeOf: upgradeOf, upgradeView: upgradeView, upgradeAdviceOf: upgradeAdviceOf,
+  CLOSING_STEPS: CLOSING_STEPS, closingChange: closingChange, closingView: closingView,
+  REVIEW_VOTES: REVIEW_VOTES, reviewer: reviewer, reviewView: reviewView, reviewChange: reviewChange, reviewInfo: reviewInfo, gatesOf: gatesOf,
+  FUND_STATES: FUND_STATES, committeeMember: committeeMember, fundingRequest: fundingRequest, fundingChange: fundingChange, fundingView: fundingView, fundingInfo: fundingInfo,
+  unitsOf: unitsOf, configOf: configOf, powerOf: powerOf, computeOf: computeOf, readinessOf: readinessOf, verificationsOf: verificationsOf, inputHashOf: inputHashOf, assess: assess, listView: listView, stateOf: stateOf };
