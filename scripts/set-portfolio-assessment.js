@@ -26,6 +26,13 @@
                  a Nano or Micro pod is priced on the offtake partner's stated
                  per-megawatt figures (compute-contract.js PARTNER.reference),
                  any of them replaced by the workspace's own
+       .compute  { basis: 'chips', chipset?, pod?: { prices, costUsd } }
+                 compute is the maker's 1 MW pod, sized and priced BY CHIP
+                 (api/_lib/pod-spec.js, the maker's product overview): the
+                 GPUs, the usable IT and the power at the meter are what the
+                 pod carries with each chip. `chipset` names the workspace's
+                 own chip; `pod.prices` a price a GPU-hour for a chip with no
+                 public one; `pod.costUsd` the pod's cost once the maker quotes
        .gates    { minKva, minLeaseYears, irrHurdlePct }
                  the workspace's own screening gates: the transformer it
                  prefers, the lease years it wants left, its hurdle rate
@@ -63,11 +70,15 @@
      … --attest-source Asana --attest-key-hash <sha256 of the app server's key, 64 hex>
      … --clear-attest                       decisions here only again
      … --clear-funding                      back to the finance marketplace
+     … --compute-basis chips                the maker's pod, by chip
+     … --chip gb300                         the workspace's own chip (rtx6000, gb300, vr-maxq, vr-maxp)
+     … --gpu-hour-price gb300=4.50          a price for a chip with no public one
+     … --pod-cost gb300=21000000            the pod's cost, once the maker quotes
      … --compute-basis spot                 back to the public reference price
      add --apply --confirm-org chileasing.com to write
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
-var AS = require('../api/_lib/portfolio/assess');
+var AS = require('../api/_lib/portfolio/assess'), PS = require('../api/_lib/pod-spec');
 function arg(n) { var i = process.argv.indexOf(n); return i >= 0 ? process.argv[i + 1] : null; }
 function args(n) { var out = []; process.argv.forEach(function (a, i) { if (a === n && process.argv[i + 1] != null) out.push(process.argv[i + 1]); }); return out; }
 function has(n) { return process.argv.indexOf(n) >= 0; }
@@ -105,7 +116,13 @@ function asked() {
     if (!String(asrc || '').trim()) throw refuse(2, '--attest-key-hash needs --attest-source: the name of the app the committee decides in (Asana)');
     out.attest = { source: String(asrc).trim().slice(0, 30), keyHash: String(ah) };
   }
-  if (basis != null) { if (basis !== 'partner' && basis !== 'spot') throw refuse(2, '--compute-basis is partner (the offtake partner’s stated figures) or spot (the public reference price)'); out.compute.basis = basis === 'partner' ? 'partner' : null; }
+  if (basis != null) { if (basis !== 'partner' && basis !== 'spot' && basis !== 'chips') throw refuse(2, '--compute-basis is chips (the maker’s 1 MW pod, sized and priced by the chip racked in it), partner (the offtake partner’s stated figures) or spot (the public reference price)'); out.compute.basis = basis === 'spot' ? null : basis; }
+  var chip = arg('--chip');
+  if (chip != null) { if (!PS.platformFor(chip)) throw refuse(2, '--chip is one of the pod’s configurations: ' + PS.PLATFORMS.map(function (p) { return p.key; }).join(', ')); out.compute.chipset = PS.platformFor(chip).key; }
+  /* the workspace's own figures for a pod configuration: --gpu-hour-price gb300=4.50, --pod-cost gb300=21000000 */
+  function byChip(flag, what) { var o = {}; args(flag).forEach(function (raw) { var m = /^([a-z0-9-]+)=\$?([0-9.,_]+)$/i.exec(String(raw).trim()), p = m && PS.platform(m[1]), n = m ? Number(m[2].replace(/[,_]/g, '')) : NaN; if (!p || !(n > 0)) throw refuse(2, flag + ' is <configuration>=<' + what + '>, the configuration one of ' + PS.PLATFORMS.map(function (x) { return x.key; }).join(', ')); o[p.key] = n; }); return o; }
+  var prices = byChip('--gpu-hour-price', 'dollars a GPU-hour'), costs = byChip('--pod-cost', 'dollars a pod');
+  if (Object.keys(prices).length || Object.keys(costs).length) out.compute.pod = { prices: prices, costUsd: costs };
   var ref = { revenueUsdPerMwYear: money('--revenue-per-mw-year'), capexUsdPerMw: money('--capex-per-mw'), utilityUsdPerMwYear: money('--utility-per-mw-year') };
   Object.keys(ref).forEach(function (k) { if (ref[k] === undefined) delete ref[k]; });
   if (Object.keys(ref).length) out.compute.reference = ref;
@@ -123,6 +140,8 @@ function patch(current, ask) {
     cur.compute = cur.compute && typeof cur.compute === 'object' ? cur.compute : {};
     if ('basis' in ask.compute) { if (ask.compute.basis) cur.compute.basis = ask.compute.basis; else delete cur.compute.basis; }
     if (ask.compute.reference) cur.compute.reference = Object.assign({}, cur.compute.reference || {}, ask.compute.reference);
+    if (ask.compute.chipset) cur.compute.chipset = ask.compute.chipset;
+    if (ask.compute.pod) { var cp = cur.compute.pod && typeof cur.compute.pod === 'object' ? cur.compute.pod : {}; cur.compute.pod = { prices: Object.assign({}, cp.prices || {}, ask.compute.pod.prices), costUsd: Object.assign({}, cp.costUsd || {}, ask.compute.pod.costUsd) }; }
   }
   if (Object.keys(ask.gates).length) cur.gates = Object.assign({}, cur.gates && typeof cur.gates === 'object' ? cur.gates : {}, ask.gates);
   if (ask.review) cur.review = ask.review;
@@ -134,6 +153,8 @@ function patch(current, ask) {
   Object.keys(ask.gates).forEach(function (k) { if (!read.gates || read.gates[k] !== ask.gates[k]) throw refuse(2, 'Refusing: ' + k + ' = ' + ask.gates[k] + ' is outside the range the assessment accepts.'); });
   if (ask.funding && (!read.funding || read.funding.members.length !== ask.funding.members.length)) throw refuse(2, 'Refusing: the assessment would not read that committee back (a repeated or malformed address?).');
   if (ask.attest && !(read.funding && read.funding.attest && read.funding.attest.keyHash === ask.attest.keyHash)) throw refuse(2, 'Refusing: the assessment would not read that connected app back.');
+  if (ask.compute.basis && read.compute.basis !== ask.compute.basis) throw refuse(2, 'Refusing: the assessment would not read that compute basis back.');
+  if (ask.compute.pod) ['prices', 'costUsd'].forEach(function (g) { Object.keys(ask.compute.pod[g]).forEach(function (k) { if (read.compute.pod[g][k] !== ask.compute.pod[g][k]) throw refuse(2, 'Refusing: ' + g + '.' + k + ' = ' + ask.compute.pod[g][k] + ' is outside the range the assessment accepts.'); }); });
   if (ask.compute.reference) Object.keys(ask.compute.reference).forEach(function (k) { if (read.compute.reference[k] !== ask.compute.reference[k]) throw refuse(2, 'Refusing: ' + k + ' = ' + ask.compute.reference[k] + ' is outside the range the assessment accepts.'); });
   return { changed: JSON.stringify(cur) !== was, config: cur, read: read };
 }
@@ -172,7 +193,7 @@ function summary(p) {
     var first = await write(st.db, ORG, ask, now), second = await write(st.db, ORG, ask, now);
     var sample = AS.assess({ address: { state: 'OK', zip: '74834' }, transformerKva: 1500 }, { config: first.read, now: now }).compute;
     console.log(JSON.stringify({ mode: 'dry-run (offline, in-memory)', org: ORG, firstRun: summary(first), secondRunChanged: second.changed, write: { portfolioAssessment: st.data[home + '/billing/current'].portfolioAssessment },
-      sample: { site: '1,500 kVA in ZIP 74834', compute: sample.words, basis: sample.economics.basis, irrPct: sample.economics.irrPct, capexUsd: sample.economics.capexUsd } }, null, 2));
+      sample: { site: '1,500 kVA in ZIP 74834', compute: sample.words, byChip: sample.byChip ? sample.shelf.map(function (u) { return { chip: u.chip, gpus: u.gpus, meterKw: u.meterKw, pods: u.units, irrPct: u.irrPct == null ? null : u.irrPct }; }) : undefined, basis: sample.economics.basis, irrPct: sample.economics.irrPct, capexUsd: sample.economics.capexUsd } }, null, 2));
     console.log('Nothing was written anywhere. Re-run with --apply --confirm-org ' + ORG + ' to write it.');
     return;
   }

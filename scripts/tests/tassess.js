@@ -15,7 +15,9 @@
      A  the assessment library: the power rules (measured, entered, ceiling,
         none: never a zero peak), the compute shelf, the readiness score,
         the verifications, the approval
-     D  the door on the shared Firestore double: Run, the screening job a
+     C  by chip (2026-11-11): the maker's pod as ONE record, sized and priced
+        by the chip racked in it where a workspace asks, off for every other
+   D  the door on the shared Firestore double: Run, the screening job a
         phase at a time (Grid Atlas, then the parcel), a readiness mark, the
         approval for pre-development, the list row without its tables
    node scripts/tests/tassess.js */
@@ -558,6 +560,81 @@ test('D11 a closing step through the door: 409 with none in the settings; an edi
   var undo = await w.post({ action: 'assess-closing', site: 's1', step: 'lease', done: false }); assert.equal(undo.closing.complete, false); assert.ok(/Took back the lease/.test(undo.note));
   assert.equal(w.audits('sitecrm-assess-closing').length, 5); assert.equal((await w.door.fullView({ root: w.root }, { id: 's1' }, w.site('s1'))).closingHistory.length, 4);
   await rejects(w.post({ action: 'assess-closing', site: 's1', step: 'purchase' }, { canEdit: false }), 403);
+});
+
+/* ── BY CHIP (2026-11-11, Tommy, of the pod maker's product overview: "Let's
+   base it off the chips this is the first real spec sheet we have received
+   and it's very detailed") ── */
+var PS = require('../../api/_lib/pod-spec');
+function chips(extra) { return A.configOf({ portfolioAssessment: { compute: Object.assign({ basis: 'chips' }, extra || {}) } }); }
+test('C01 the pod’s sheet is ONE record: what a pod carries by chip, at the meter at its own design pPUE, and the heat read off the sheet’s own table', function () {
+  assert.equal(PS.POD.ppue, 1.091); assert.equal(PS.POD.coolingKw, 1000); assert.equal(PS.POD.site.maxPods, 4); assert.equal(PS.POD.commercial.priced, false);
+  assert.deepStrictEqual(PS.PLATFORMS.map(function (p) { return [p.key, p.gpus, p.itKw, p.peakItKw, PS.atMeter(p).needKw]; }),
+    [['rtx6000', 432, 430, 430, 469], ['gb300', 288, 600, 680, 742], ['vr-maxq', 288, 748, 748, 816], ['vr-maxp', 288, 908, 908, 991]]);
+  PS.PLATFORMS.forEach(function (p) { assert.ok(PS.atMeter(p).needKw < 1000, p.key + ' stays under 1 MW of facility load a pod'); });
+  assert.equal(PS.platformFor('gb300').key, 'gb300'); assert.equal(PS.platformFor('vr-maxp').key, 'vr-maxp'); assert.equal(PS.platformFor('h100'), null);
+  /* the heat: GB300 is whole to 35 °C and 89% at 40 °C (420 of 473 kW); Vera Rubin Max P is capped at both; the RTX pod is not judged */
+  var g = PS.thermalOf(PS.platform('gb300')); assert.deepStrictEqual(g.rows.map(function (r) { return r.share; }), [1, 0.89]); assert.equal(g.derates, true); assert.ok(/Full power to about 39\.4 °C/.test(g.words));
+  var v = PS.thermalOf(PS.platform('vr-maxp')); assert.deepStrictEqual(v.rows.map(function (r) { return r.share; }), [0.97, 0.48]);
+  var x = PS.thermalOf(PS.platform('rtx6000')); assert.equal(x.derates, false); assert.ok(/gives no figure/.test(x.words));
+  assert.ok(PS.requirements(2).some(function (w) { return /2 pads, each at least 21 × 9 ft, rated 60 metric tons, with 2 m/.test(w); })); assert.ok(PS.requirements(1).some(function (w) { return /No price is on the sheet/.test(w); }));
+});
+test('C02 off by default: a workspace that does not ask keeps the shelf and its hash; asking is `compute.basis: chips`, and its own figures are read by the pod’s keys only', function () {
+  var plain = A.configOf(null), c = chips({ pod: { prices: { gb300: 4.5, h100: 3, 'vr-maxp': 0 }, costUsd: { gb300: 21000000, rtx6000: 5 } } });
+  assert.equal(plain.compute.basis, null); assert.equal(A.computeOf({ availableKw: 1500, basis: 'measured' }, plain, {}).chosen.key, 'm1000'); assert.equal(A.computeOf({ availableKw: 1500, basis: 'measured' }, plain, {}).byChip, undefined);
+  assert.equal(c.compute.basis, 'chips'); assert.deepStrictEqual(c.compute.pod, { prices: { gb300: 4.5 }, costUsd: { gb300: 21000000 } });
+  var site = { serviceCapacityKw: 1500, state: 'OK' };
+  assert.notEqual(A.inputHashOf(site, null, null, chips(), null), A.inputHashOf(site, null, null, plain, null));
+  assert.deepStrictEqual(A.unitsOf(plain).map(function (u) { return u.needKw; }), [90, 180, 420, 600, 900, 1200]); assert.deepStrictEqual(A.unitsOf(chips()).map(function (u) { return u.key; }), ['rtx6000', 'gb300', 'vr-maxq', 'vr-maxp']);
+});
+test('C03 sized by chip: one to four pods on the free power, every configuration that fits priced by the contract engine on its own GPUs, the answer the highest screening return', function () {
+  var cfg = chips(), site = { address: { state: 'OK', zip: '74834' } };
+  var none = A.computeOf({ availableKw: 400, basis: 'measured' }, cfg, site); assert.equal(none.fits, false); assert.equal(none.needKw, 469); assert.ok(/does not carry a pod: the lightest configuration \(RTX PRO 6000, 430 kW of IT\) needs 469 kW/.test(none.words));
+  var c = A.computeOf({ availableKw: 1000, basis: 'measured' }, cfg, site);
+  assert.equal(c.byChip, true); assert.equal(c.pue, 1.091); assert.deepStrictEqual(c.shelf.map(function (u) { return [u.key, u.meterKw, u.units]; }), [['rtx6000', 469, 2], ['gb300', 742, 1], ['vr-maxq', 816, 1], ['vr-maxp', 991, 1]]);
+  assert.equal(c.chosen.key, 'rtx6000'); assert.equal(c.chosen.units, 2); assert.equal(c.chosen.gpus, 864); assert.equal(c.chosen.itKw, 860); assert.equal(c.chosen.meterKw, 938); assert.equal(c.chosen.leftKw, 62); assert.ok(/highest screening return/.test(c.chosen.why));
+  assert.ok(/2 pods of 432 RTX PRO 6000 GPUs each \(860 kW of IT, 938 kW at the meter at pPUE 1\.091\) on 1,000 kW free/.test(c.words));
+  var e = c.economics; assert.ok(e.ok); assert.equal(e.basis, 'chips'); assert.equal(e.gpus, 864); assert.equal(e.itKw, 860); assert.equal(e.priceBasis, 'spot'); assert.equal(e.capexBasis, 'estimate'); assert.ok(e.irrPct > 0); assert.ok(e.capexUsd > 0);
+  assert.ok(e.notes.some(function (n) { return /not an offer/.test(n); })); assert.ok(e.notes.some(function (n) { return /the maker’s sheet carries no price/.test(n); })); assert.ok(e.notes.some(function (n) { return /hours capped by heat/.test(n); }));
+  /* a chip with no public price shows no return; one the library does not carry is sized and nothing more */
+  var gb = c.shelf[1], vr = c.shelf[3]; assert.equal(gb.priced, true); assert.equal(gb.irrPct, null); assert.ok(gb.capexUsd > 0); assert.equal(vr.priced, false); assert.equal(vr.irrPct, null); assert.equal(vr.capexUsd, null);
+  /* never more than four stand-alone pods, and it says so */
+  var big = A.computeOf({ availableKw: 6000, basis: 'measured' }, cfg, site); assert.equal(big.chosen.units, 4); assert.ok(big.shelf.every(function (u) { return u.units === 4; })); assert.ok(/one to 4 stand-alone pods/.test(big.more));
+  assert.ok(/1 MW of IT|pads, each at least 21 × 9 ft/.test(big.space.words)); assert.ok(/no chiller and no water/.test(big.cooling.words));
+});
+test('C04 the workspace’s own chip, its own price and the pod’s own cost: the named chip is the answer where it fits, priced on the figure set, and said to be the workspace’s', function () {
+  var site = { address: { state: 'AZ', zip: '85201' } }, c = A.computeOf({ availableKw: 1000, basis: 'measured' }, chips({ chipset: 'gb300', pod: { prices: { gb300: 4.5 } } }), site), e = c.economics;
+  assert.equal(c.chosen.key, 'gb300'); assert.equal(c.chosen.why, 'this workspace’s chip'); assert.equal(c.chosen.units, 1); assert.equal(c.chosen.leftKw, 258);
+  assert.equal(e.pricePerGpuHour, 4.5); assert.equal(e.priceBasis, 'workspace price'); assert.ok(/the workspace’s own price/.test(e.irrBasis)); assert.ok(e.irrPct > 0); assert.equal(e.gpus, 288);
+  var q = A.computeOf({ availableKw: 1000, basis: 'measured' }, chips({ chipset: 'gb300', pod: { prices: { gb300: 4.5 }, costUsd: { gb300: 30000000 } } }), site).economics;
+  assert.equal(q.capexUsd, 30000000); assert.equal(q.capexBasis, 'entered'); assert.ok(q.irrPct < e.irrPct); assert.ok(q.notes.some(function (n) { return /this workspace’s own figure for the pod/.test(n); }));
+  /* the named chip does not fit: the answer falls to what does, and the upgrade to ask for is the named chip's pod */
+  var r = A.assess({ address: { state: 'AZ', zip: '85201' }, serviceCapacityKw: 600, existingPeakKw: 0 }, { config: chips({ chipset: 'gb300' }), now: NOW });
+  assert.equal(r.compute.chosen.key, 'rtx6000'); assert.equal(r.upgradeAdvice.unit, 'gb300'); assert.equal(r.upgradeAdvice.needKw, 742); assert.equal(r.upgradeAdvice.shortKw, 142); assert.ok(/carries a 430 kW RTX PRO 6000 pod today\. A 600 kW GB300 NVL72 pod needs 742 kW free/.test(r.upgradeAdvice.words));
+  assert.equal(r.pairing.leftKw, 131); assert.ok(/Beside the 430 kW RTX PRO 6000 pod/.test(r.pairing.words)); assert.equal(r.recommend.fits[0].size, '430 kW RTX PRO 6000');
+});
+test('C05 the readiness and the verifications follow the pod: no water, two routes, the pad, the feed, and the design ambient where the chosen racks are capped in the heat', function () {
+  var r = A.assess({ address: { state: 'AZ', zip: '85201' }, serviceCapacityKw: 1000, existingPeakKw: 0 }, { config: chips({ chipset: 'gb300' }), now: NOW });
+  function item(k) { var hit = null; r.readiness.sections.forEach(function (s) { s.items.forEach(function (i) { if (i.key === k) hit = i; }); }); return hit; }
+  assert.equal(item('physical-cooling').state, 'screened'); assert.equal(item('physical-cooling').source, 'Pod specification'); assert.ok(/no water supply or discharge/.test(item('physical-cooling').words));
+  assert.equal(item('conn-diversity').state, 'open'); assert.ok(/two carriers, or one carrier with a physically separate second route/.test(item('conn-diversity').words));
+  assert.ok(/21 × 9 ft and rated 60 metric tons/.test(item('physical-area').words)); assert.ok(/12 three-phase connections at 480Y\/277 V/.test(item('power-oneline').words)); assert.ok(/two 20 ft container sections/.test(item('physical-access').words));
+  assert.ok(r.compute.thermal.derates); assert.ok(r.verify.some(function (v) { return v.key === 'pod-ambient' && /39\.4 °C/.test(v.label); })); assert.ok(r.verify.some(function (v) { return v.key === 'pod-routes'; }));
+  assert.ok(r.compute.requirements.length >= 6);
+  /* the RTX pod is not capped on the sheet: no ambient verification is invented for it */
+  var x = A.assess({ address: { state: 'AZ', zip: '85201' }, serviceCapacityKw: 500, existingPeakKw: 0 }, { config: chips(), now: NOW }); assert.ok(!x.verify.some(function (v) { return v.key === 'pod-ambient'; }));
+  /* the register's row carries the chips, not the requirements */
+  var row = A.listView({ result: r }, { address: { state: 'AZ', zip: '85201' }, serviceCapacityKw: 1000, existingPeakKw: 0 }, { config: chips({ chipset: 'gb300' }) });
+  assert.equal(row.compute.requirements, undefined); assert.deepStrictEqual(row.compute.shelf.map(function (u) { return u.chip; }), ['RTX PRO 6000', 'GB300 NVL72', 'Vera Rubin NVL72, Max Q', 'Vera Rubin NVL72, Max P']); assert.equal(row.stale, false);
+});
+test('C06 through the door: a workspace on the chip basis is run and stored by chip, and an upgrade request names a pod configuration, never a unit of the other shelf', async function () {
+  var w = world({ billing: { portfolioAssessment: { compute: { basis: 'chips' } } } });
+  await w.post({ action: 'assess-run', ids: ['s1', 's2'] });
+  var a = w.site('s1').assessment.result; assert.equal(a.compute.byChip, true); assert.equal(a.compute.chosen.key, 'rtx6000'); assert.equal(a.compute.chosen.units, 3); assert.equal(a.compute.pod.maker, 'Runware');
+  assert.equal(w.site('s2').assessment.result.compute.fits, false);
+  var up = await w.post({ action: 'assess-upgrade', site: 's2', unit: 'gb300' }); assert.equal(w.site('s2').assessment.upgrade.targetKw, 782);   /* 120 kW limit, 80 free: 742 short by 662 */
+  assert.equal(w.site('s2').assessment.result.upgrade.compute.label, '600 kW GB300 NVL72'); assert.ok(up);
+  await rejects(w.post({ action: 'assess-upgrade', site: 's2', unit: 'm350' }), 400, /not a unit on the compute shelf/);
 });
 
 (async function () {

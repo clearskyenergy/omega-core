@@ -49,7 +49,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var B = require('./assess-bess'), T = require('./assess-supercharger');
-var CM = require('../omega-compute-model'), CC = require('../compute-contract'), D = require('./diligence'), UR = require('../utility-rates');
+var CM = require('../omega-compute-model'), CC = require('../compute-contract'), D = require('./diligence'), UR = require('../utility-rates'), PS = require('../pod-spec');
 
 var VERSION = 1, CONFIG_KEY = 'portfolioAssessment', CONTINUOUS = 0.8;
 /* the modular shelf, by IT load. The 75 kW unit is the Omega-Core skid as the
@@ -120,7 +120,10 @@ function configOf(billing) {
       partnerName: typeof c.partnerName === 'string' ? c.partnerName.slice(0, 80) : null, partnerFeePct: num(c.partnerFeePct) >= 0 && num(c.partnerFeePct) <= 50 ? num(c.partnerFeePct) : null,
       termMonths: num(c.termMonths) >= 12 && num(c.termMonths) <= 240 ? Math.floor(num(c.termMonths)) : null,
       /* 'partner': a Nano or Micro pod is priced on the offtake partner's stated per-megawatt figures (compute-contract.js PARTNER.reference), each replaceable here */
-      basis: c.basis === 'partner' ? 'partner' : null,
+      basis: c.basis === 'partner' ? 'partner' : c.basis === 'chips' ? 'chips' : null,
+      /* 'chips': the pod as its maker specifies it, sized and priced by the chip racked in it (pod-spec.js). The workspace's own
+         figures for it, by the pod's platform key: a price a GPU-hour where the chip has no public one, the pod's cost once the maker quotes */
+      pod: { prices: podFigures(obj(c.pod).prices, 0.05, 100), costUsd: podFigures(obj(c.pod).costUsd, 1e5, 5e8) },
       reference: { capexUsdPerMw: within(ref.capexUsdPerMw, 1e5, 5e8), revenueUsdPerMwYear: within(ref.revenueUsdPerMwYear, 1e4, 5e8), utilityUsdPerMwYear: within(ref.utilityUsdPerMwYear, 0, 5e8),
         gpusPerMw: within(ref.gpusPerMw, 1, 1e5), racksPerMw: within(ref.racksPerMw, 1, 1000), chipset: typeof ref.chipset === 'string' && CM.chipset(ref.chipset) ? ref.chipset : null } },
     funding: funding,
@@ -128,6 +131,7 @@ function configOf(billing) {
     review: reviewers.length ? { name: clean(rv.name, 60) || 'Executive Review', members: reviewers } : null,
     closing: closeYears != null ? { minLeaseYears: closeYears, agreement: clean(cl.agreement, 60) || 'site host agreement' } : null };
 }
+function podFigures(raw, lo, hi) { var out = {}; raw = obj(raw); PS.PLATFORMS.forEach(function (p) { var n = num(raw[p.key]); if (n != null && n >= lo && n <= hi) out[p.key] = n; }); return out; }
 function clean(v, n) { return typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n) || null : null; }
 
 /* ── power: the limit, the peak, what is free ──────────────────────────── */
@@ -279,7 +283,93 @@ function computeEconomics(m, units, cfg, site) {
   econCache[key] = res;
   return res;
 }
-function computeOf(power, cfg, site) {
+/* ── BY CHIP (2026-11-11, Tommy, of the pod maker's product overview: "Let's
+   base it off the chips this is the first real spec sheet we have received
+   and it's very detailed"). Where a workspace's settings ask for it
+   (compute.basis 'chips'), the unit is the maker's 1 MW pod and the shelf
+   is what that pod carries BY CHIP (pod-spec.js, the one record): the GPUs,
+   the usable IT and the power at the meter are the sheet's, at the pod's
+   own design pPUE. One to four stand-alone pods a site, as the maker sites
+   them. Every configuration that fits is priced by the ONE contract engine
+   on its own GPUs: at the chip's public reference price, else a price the
+   workspace set, else no return is shown. The answer is the workspace's own
+   chip where it fits, else the configuration with the highest screening
+   return, else the largest. The sheet carries no price: capital is the
+   engine's estimate until the maker quotes, and says so. ── */
+function chipsBasis(cfg) { return !!(cfg && cfg.compute && cfg.compute.basis === 'chips'); }
+function unitName(u) { return u.chip ? u.label + ' ' + u.chip + ' pod' : u.label + ' ' + u.klassLabel; }
+/* the units a workspace's compute is sized in, smallest at the meter first: each with what must be free for one */
+function unitsOf(cfg, pue) {
+  if (chipsBasis(cfg)) return PS.PLATFORMS.map(function (p) { var m = PS.atMeter(p); return { key: p.key, label: fmt(p.itKw) + ' kW', itKw: p.itKw, needKw: m.needKw, chip: p.short }; }).sort(function (a, b) { return a.needKw - b.needKw; });
+  pue = pue || (cfg && cfg.compute && cfg.compute.pue) || CM.DEFAULTS.pue;
+  return MODULARS.map(function (m) { return { key: m.key, label: m.label, itKw: m.itKw, needKw: Math.round(m.itKw * pue), chip: null }; });
+}
+function podEconomics(p, units, cfg, site) {
+  var rate = rateOf(site), term = cfg.compute.termMonths || COMPUTE_TERM_MONTHS, chip = p.chipset ? CM.chipset(p.chipset) : null, own = cfg.compute.pod || { prices: {}, costUsd: {} };
+  var price = own.prices[p.key] != null ? own.prices[p.key] : null, quoted = own.costUsd[p.key] != null ? own.costUsd[p.key] : null, m = PS.atMeter(p), pod = PS.POD;
+  if (!chip) return { ok: false, sized: true, gpus: p.gpus * units, itKw: p.itKw * units, chipset: { key: null, name: p.name },
+    reason: p.name + ' is not in the chip price library yet: the pod is sized on the maker’s figures, and no capital or return is shown' };
+  var key = ['pod', PS.VERSION, p.key, units, rate ? rate.perKwh + rate.words : null, term, price, quoted, cfg.compute.partnerFeePct, cfg.compute.partnerName].join('|');
+  if (econCache[key]) return econCache[key];
+  var cost = quoted != null ? quoted : CM.dynamicCapex(chip, p.gpus).mid;
+  var unit = { label: pod.label + ' (' + p.short + ')', word: 'pod', kw: m.drawKw, itKw: p.itKw, gpus: p.gpus, costUsd: cost }; if (p.racks) unit.racks = p.racks;
+  var input = { chipset: chip.key, units: units, unit: unit, contract: { termMonths: term, partner: cfg.compute.partnerFeePct != null ? { name: cfg.compute.partnerName || 'the offtake partner', feePct: cfg.compute.partnerFeePct } : false }, site: { route: 'own' }, operating: {} };
+  if (price != null) input.contract.pricePerGpuHour = price;
+  if (rate) input.operating.electricity = rate.perKwh;
+  var out; try { out = CC.contractCase(input, {}); } catch (e) { out = null; }
+  if (!out || out.ok === false) return { ok: false, reason: 'The compute engine could not price this pod' };
+  var e = D.economicsFromCase(out, input, null), at = price != null ? null : e.irrAt, set = price != null && e.priced, notes = [];
+  notes.push('The pod is the ' + pod.label + ' as its maker specifies it (' + pod.sheet.title + ', ' + pod.sheet.dated + '). ' + pod.sheet.standing + '.');
+  notes.push('By chip: one pod carries ' + fmt(p.gpus) + ' ' + p.name + ' GPUs (' + p.hardware + '), ' + fmt(p.itKw) + ' kW of usable IT' + (p.peakItKw > p.itKw ? ' rated and ' + fmt(p.peakItKw) + ' kW at peak' : '') + ', inside 1 MW of liquid cooling' + (p.estimate ? '; ' + p.estimate : '') + '.');
+  notes.push('At the meter: ' + fmt(m.needKw) + ' kW free a pod (' + (p.peakItKw > p.itKw ? 'the peak' : 'the IT') + ' at the pod’s design pPUE of ' + pod.ppue + ', stated at 1 MW full load). The site’s own transformer losses are not in it.');
+  notes.push(quoted != null ? 'Capital is this workspace’s own figure for the pod, $' + fmt(quoted) + ' a pod.' : 'Capital is the engine’s chipset-scaled midpoint for ' + fmt(p.gpus) + ' ' + chip.name + ' GPUs, an estimate, not a quote: the maker’s sheet carries no price, so the enclosure and cooling are the engine’s allowance, not the pod’s.');
+  notes.push(set ? 'Priced at $' + price + ' a GPU-hour, this workspace’s own figure: not a contract.' : at ? 'Priced at the chip’s public ' + at.basis + ' reference ($' + at.price + ' a GPU-hour): no contract price is set, so this is a screening figure.' : 'The chip has no public reference price, so no return is shown until a price is set for it.');
+  notes.push(rate ? 'Electricity: ' + rate.words + '.' : 'Electricity is the engine’s default ($' + CM.DEFAULTS.electricity + ' a kWh): no ZIP, state or power price is on file for this site.');
+  notes.push('The return is the project IRR on monthly cash over the ' + term + '-month term, annualised, before tax and without debt' + (term < pod.commercial.minTermMonths ? '' : '; the maker’s own minimum term is ' + pod.commercial.minTermMonths + ' months') + '. No site rent, the maker’s operating fee or hours capped by heat are in the case.');
+  var irr = set ? e.irrPct : at ? at.pct : null;
+  var res = { ok: true, basis: 'chips', chipset: { key: chip.key, name: p.name }, gpus: e.gpus, itKw: e.computeKw, capexUsd: e.capexUsd, capexBasis: quoted != null ? 'entered' : 'estimate', termMonths: term,
+    irrPct: irr, irrBasis: irr == null ? null : set ? 'project IRR at $' + price + ' a GPU-hour, the workspace’s own price' : 'project IRR at the public ' + at.basis + ' reference, $' + at.price + ' a GPU-hour',
+    pricePerGpuHour: set ? price : at ? at.price : null, priceBasis: set ? 'workspace price' : at ? at.basis : null, paybackMonths: set ? e.paybackMonths : at ? at.paybackMonths : null, notes: notes,
+    electricity: rate ? { perKwh: rate.perKwh, source: rate.source, utility: rate.utility } : { perKwh: null, source: 'default', utility: null } };
+  if (Object.keys(econCache).length > 400) econCache = {};
+  econCache[key] = res;
+  return res;
+}
+function podCompute(power, cfg, site, want) {
+  var pod = PS.POD, kw = power.availableKw, max = pod.site.maxPods;
+  var shelf = PS.PLATFORMS.map(function (p) {
+    var m = PS.atMeter(p), n = kw != null ? Math.min(max, Math.floor(kw / m.needKw + 1e-9)) : 0;
+    return { key: p.key, label: fmt(p.itKw) + ' kW', chip: p.short, klass: 'micro', klassLabel: 'Micro pod', itKw: p.itKw, gpus: p.gpus, meterKw: m.needKw, coolingKw: m.overheadKw, fits: n >= 1, units: n };
+  }).sort(function (a, b) { return a.meterKw - b.meterKw; });
+  var out = { pue: pod.ppue, byChip: true, shelf: shelf, chosen: null, fits: false, basis: power.basis, words: null,
+    pod: { maker: pod.maker, name: pod.name, label: pod.label, sheet: pod.sheet.title + ', ' + pod.sheet.dated, standing: pod.sheet.standing, coolingKw: pod.coolingKw, maxPods: max } };
+  if (kw == null) { out.words = 'No power figure to size compute on'; return out; }
+  shelf.forEach(function (u) {
+    if (!u.fits) return;
+    var e = podEconomics(PS.platform(u.key), u.units, cfg, site);
+    u.irrPct = e.ok ? e.irrPct : null; u.priceBasis = e.ok ? e.priceBasis : null; u.capexUsd = e.ok ? e.capexUsd : null; u.priced = !!e.ok;
+  });
+  var fitting = shelf.filter(function (u) { return u.fits; }), pick = null, why = null;
+  if (!fitting.length) { out.words = fmt(kw) + ' kW does not carry a pod: the lightest configuration (' + shelf[0].chip + ', ' + shelf[0].label + ' of IT) needs ' + fmt(shelf[0].meterKw) + ' kW at the meter'; out.needKw = shelf[0].meterKw; return out; }
+  var named = want ? PS.platform(want) : PS.platformFor(cfg.compute.chipset);
+  if (named) { pick = fitting.filter(function (u) { return u.key === named.key; })[0] || null; if (pick) why = want ? 'the unit asked for' : 'this workspace’s chip'; }
+  if (!pick) { fitting.forEach(function (u) { if (u.irrPct != null && (!pick || u.irrPct > pick.irrPct)) pick = u; }); if (pick) why = 'the highest screening return of the configurations that fit'; }
+  if (!pick) { pick = fitting[fitting.length - 1]; why = 'the largest configuration that fits; none of them has a price on file'; }
+  var p = PS.platform(pick.key), units = pick.units;
+  out.fits = true;
+  out.chosen = { key: pick.key, label: pick.label, chip: pick.chip, klass: pick.klass, klassLabel: pick.klassLabel, units: units, itKw: pick.itKw * units, gpus: pick.gpus * units, meterKw: pick.meterKw * units, coolingKw: pick.coolingKw * units, leftKw: r2(kw - pick.meterKw * units), why: why };
+  out.words = (units > 1 ? units + ' pods' : 'One pod') + ' of ' + fmt(pick.gpus) + ' ' + pick.chip + ' GPUs' + (units > 1 ? ' each' : '') + ' (' + fmt(out.chosen.itKw) + ' kW of IT, ' + fmt(out.chosen.meterKw) + ' kW at the meter at pPUE ' + pod.ppue + ') on ' + fmt(kw) + ' kW' +
+    (power.basis === 'ceiling' ? ', a ceiling' : power.basis === 'upgrade' ? ' after the upgrade' : ' free') + ': ' + why;
+  out.cooling = { kw: out.chosen.coolingKw, words: fmt(out.chosen.coolingKw) + ' kW of the ' + fmt(out.chosen.meterKw) + ' kW at the meter is the dry cooler’s fans, the pumps and the air units (design pPUE ' + pod.ppue + ' at full load). The loop is closed and rejects to outdoor air: no chiller and no water' };
+  out.space = { pods: units, words: (units > 1 ? units + ' pads, each' : 'One pad') + ' at least ' + pod.pad.lengthFt + ' × ' + pod.pad.widthFt + ' ft and rated ' + pod.pad.ratedTonnes + ' metric tons' + (units > 1 ? ', ' + pod.pad.betweenPodsM + ' m (' + pod.pad.betweenPodsFt + ' ft) between pods' : '') + ', with truck and crane access: the maker’s figures. Confirm the site has it before the site is approved' };
+  out.thermal = PS.thermalOf(p);
+  out.requirements = PS.requirements(units);
+  if (kw >= shelf[0].meterKw * (max + 1)) out.more = 'The maker sites one to ' + max + ' stand-alone pods; more than that on one site is its cluster design (five pods to a unit, two feeds a pod), which is not sized here.';
+  out.economics = podEconomics(p, units, cfg, site);
+  return out;
+}
+function computeOf(power, cfg, site, want) {
+  if (chipsBasis(cfg)) return podCompute(power, cfg, site, want);
   var pue = cfg.compute.pue || CM.DEFAULTS.pue, kw = power.availableKw;
   var shelf = MODULARS.map(function (m) { var need = Math.round(m.itKw * pue), k = klassOf(m.itKw), n = kw != null ? Math.floor(kw / need + 1e-9) : 0; return { key: m.key, label: m.label, klass: k.key, klassLabel: k.label, itKw: m.itKw, meterKw: need, coolingKw: need - m.itKw, fits: kw != null && kw >= need, units: m.repeats ? n : Math.min(n, 1) }; });
   var out = { pue: pue, shelf: shelf, chosen: null, fits: false, basis: power.basis, words: null };
@@ -386,6 +476,14 @@ function evidenceFor(key, c) {
     if (key === 'conn-providers' && f.carriersRead && f.carriers && f.carriers.length) return scr(f.carriers.slice(0, 4).join(', ') + (f.carriers.length > 4 ? ' and ' + (f.carriers.length - 4) + ' more' : ''), 'FCC broadband data');
     if (key === 'conn-latency' && f.carrierHotel) return scr('Nearest carrier hotel: ' + f.carrierHotel + (f.carrierHotelMi != null ? ', ' + f.carrierHotelMi + ' mi' : ''), 'PeeringDB');
   }
+  if (c.compute.byChip) {
+    var P = PS.POD;
+    if (key === 'physical-cooling') return scr('The pod is a closed loop that rejects heat to outdoor air: no water supply or discharge. Coolant is topped up at maintenance', 'Pod specification');
+    if (key === 'conn-diversity') return f && f.carriersRead && f.carriers && f.carriers.length > 1 ? scr(f.carriers.length + ' carriers at the address; the pod’s maker asks for ' + P.connectivity + ', and separate routes are not confirmed', 'FCC broadband data') : hint('The pod’s maker asks for ' + P.connectivity);
+    if (key === 'physical-access') return hint('Each pod ships as two ' + P.shipping.container + ' container sections (about ' + (P.shipping.coolingSectionKg / 1000) + ' and up to ' + (P.shipping.computeSectionKg / 1000) + ' metric tons): road access for the trucks and room for a crane');
+    if (key === 'power-oneline') return hint('Each pod takes one feed of ' + P.electrical.connectionsPerPod + ' three-phase connections at ' + P.electrical.voltage + '; no UPS or generator in this model');
+    if (key === 'package-liquid' && c.compute.fits && c.compute.thermal) return hint(c.compute.thermal.words);
+  }
   if (key === 'package-alignment' && c.compute.fits) return scr('Sized: ' + c.compute.words, 'This assessment');
   return null;
 }
@@ -417,6 +515,10 @@ function verificationsOf(c, readiness) {
   if (open('control-evidence')) out.push({ key: 'control', label: 'Put the site-control document on file (deed, lease, option or the host agreement and its amendment)' });
   if (open('zoning-use')) out.push({ key: 'zoning', label: 'Confirm with the jurisdiction that compute is a permitted use' + (pa && pa.zoning ? ' in ' + pa.zoning : '') });
   if (open('conn-fiber') && !(f && f.carriersRead && f.carriers && f.carriers.length)) out.push({ key: 'fiber', label: 'Get a carrier’s quote for dedicated symmetrical fiber to the site' });
+  if (c.compute.byChip && c.compute.fits) {
+    if (c.compute.thermal && c.compute.thermal.derates) out.push({ key: 'pod-ambient', label: 'Get the site’s design ambient (its hottest-hour dry bulb) and the maker’s derate for it: ' + c.compute.thermal.words.split('. ')[0].replace(/^Full power/, 'the chosen racks hold full power') });
+    if (open('conn-diversity')) out.push({ key: 'pod-routes', label: 'Confirm ' + PS.POD.connectivity + ' to the site: the pod’s maker asks for it' });
+  }
   if (!sc) out.push({ key: 'screen', label: 'Run the Grid Atlas and parcel screens: the substation, the utility, fiber and zoning are not read yet' });
   return out.slice(0, 8);
 }
@@ -432,7 +534,7 @@ var PREDEV_STATUS = 'Pre-development';
    returns are on different bases (said), so this ranks a screen, not a deal */
 function recommendOf(compute, bess, sup) {
   var fits = [];
-  if (compute && compute.fits) fits.push({ use: 'compute', label: 'Compute', size: compute.chosen ? (compute.chosen.units > 1 ? compute.chosen.units + ' × ' : '') + compute.chosen.label : null, irrPct: compute.economics && compute.economics.ok ? compute.economics.irrPct : null });
+  if (compute && compute.fits) fits.push({ use: 'compute', label: 'Compute', size: compute.chosen ? (compute.chosen.units > 1 ? compute.chosen.units + ' × ' : '') + compute.chosen.label + (compute.chosen.chip ? ' ' + compute.chosen.chip : '') : null, irrPct: compute.economics && compute.economics.ok ? compute.economics.irrPct : null });
   if (bess && bess.ok) fits.push({ use: 'bess', label: 'Battery storage', size: fmt(bess.sizing.kw) + ' kW / ' + fmt(bess.sizing.kwh) + ' kWh', irrPct: bess.returns.irrPct, noNetInvestment: bess.returns.noNetInvestment === true });
   if (sup && sup.ok) fits.push({ use: 'supercharger', label: 'Fast charging', size: sup.sizing.posts + ' dispensers', irrPct: sup.returns.irrPct });
   var best = null; fits.forEach(function (f) { if (f.irrPct != null && (!best || f.irrPct > best.irrPct)) best = f; });
@@ -463,7 +565,7 @@ function decisionOf(input, ctx) {
    and the sizes follow from that fact. ── */
 var UPGRADE_STATES = ['requested', 'granted', 'declined', 'withdrawn'];
 function fail(status, message) { var e = new Error(message); e.status = status; return e; }
-/* cur: the stored record or null. input: { status?, targetKw?, unit?, askedBy?, note? }. ctx: { by, now, limitKw, partner, pue } */
+/* cur: the stored record or null. input: { status?, targetKw?, unit?, askedBy?, note? }. ctx: { by, now, limitKw, partner, pue, config } */
 function upgradeOf(cur, input, ctx) {
   input = input || {}; ctx = ctx || {}; cur = cur && typeof cur === 'object' ? cur : null;
   var status = String(input.status || 'requested').toLowerCase().trim();
@@ -472,9 +574,9 @@ function upgradeOf(cur, input, ctx) {
   if (status !== 'requested' && !live) throw fail(409, 'There is no upgrade request on this site to mark ' + status);
   if (status === 'requested') {
     if (input.unit != null && input.unit !== '') {
-      var m = MODULARS.filter(function (x) { return x.key === String(input.unit); })[0];
+      var m = unitsOf(ctx.config, ctx.pue).filter(function (x) { return x.key === String(input.unit); })[0];
       if (!m) throw fail(400, 'That is not a unit on the compute shelf');
-      var need = Math.round(m.itKw * (ctx.pue || CM.DEFAULTS.pue));
+      var need = m.needKw;
       /* the unit needs `need` kW FREE: where the site's own load already takes part of the limit, the ask is the limit plus what is short */
       target = ctx.limitKw != null && ctx.availableKw != null ? Math.max(need, Math.round(ctx.limitKw + Math.max(0, need - ctx.availableKw))) : need; unit = m.key;
     } else target = num(input.targetKw);
@@ -494,13 +596,13 @@ function upgradeView(u, power, cfg, site) {
   var target = num(u.targetKw), from = power.limitKw, add = from != null ? Math.max(0, r2(target - from)) : null;
   /* what it would carry is judged on what would be FREE: the new service less the load the site already puts on it */
   var used = from != null && power.availableKw != null ? Math.max(0, from - power.availableKw) : 0;
-  var c = computeOf({ availableKw: Math.max(0, r2(target - used)), basis: 'upgrade' }, cfg, site), e = c.economics || {};
+  var c = computeOf({ availableKw: Math.max(0, r2(target - used)), basis: 'upgrade' }, cfg, site, chipsBasis(cfg) ? u.unit || null : null), e = c.economics || {};
   var ask = 'a utility-side upgrade to ' + fmt(target) + ' kW' + (add != null ? ' (' + fmt(add) + ' kW more than the ' + fmt(from) + ' kW limit on file)' : ''), who = u.askedBy ? ', asked for by ' + u.askedBy : '';
   var words = u.status === 'requested' ? 'Requested: ' + ask + who + '. Nothing is sized on it until the utility grants it.'
     : u.status === 'granted' ? 'Granted: ' + ask + who + '. Record the new service on the site so every size follows from it.'
     : 'Declined: ' + ask + who + '. The site stays on the power it has.';
   return { status: u.status, targetKw: target, fromKw: from, addKw: add, unit: u.unit || null, askedBy: u.askedBy || null, note: u.note || null, requestedBy: u.requestedBy || null, requestedAt: u.requestedAt || null, by: u.by || null, at: u.at || null, words: words,
-    compute: c.fits && c.chosen ? { label: (c.chosen.units > 1 ? c.chosen.units + ' × ' : '') + c.chosen.label, klass: c.chosen.klass, klassLabel: c.chosen.klassLabel, meterKw: c.chosen.meterKw, words: c.words,
+    compute: c.fits && c.chosen ? { label: (c.chosen.units > 1 ? c.chosen.units + ' × ' : '') + c.chosen.label + (c.chosen.chip ? ' ' + c.chosen.chip : ''), klass: c.chosen.klass, klassLabel: c.chosen.klassLabel, meterKw: c.chosen.meterKw, words: c.words,
       irrPct: e.ok ? e.irrPct : null, priceBasis: e.ok ? e.priceBasis : null, capexUsd: e.ok ? e.capexUsd : null } : null };
 }
 
@@ -517,7 +619,7 @@ function pairingOf(compute, site, st, power, cfg) {
   if (!ch || !(ch.leftKw >= PAIR_MIN_KW)) return null;
   var b = B.bessCase({ powerKw: ch.leftKw, state: st, utility: power.utility || site.utility || null, assumptions: cfg.bess });
   if (!b.ok) return null;
-  var pod = (ch.units > 1 ? ch.units + ' × ' : '') + ch.label + ' ' + ch.klassLabel, ret = b.returns.noNetInvestment ? 'no net capital' : b.returns.irrPct != null ? b.returns.irrPct + '%' : 'no return shown';
+  var pod = (ch.units > 1 ? ch.units + ' × ' : '') + unitName(ch), ret = b.returns.noNetInvestment ? 'no net capital' : b.returns.irrPct != null ? b.returns.irrPct + '%' : 'no return shown';
   return { leftKw: ch.leftKw, pod: pod,
     bess: { kw: b.sizing.kw, kwh: b.sizing.kwh, capexUsd: b.capex.total, netCapexUsd: b.capex.net, irrPct: b.returns.irrPct, noNetInvestment: b.returns.noNetInvestment === true, irrBasis: b.returns.irrBasis, npv: b.returns.npv, marketFit: b.market.fit },
     words: 'Beside the ' + pod + ', the ' + fmt(ch.leftKw) + ' kW it leaves carries a ' + fmt(b.sizing.kw) + ' kW / ' + fmt(b.sizing.kwh) + ' kWh battery (' + ret + (b.market.fit !== 'zone' ? ', at reference rates' : '') + '). The pod and this battery together fit the free power; the battery above is sized on all of it by itself.' };
@@ -533,18 +635,21 @@ function pairingOf(compute, site, st, power, cfg) {
    needs its power on file first. */
 function upgradeAdviceOf(power, compute, cfg, site, mark) {
   if (mark || power.availableKw == null) return null;
-  var goal = MODULARS[MODULARS.length - 1], chosen = compute.chosen || null;
+  /* the goal: the 1 MW Micro pod; by chip, the workspace's own chip in a pod, else the pod's heaviest configuration */
+  var defs = unitsOf(cfg), named = chipsBasis(cfg) ? PS.platformFor(cfg.compute.chipset) : null;
+  var goal = named ? defs.filter(function (d) { return d.key === named.key; })[0] : defs[defs.length - 1], chosen = compute.chosen || null;
   if (chosen && chosen.key === goal.key) return null;
   var shelf = compute.shelf || [], g = shelf.filter(function (u) { return u.key === goal.key; })[0]; if (!g) return null;
+  if (g.fits) return null;
   var free = power.availableKw, short = Math.max(0, r2(g.meterKw - free)), target = power.limitKw != null ? Math.round(power.limitKw + short) : g.meterKw;
-  var next = shelf.filter(function (u) { return !u.fits && u.key !== goal.key; })[0] || null, nextShort = next ? Math.max(0, r2(next.meterKw - free)) : null;
-  var c = computeOf({ availableKw: g.meterKw, basis: 'upgrade' }, cfg, site), e = c.economics || {};
-  var has = chosen ? 'carries a ' + chosen.label + ' ' + chosen.klassLabel + ' today' : 'carries no pod today';
-  return { unit: goal.key, label: goal.label + ' ' + g.klassLabel, needKw: g.meterKw, shortKw: short, targetKw: target,
-    next: next && nextShort > 0 ? { unit: next.key, label: next.label + ' ' + next.klassLabel, needKw: next.meterKw, shortKw: nextShort } : null,
+  var next = shelf.filter(function (u) { return !u.fits && u.key !== goal.key && u.meterKw < g.meterKw; })[0] || null, nextShort = next ? Math.max(0, r2(next.meterKw - free)) : null;
+  var c = computeOf({ availableKw: g.meterKw, basis: 'upgrade' }, cfg, site, chipsBasis(cfg) ? goal.key : null), e = c.economics || {};
+  var has = chosen ? 'carries a ' + unitName(chosen) + ' today' : 'carries no pod today';
+  return { unit: goal.key, label: unitName(g), needKw: g.meterKw, shortKw: short, targetKw: target,
+    next: next && nextShort > 0 ? { unit: next.key, label: unitName(next), needKw: next.meterKw, shortKw: nextShort } : null,
     compute: e.ok ? { irrPct: e.irrPct, priceBasis: e.priceBasis, capexUsd: e.capexUsd } : null,
-    words: 'To request: ' + fmt(free) + ' kW ' + has + '. A ' + goal.label + ' ' + g.klassLabel + ' needs ' + fmt(g.meterKw) + ' kW free at the meter, ' + fmt(short) + ' kW more' + (power.limitKw != null ? ' (a ' + fmt(target) + ' kW service)' : '') +
-      (next && nextShort > 0 ? '; ' + fmt(nextShort) + ' kW more would already carry a ' + next.label + ' ' + next.klassLabel : '') + '. Nothing has been asked of the utility yet.' };
+    words: 'To request: ' + fmt(free) + ' kW ' + has + '. A ' + unitName(g) + ' needs ' + fmt(g.meterKw) + ' kW free at the meter, ' + fmt(short) + ' kW more' + (power.limitKw != null ? ' (a ' + fmt(target) + ' kW service)' : '') +
+      (next && nextShort > 0 ? '; ' + fmt(nextShort) + ' kW more would already carry a ' + unitName(next) : '') + '. Nothing has been asked of the utility yet.' };
 }
 
 /* ── THE FUNDING LIST (2026-11-09, Tommy: "we dont need to send to the
@@ -808,8 +913,10 @@ function reviewInfo(cfg, email) { var r = cfg && cfg.review; return r ? { name: 
 function inputHashOf(site, screen, parcel, cfg, upgrade) {
   site = site || {};
   var up = upgrade && typeof upgrade === 'object' && upgrade.status !== 'withdrawn' ? [upgrade.status, num(upgrade.targetKw), upgrade.askedBy || null] : null;
-  return hash(JSON.stringify([VERSION, B.VERSION, T.VERSION, num(site.transformerKva), num(site.serviceCapacityKw), num(site.existingPeakKw), num(site.reportedPeakKw), site.peakUnresolved === true,
-    num(site.availablePowerMw), stateOf(site), zipOf(site), num(site.powerPricePerKwh), num(site.termYearsRemaining), screen ? screen.at || null : null, parcel ? parcel.at || null : null, cfg || null, up]));
+  var facts = [VERSION, B.VERSION, T.VERSION, num(site.transformerKva), num(site.serviceCapacityKw), num(site.existingPeakKw), num(site.reportedPeakKw), site.peakUnresolved === true,
+    num(site.availablePowerMw), stateOf(site), zipOf(site), num(site.powerPricePerKwh), num(site.termYearsRemaining), screen ? screen.at || null : null, parcel ? parcel.at || null : null, cfg || null, up];
+  if (chipsBasis(cfg)) facts.push(PS.VERSION);   /* the pod's sheet, only where it is read: every other workspace's answers keep their hash */
+  return hash(JSON.stringify(facts));
 }
 
 /* site: the flat record (site-bridge flatten). ctx: { screen, parcel, marks, config, now, upgrade } */
@@ -839,7 +946,7 @@ function listView(a, site, ctx) {
   /* only what the row and the card draw: the notes, the streams, the loan, the shelf and the limits ride on the one-site view */
   if (r.bess) { delete r.bess.projections; delete r.bess.notes; delete r.bess.revenue; delete r.bess.debt; delete r.bess.energyAtEnd; }
   if (r.supercharger) { delete r.supercharger.projections; delete r.supercharger.notes; }
-  if (r.compute) { r.compute.shelf = (r.compute.shelf || []).map(function (u) { return { key: u.key, label: u.label, klassLabel: u.klassLabel, meterKw: u.meterKw, fits: u.fits }; }); if (r.compute.economics) delete r.compute.economics.notes; if (r.compute.space) delete r.compute.space; }
+  if (r.compute) { r.compute.shelf = (r.compute.shelf || []).map(function (u) { var row = { key: u.key, label: u.label, klassLabel: u.klassLabel, meterKw: u.meterKw, fits: u.fits }; if (u.chip) { row.chip = u.chip; row.gpus = u.gpus; row.units = u.units; row.irrPct = u.irrPct == null ? null : u.irrPct; } return row; }); delete r.compute.requirements; if (r.compute.economics) delete r.compute.economics.notes; if (r.compute.space) delete r.compute.space; }
   if (r.upgrade && r.upgrade.compute) delete r.upgrade.compute.words;
   if (r.power) { delete r.power.limits; delete r.power.verify; }
   if (r.readiness) r.readiness.sections = r.readiness.sections.map(function (s) { return { key: s.key, label: s.label, done: s.done, of: s.of }; });
@@ -860,4 +967,4 @@ module.exports = { VERSION: VERSION, CONFIG_KEY: CONFIG_KEY, CONTINUOUS: CONTINU
   CLOSING_STEPS: CLOSING_STEPS, closingChange: closingChange, closingView: closingView,
   REVIEW_VOTES: REVIEW_VOTES, reviewer: reviewer, reviewView: reviewView, reviewChange: reviewChange, reviewInfo: reviewInfo, gatesOf: gatesOf,
   FUND_STATES: FUND_STATES, committeeMember: committeeMember, fundingRequest: fundingRequest, fundingChange: fundingChange, fundingView: fundingView, fundingInfo: fundingInfo,
-  configOf: configOf, powerOf: powerOf, computeOf: computeOf, readinessOf: readinessOf, verificationsOf: verificationsOf, inputHashOf: inputHashOf, assess: assess, listView: listView, stateOf: stateOf };
+  unitsOf: unitsOf, configOf: configOf, powerOf: powerOf, computeOf: computeOf, readinessOf: readinessOf, verificationsOf: verificationsOf, inputHashOf: inputHashOf, assess: assess, listView: listView, stateOf: stateOf };
