@@ -82,6 +82,11 @@
    ═══════════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var auth = require('./_lib/verify-token');
+/* the ONE reader of the FCC BDC facts (the confirm ladder's own lookup):
+   census block, surrounding hex and ~1.5 km ring off the Esri Living Atlas
+   layers, keyless. Required here so the server has the same road the Grid
+   Atlas pin has, never a second copy of the queries. */
+var FCCBDC = require('../omega-fiber-confirm.js');
 
 var BUILD = '2026-09-18.public-fiber';
 var MODEL = 'network-proximity-v3';
@@ -413,7 +418,7 @@ function facilities(lat, lon) {
    ═══════════════════════════════════════════════════════════════════════════ */
 function fccAtPoint(lat, lon) {
   var key = process.env.FCC_BB_KEY || '';
-  if (!key) return Promise.resolve({ status: 'skipped', fiber: null, providers: [], note: 'not checked — FCC_BB_KEY is not set' });
+  if (!key) return fccViaBdc(lat, lon, 'FCC_BB_KEY is not set');
   var url = 'https://broadbandmap.com/api/v1/location/internet?service_type=business&lat=' + lat.toFixed(5) + '&lng=' + lon.toFixed(5);
   return getJson(url, { headers: { Authorization: 'Bearer ' + key } }, 10000).then(function (d) {
     var provs = (d && d.providers) || [], fib = [];
@@ -422,16 +427,54 @@ function fccAtPoint(lat, lon) {
       var best = fib[0];
       for (var j = 1; j < fib.length; j++) if ((fib[j].max_download_mbps || 0) > (best.max_download_mbps || 0)) best = fib[j];
       var spd = best.max_download_mbps ? (best.max_download_mbps >= 1000 ? (best.max_download_mbps / 1000) + 'G' : best.max_download_mbps + 'M') : '';
-      return { status: 'ok', fiber: true, providers: fib.map(function (p) { return { name: p.name, down: p.max_download_mbps, up: p.max_upload_mbps }; }),
+      return { status: 'ok', fiber: true, basis: 'business', providers: fib.map(function (p) { return { name: p.name, down: p.max_download_mbps, up: p.max_upload_mbps }; }),
                note: fib.length + ' fiber ISP' + (fib.length > 1 ? 's' : '') + ' at this location · ' + (best.name || '') + (spd ? ' ' + spd : '') };
     }
-    if (provs.length) return { status: 'ok', fiber: false, providers: [], note: provs.length + ' ISP(s) reported, none fiber at this location' };
-    return { status: 'empty', fiber: false, providers: [], note: 'no reported business service at this location' };
+    if (provs.length) return { status: 'ok', fiber: false, basis: 'business', providers: [], note: provs.length + ' ISP(s) reported, none fiber at this location' };
+    return { status: 'empty', fiber: false, basis: 'business', providers: [], note: 'no reported business service at this location' };
   }).catch(function (e) {
     var m = /HTTP (\d+)/.exec(e && e.message || '');
     var why = m ? (m[1] === '401' ? 'FCC key rejected' : m[1] === '429' ? 'FCC rate limit reached' : 'FCC lookup unavailable (' + m[1] + ')') : 'FCC lookup ' + ((e && e.name === 'AbortError') ? 'timed out' : 'failed');
-    return { status: 'failed', fiber: null, providers: [], note: 'not checked — ' + why };
+    return fccViaBdc(lat, lon, 'the keyed road failed: ' + why);
   });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SOURCE 2b · FCC BDC AT THE POINT (keyless fallback)
+   The same FCC Broadband Data Collection the Grid Atlas pin reads, through
+   the confirm ladder's own lookup (omega-fiber-confirm.js — the ONE reader),
+   when the keyed road is unset or down. It NAMES the carriers with fiber
+   plant in the census block / surrounding hex; it is MASS-MARKET
+   availability (basis: 'mass-market') and carries NO advertised speeds, so
+   every provider's down/up is null and a 1 Gbps question stays unread —
+   never a false "no". Before this fallback, a deployment without FCC_BB_KEY
+   screened every site's fiber as "Not read" while the browser pin named the
+   carriers at the same point (Williams Food, 2026-11-11).
+   ═══════════════════════════════════════════════════════════════════════════ */
+function fccViaBdc(lat, lon, why) {
+  return new Promise(function (resolve) {
+    var done = false, t = setTimeout(function () { fin(new Error('timed out')); }, 25000);
+    function fin(e, bdc) { if (done) return; done = true; clearTimeout(t); resolve(e ? { error: e } : { bdc: bdc }); }
+    try { FCCBDC.lookup(lat, lon, fin); } catch (e) { fin(e); }
+  }).then(function (r) {
+    if (r.error) return { status: 'failed', fiber: null, basis: 'mass-market', providers: [],
+      note: 'not checked — ' + (why ? why + '; ' : '') + 'the keyless FCC BDC road failed too (' + String(r.error && r.error.message || r.error).slice(0, 120) + ')' };
+    return fccFromBdc(r.bdc, why);
+  });
+}
+/* pure: the confirm ladder's normalized answer → fccAtPoint's shape */
+function fccFromBdc(bdc, why) {
+  if (!bdc || (!bdc.block && !bdc.hex)) return { status: 'empty', fiber: null, basis: 'mass-market', providers: [],
+    note: 'the FCC data has no census block or hex at this point' };
+  var road = ' (FCC BDC ' + bdc.asOf + ', keyless: mass-market availability, advertised speeds not read' + (why ? '; ' + why : '') + ')';
+  var at = bdc.block && bdc.block.fiber.length ? { rows: bdc.block.fiber, where: 'the site’s census block' }
+         : bdc.hex && bdc.hex.fiber.length ? { rows: bdc.hex.fiber, where: 'the surrounding ~0.7 km² hex' } : null;
+  if (at) return { status: 'ok', fiber: true, basis: 'mass-market',
+    providers: at.rows.map(function (p) { return { name: p.name, down: null, up: null }; }),
+    note: at.rows.length + ' provider' + (at.rows.length > 1 ? 's report' : ' reports') + ' fiber to the premises in ' + at.where + road };
+  var ring = bdc.nearby && bdc.nearby.fiber.length ? ' ' + bdc.nearby.fiber.length + ' provider' + (bdc.nearby.fiber.length > 1 ? 's report' : ' reports') + ' fiber within ~' + bdc.nearby.radiusKm + ' km.' : '';
+  return { status: 'ok', fiber: false, basis: 'mass-market', providers: [],
+    note: 'no provider reports fiber to the premises in the census block or surrounding hex' + road + '.' + ring };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -782,7 +825,7 @@ function capacity(d, lat, lon) {
     cls = 'regional'; why = 'within ' + fmtMi(near.mi) + ' of a long-haul corridor';
   } else if (nets >= 50 || d.fccFiber === true) {
     cls = 'metro'; why = nets >= 50 ? nets.toLocaleString('en-US') + ' carrier presences within 80 mi'
-                                    : 'business fiber reported at the location';
+                                    : fccWord(d) + ' at the location';
   } else if (near && (lh.independent || 0) >= 2) {
     /* Reachable long-haul on more than one bearing. The build is a real
        lateral and should be priced as one, but calling this 'edge' would
@@ -951,9 +994,15 @@ function score(d) {
    the point — with facility proximity as the soft signal. Four words, each
    with the reasons that earned it, so a reader can disagree with the rule
    rather than the number. */
+/* what an FCC "yes" is, by the road that read it: the keyed road asks for
+   business service; the keyless road is mass-market availability and must
+   never be dressed up as dedicated service */
+function fccWord(d) {
+  return d.fccBasis === 'mass-market' ? 'fiber to the premises reported (FCC BDC, mass-market)' : 'business fiber reported';
+}
 function verdict(d) {
   var hard = [];
-  if (d.fccFiber === true) hard.push({ kind: 'fcc', mi: 0, label: 'FCC reports business fiber at this location' });
+  if (d.fccFiber === true) hard.push({ kind: 'fcc', mi: 0, label: 'FCC: ' + fccWord(d) + ' at this location' });
   if (d.plantMi != null) hard.push({ kind: 'plant', mi: d.plantMi, label: 'surveyed fiber plant (' + d.plantSource + ')' });
   if (d.harvestMi != null) hard.push({ kind: 'harvest', mi: d.harvestMi, label: 'published fiber layer (' + d.harvestSource + ')' });
   if (d.osmLineMi != null) hard.push({ kind: 'osm_line', mi: d.osmLineMi, label: 'mapped fibre line (OpenStreetMap, approximate)' });
@@ -1003,7 +1052,7 @@ function verdict(d) {
     reasons.push(nearest ? 'nearest mapped fiber is ' + fmtMi(nearest.mi) + ' away (' + nearest.label + ')' : 'no published fiber geometry within ' + PLANT_RADIUS_MI + ' mi — public plant data is city-by-city, so this is a gap in the record, not a finding');
     reasons.push(fac == null ? 'no carrier facility within ' + FACILITY_RADIUS_MI + ' mi' : 'nearest carrier facility ' + fmtMi(fac) + ' away (' + d.nearestCarrier.name + ')');
   }
-  if (d.fccFiber === true && v !== 'likely') reasons.unshift('FCC reports business fiber at this location');
+  if (d.fccFiber === true && v !== 'likely') reasons.unshift('FCC: ' + fccWord(d) + ' at this location');
   if (d.osmExchangeMi != null && d.osmExchangeMi <= 3 && !(nearest && nearest.kind === 'exchange')) reasons.push('telephone exchange ' + fmtMi(d.osmExchangeMi) + ' away (OpenStreetMap)');
 
   /* Lateral: the build from the site to the nearest hard evidence, or to the
@@ -1098,7 +1147,7 @@ function analyse(lat, lon, boundary, gbps) {
     var d = {
       nearestCarrier: fac.nearestCarrier || null, nearestMajor: fac.nearestMajor || null,
       netsWithin80: fac.netsWithin80 || 0, ixWithin80: fac.ixWithin80 || 0,
-      fccFiber: fcc.fiber == null ? null : fcc.fiber, fccNote: fcc.note || '',
+      fccFiber: fcc.fiber == null ? null : fcc.fiber, fccNote: fcc.note || '', fccBasis: fcc.basis || null,
       plantMi: plant.nearest ? plant.nearest.mi : null, plantSource: plant.nearest ? plant.nearest.source : '',
       harvestMi: hv.nearest ? hv.nearest.mi : null, harvestSource: hv.nearest ? hv.nearest.source : '',
       osmLineMi: osm.nearestLine ? osm.nearestLine.mi : null,
@@ -1116,7 +1165,8 @@ function analyse(lat, lon, boundary, gbps) {
     if (fac.status === 'failed') findings.push({ severity: 'note', text: 'PeeringDB did not answer (' + fac.error + ') — facility distance, density and exchanges are unscored, not zero.' });
     if (fac.truncated) findings.push({ severity: 'note', text: 'PeeringDB returned its 1,000-row cap for this area; counts within 80 mi are a floor.' });
     if (fcc.status === 'skipped') findings.push({ severity: 'note', text: 'Service at the point was not checked: set FCC_BB_KEY to query the FCC Broadband Data Collection.' });
-    if (fcc.fiber === false) findings.push({ severity: 'risk', text: 'FCC reports no business fiber service at this location — a lateral is required, not a drop.' });
+    if (fcc.basis === 'mass-market' && fcc.status === 'ok') findings.push({ severity: 'note', text: 'The FCC read is the keyless BDC road: carriers named from mass-market availability; advertised speeds and business service were not read' + (process.env.FCC_BB_KEY ? '' : ' (set FCC_BB_KEY for the business-service road)') + '.' });
+    if (fcc.fiber === false) findings.push({ severity: 'risk', text: fcc.basis === 'mass-market' ? 'No provider reports fiber to the premises around this location (FCC BDC, mass-market) — plan for a lateral, and ask the ILEC and the electric cooperative.' : 'FCC reports no business fiber service at this location — a lateral is required, not a drop.' });
     if (osm.status === 'failed') findings.push({ severity: 'note', text: 'OpenStreetMap telecom layer did not answer (' + (osm.trace || []).join(', ') + ').' });
     if (hv.status === 'failed') findings.push({ severity: 'note', text: 'Published-layer harvest did not complete (' + hv.error + '); surveyed plant may exist that this run did not reach.' });
     if (!d.nearestCarrier) findings.push({ severity: 'blocker', text: 'No PeeringDB facility with ' + CARRIER_NETS + '+ networks within ' + FACILITY_RADIUS_MI + ' mi. For a latency-sensitive load this is a fatal-flaw finding, not a detail.' });
@@ -1150,7 +1200,7 @@ function analyse(lat, lon, boundary, gbps) {
       facilities: { status: fac.status, ms: fac.ms, error: fac.error, nearest: fac.nearest || [], within80: fac.within80 || 0, within160: fac.within160 || 0,
                     netsWithin80: fac.netsWithin80 || 0, ixWithin80: fac.ixWithin80 || 0,
                     nearestCarrier: fac.nearestCarrier || null, nearestMajor: fac.nearestMajor || null, nearestIx: fac.nearestIx || null, truncated: !!fac.truncated },
-      fcc: { status: fcc.status, ms: fcc.ms, fiber: fcc.fiber == null ? null : fcc.fiber, providers: fcc.providers || [], note: fcc.note },
+      fcc: { status: fcc.status, ms: fcc.ms, fiber: fcc.fiber == null ? null : fcc.fiber, basis: fcc.basis || null, providers: fcc.providers || [], note: fcc.note },
       osm: { status: osm.status, ms: osm.ms, error: osm.error, trace: osm.trace || [], features: osm.features || [],
              nearestLine: osm.nearestLine || null, nearestExchange: osm.nearestExchange || null, nearestDataCenter: osm.nearestDataCenter || null },
       plant: { status: plant.status, ms: plant.ms, nearest: plant.nearest || null, layers: plant.layers || [] },
@@ -1269,7 +1319,7 @@ module.exports = function handler(req, res) {
 
 /* Exported for scripts/test-network-proximity.js — pure pieces only. */
 module.exports._test = { distMi: distMi, bboxFor: bboxFor, nearestLineMi: nearestLineMi, nearestFrom: nearestFrom, normGeom: normGeom, webMercToWgs: webMercToWgs,
-                         longhaul: longhaul, score: score, verdict: verdict,
+                         longhaul: longhaul, score: score, verdict: verdict, fccFromBdc: fccFromBdc, fccWord: fccWord,
                          datacenters: datacenters, capacity: capacity, dcSuitability: dcSuitability,
                          bearingTo: bearingTo, closestOnCorridor: closestOnCorridor,
                          regionOf: regionOf, carriersFor: carriersFor,

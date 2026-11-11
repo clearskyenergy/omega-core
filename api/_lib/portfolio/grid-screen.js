@@ -94,12 +94,17 @@ function fromNetwork(r) {
   var fcc = b.fcc || {}, st = String(fcc.status || ''), provs = Array.isArray(fcc.providers) ? fcc.providers : [];
   var read = st === 'ok' || st === 'empty', carriers = [];
   provs.forEach(function (p) { var n = str(p && p.name, 80); if (n && carriers.indexOf(n) < 0) carriers.push(n); });
-  var sym = read ? provs.some(function (p) { return num(p.down) >= 1000 && num(p.up) >= 1000; }) : null;
+  /* The keyless BDC road names carriers but carries no advertised speeds
+     (every down/up is null). 1 Gbps symmetric is then NOT READ — null,
+     never a false "no". A read with no fiber providers at all stays an
+     honest false: nothing is offered. */
+  var speedsRead = provs.some(function (p) { return num(p.down) != null || num(p.up) != null; });
+  var sym = !read ? null : provs.length === 0 ? false : speedsRead ? provs.some(function (p) { return num(p.down) >= 1000 && num(p.up) >= 1000; }) : null;
   var why = st === 'skipped' ? 'carrier names need the FCC key' : st === 'failed' ? 'carrier names not read: ' + String(fcc.note || 'the FCC lookup failed').replace(/^not checked\s*[—-]\s*/, '') : null;
   var fac = b.facilities || {}, hotel = fac.nearestMajor || null, lat = b.fiber && b.fiber.lateral;
   return { ok: true, fiber: {
     carriers: read ? carriers : [], carriersRead: read, carriersStatus: read ? 'read' : st === 'skipped' ? 'needs-key' : st === 'failed' ? 'failed' : 'unknown', carriersNote: why,
-    symmetric1g: read ? sym : null, symmetricCount: read ? provs.filter(function (p) { return num(p.down) >= 1000 && num(p.up) >= 1000; }).length : null,
+    symmetric1g: sym, symmetricCount: sym == null ? null : provs.filter(function (p) { return num(p.down) >= 1000 && num(p.up) >= 1000; }).length,
     lateralMi: lat ? num(lat.mi) : null, lateralTo: lat ? str(lat.to, 160) : null,
     carrierHotel: hotel ? str(hotel.name, 120) : null, carrierHotelMi: hotel ? round(num(hotel.mi), 1) : null,
     verdict: b.fiber && b.fiber.verdict ? str(b.fiber.verdict, 20) : null },

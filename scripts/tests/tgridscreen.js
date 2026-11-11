@@ -76,6 +76,15 @@ test('G03 the network answer: carriers only from the FCC read at the address; th
   assert.deepEqual(r.fiber.carriers, ['Lumen', 'Comcast Business'], 'one name once'); assert.equal(r.fiber.symmetric1g, true); assert.equal(r.fiber.symmetricCount, 2); assert.equal(r.sources.fcc, 'FCC broadband data (BDC)');
   var noSym = networkRead(); noSym.body.fcc.providers = [{ name: 'Comcast Business', down: 1000, up: 35 }];
   assert.equal(G.fromNetwork(noSym).fiber.symmetric1g, false);
+  /* the keyless BDC road: carriers named, no advertised speeds — 1 Gbps
+     symmetric is NOT READ (null), never a false "no" (Williams Food) */
+  var keyless = networkRead(); keyless.body.fcc = { status: 'ok', fiber: true, basis: 'mass-market',
+    providers: [{ name: 'ImOn Communications LLC', down: null, up: null }, { name: 'AT&T Oklahoma', down: null, up: null }], note: '2 providers report fiber (keyless)' };
+  var kl = G.fromNetwork(keyless);
+  assert.deepEqual(kl.fiber.carriers, ['ImOn Communications LLC', 'AT&T Oklahoma'], 'keyless road still names the carriers');
+  assert.equal(kl.fiber.carriersRead, true);
+  assert.equal(kl.fiber.symmetric1g, null, 'no speeds on the road: symmetric is unread, not "no"');
+  assert.equal(kl.fiber.symmetricCount, null, 'and the count is unread too');
   var lim = networkSkipped(); lim.body.fcc = { status: 'failed', providers: [], note: 'not checked — FCC rate limit reached' };
   assert.equal(G.fromNetwork(lim).fiber.carriersNote, 'carrier names not read: FCC rate limit reached');
   assert.equal(G.fromNetwork({ status: 504, body: { error: 'timed out' } }).ok, false);

@@ -1438,7 +1438,13 @@ skid untouched without one. With the switch on the pipeline IS the one
 register list (`body.dg-one`: the classic stats, filters, bulk bar and
 table stand down; search, archived and load-more fold into the pipeline). `grid-screen.js` screens sites through grid-atlas,
 network-proximity and hosting-capacity (gates move to screened, never
-confirmed; carrier names need `FCC_BB_KEY`). `loi-package.js` sends ONE
+confirmed; carrier names come from `FCC_BB_KEY`'s business-service road,
+else the keyless FCC BDC fallback — `fccViaBdc` in
+`api/network-proximity.js` on the confirm ladder's own `lookup`, the ONE
+reader — which names carriers as mass-market availability, reads no
+advertised speeds, and so leaves 1 Gbps symmetric UNREAD, never a false
+"no"; 2026-11-11, Williams Food read "Not read" while the pin named the
+carriers). `loi-package.js` sends ONE
 package to the offtake partner (Lightsmith in `partners.js`,
 `LIGHTSMITH_ENERGY_EMAIL`; 409 without it), never IRR, capex or price. Off,
 the answers carry no `diligence` and the pages draw nothing new; on, the
