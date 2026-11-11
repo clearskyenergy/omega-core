@@ -22,6 +22,11 @@
    price the workspace sets; the capital is the engine's estimate until the
    maker quotes. A chip the library does not carry is SIZED and not priced.
 
+   THIS IS THE BASELINE for the compute model's physical figures (POD.baseline):
+   an answer sized on it says where the figures come from and what they do
+   not cover. A later sheet, or a quote, replaces figures HERE and moves
+   VERSION, so every stored answer resting on the old ones reads stale.
+
    PURE, ES5, server-side. Read only by a workspace whose settings ask for
    the chip basis (portfolio/assess.js, compute.basis 'chips'): the sheet is
    the maker's confidential document, so it is never a default for every
@@ -34,6 +39,11 @@ var VERSION = '2026-11.1';
 var POD = {
   key: 'sonic', maker: 'Runware', name: 'Sonic Pod', label: 'Runware Sonic Pod',
   sheet: { title: 'Sonic Pod System, product overview', dated: '2026-11', standing: 'As stated by the maker: for information only, not an offer, and any figure may change' },
+  /* THE BASELINE (2026-11-11, Tommy: "We need to note that our baseline data comes from here"): this sheet is where the
+     compute model's physical figures come from, and every answer sized on it says so. What it is the baseline FOR is
+     named, because it is not the baseline for the money: the sheet carries no price and no revenue. */
+  baseline: { covers: ['GPUs a pod', 'usable IT by chip', 'power at the meter (design pPUE)', 'pods a site', 'the pad', 'the feed', 'the heat limits'], notCovered: ['the pod’s price', 'the GPU-hour price', 'the offtake'],
+    words: 'Baseline: the pod’s GPUs, usable IT, power at the meter, heat limits and site requirements are Runware’s Sonic Pod System product overview of November 2026, the first maker’s specification on file. It is not the baseline for the money: the sheet carries no pod price, no GPU-hour price and no offtake' },
   coolingKw: 1000,            /* liquid cooling capacity a pod */
   airCoolingKw: 98.5,         /* auxiliary air cooling */
   ppue: 1.091,                /* design pPUE at 1 MW full load, closed loop (liquid loop 1.057 + 34.1 kW of air units) */

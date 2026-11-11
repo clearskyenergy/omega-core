@@ -183,6 +183,17 @@ that asks (`compute.basis: 'chips'`) is sized and priced on it:
 - **The upgrade to ask for** is the workspace's chip in a pod, else the
   pod's heaviest configuration; an upgrade request names a configuration.
 
+**This sheet is the baseline** (2026-11-11, Tommy: "We need to note that our
+baseline data comes from here"). The compute model's physical figures, GPUs a
+pod, usable IT by chip, power at the meter, pods a site, the pad, the feed
+and the heat limits, come from Runware's Sonic Pod System product overview of
+November 2026, the first maker's specification on file. `POD.baseline` in
+`pod-spec.js` says so, and it is the first note under every answer sized on
+it, on the card and in the diligence report. It is NOT the baseline for the
+money: the pod's price, the GPU-hour price and the offtake are not on the
+sheet. A later sheet or a quote replaces the figures in that one file and
+moves its `VERSION`, so stored answers on the old figures read stale.
+
 The sheet is the maker's confidential document and says of itself that it is
 not an offer: it is off for every workspace that does not ask, and its
 figures reach a browser only as that workspace's answer. Held by

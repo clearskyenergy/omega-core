@@ -595,6 +595,7 @@ test('C03 sized by chip: one to four pods on the free power, every configuration
   assert.equal(c.chosen.key, 'rtx6000'); assert.equal(c.chosen.units, 2); assert.equal(c.chosen.gpus, 864); assert.equal(c.chosen.itKw, 860); assert.equal(c.chosen.meterKw, 938); assert.equal(c.chosen.leftKw, 62); assert.ok(/highest screening return/.test(c.chosen.why));
   assert.ok(/2 pods of 432 RTX PRO 6000 GPUs each \(860 kW of IT, 938 kW at the meter at pPUE 1\.091\) on 1,000 kW free/.test(c.words));
   var e = c.economics; assert.ok(e.ok); assert.equal(e.basis, 'chips'); assert.equal(e.gpus, 864); assert.equal(e.itKw, 860); assert.equal(e.priceBasis, 'spot'); assert.equal(e.capexBasis, 'estimate'); assert.ok(e.irrPct > 0); assert.ok(e.capexUsd > 0);
+  assert.ok(/^Baseline: .*Runware’s Sonic Pod System product overview of November 2026.*not the baseline for the money/.test(e.notes[0])); assert.equal(c.pod.baseline, PS.POD.baseline.words);
   assert.ok(e.notes.some(function (n) { return /not an offer/.test(n); })); assert.ok(e.notes.some(function (n) { return /the maker’s sheet carries no price/.test(n); })); assert.ok(e.notes.some(function (n) { return /hours capped by heat/.test(n); }));
   /* a chip with no public price shows no return; one the library does not carry is sized and nothing more */
   var gb = c.shelf[1], vr = c.shelf[3]; assert.equal(gb.priced, true); assert.equal(gb.irrPct, null); assert.ok(gb.capexUsd > 0); assert.equal(vr.priced, false); assert.equal(vr.irrPct, null); assert.equal(vr.capexUsd, null);

@@ -319,6 +319,7 @@ function podEconomics(p, units, cfg, site) {
   var out; try { out = CC.contractCase(input, {}); } catch (e) { out = null; }
   if (!out || out.ok === false) return { ok: false, reason: 'The compute engine could not price this pod' };
   var e = D.economicsFromCase(out, input, null), at = price != null ? null : e.irrAt, set = price != null && e.priced, notes = [];
+  notes.push(pod.baseline.words + '.');
   notes.push('The pod is the ' + pod.label + ' as its maker specifies it (' + pod.sheet.title + ', ' + pod.sheet.dated + '). ' + pod.sheet.standing + '.');
   notes.push('By chip: one pod carries ' + fmt(p.gpus) + ' ' + p.name + ' GPUs (' + p.hardware + '), ' + fmt(p.itKw) + ' kW of usable IT' + (p.peakItKw > p.itKw ? ' rated and ' + fmt(p.peakItKw) + ' kW at peak' : '') + ', inside 1 MW of liquid cooling' + (p.estimate ? '; ' + p.estimate : '') + '.');
   notes.push('At the meter: ' + fmt(m.needKw) + ' kW free a pod (' + (p.peakItKw > p.itKw ? 'the peak' : 'the IT') + ' at the pod’s design pPUE of ' + pod.ppue + ', stated at 1 MW full load). The site’s own transformer losses are not in it.');
@@ -342,7 +343,7 @@ function podCompute(power, cfg, site, want) {
     return { key: p.key, label: fmt(p.itKw) + ' kW', chip: p.short, klass: 'micro', klassLabel: 'Micro pod', itKw: p.itKw, gpus: p.gpus, meterKw: m.needKw, coolingKw: m.overheadKw, fits: n >= 1, units: n };
   }).sort(function (a, b) { return a.meterKw - b.meterKw; });
   var out = { pue: pod.ppue, byChip: true, shelf: shelf, chosen: null, fits: false, basis: power.basis, words: null,
-    pod: { maker: pod.maker, name: pod.name, label: pod.label, sheet: pod.sheet.title + ', ' + pod.sheet.dated, standing: pod.sheet.standing, coolingKw: pod.coolingKw, maxPods: max } };
+    pod: { maker: pod.maker, name: pod.name, label: pod.label, sheet: pod.sheet.title + ', ' + pod.sheet.dated, standing: pod.sheet.standing, baseline: pod.baseline.words, coolingKw: pod.coolingKw, maxPods: max } };
   if (kw == null) { out.words = 'No power figure to size compute on'; return out; }
   shelf.forEach(function (u) {
     if (!u.fits) return;

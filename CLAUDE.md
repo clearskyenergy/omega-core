@@ -1559,7 +1559,11 @@ the same day, each in Tommy's words in the doc:
   library does not carry is sized only; capital is the engine's estimate
   until the maker quotes (`compute.pod.costUsd`). The heat is the sheet's
   table, never interpolated; the checklist reads no water, two routes, the
-  pad and the feed off it. `tassess.js` C01 to C06.
+  pad and the feed off it. **It is the BASELINE** (Tommy: "We need to note
+  that our baseline data comes from here"): `POD.baseline` names what it
+  covers (the physical figures) and what it does not (the pod's price, the
+  GPU-hour price, the offtake), and is the first note under every answer
+  sized on it. `tassess.js` C01 to C06.
 - **A utility-side upgrade request is a mark** (`assess-upgrade`): it sizes
   nothing today; what it would carry rides beside the answer. Every sized
   site under 1 MW carries the upgrade TO ASK FOR (`upgradeAdvice`, derived:

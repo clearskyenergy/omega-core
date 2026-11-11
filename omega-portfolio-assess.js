@@ -41,7 +41,7 @@
     return '<table' + (cls ? ' class="' + cls + '"' : '') + '><tr><th>Chip in the pod</th><th>GPUs a pod</th><th>IT a pod</th><th>At the meter</th><th>Pods</th><th>Return</th></tr>' + rows.map(function (u) {
       return '<tr><td>' + esc(u.chip || '') + '</td><td>' + (u.gpus != null ? n0(u.gpus) : '') + '</td><td>' + esc(u.label) + '</td><td>' + n0(u.meterKw) + ' kW</td><td>' + (u.fits ? esc(u.units) : 'No fit') + '</td><td>' + (u.irrPct != null ? esc(pct(u.irrPct)) : u.fits ? 'No price' : '') + '</td></tr>'; }).join('') + '</table>';
   }
-  function podWords(c) { return c.byChip && c.pod ? 'The ' + c.pod.label + ' (' + c.pod.sheet + '). ' + c.pod.standing + '.' : ''; }
+  function podWords(c) { return c.byChip && c.pod ? (c.pod.baseline ? c.pod.baseline + '. ' : 'The ' + c.pod.label + ' (' + c.pod.sheet + '). ') + c.pod.standing + '.' : ''; }
   function pct(p) { return p == null ? null : (Math.round(p * 10) / 10) + '%'; }
   var BASIS = { measured: ['free', 'pa-ok', 'Measured'], entered: ['entered', 'pa-blue', 'Entered'], ceiling: ['ceiling', 'pa-warn', 'Ceiling'] };
 
