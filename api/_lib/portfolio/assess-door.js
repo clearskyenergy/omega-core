@@ -307,7 +307,7 @@ function make(deps) {
     var out = await each(c, ids, function (tx, sref, data) {
       names[sref.id] = data.name || sref.id;
       var a = Object.assign({}, data.assessment || {}), site = flat(sref.id, data), pw = AS.powerOf(site, screenOf(data)), was = a.upgrade ? a.upgrade.status : null;
-      a.upgrade = AS.upgradeOf(a.upgrade || null, c.b, { by: c.by, now: deps.now(), limitKw: pw.limitKw, availableKw: pw.availableKw, partner: site.portfolioPartner || data.portfolioPartner || null, pue: cfg.compute.pue });
+      a.upgrade = AS.upgradeOf(a.upgrade || null, c.b, { by: c.by, now: deps.now(), limitKw: pw.limitKw, availableKw: pw.availableKw, partner: site.portfolioPartner || data.portfolioPartner || null, pue: cfg.compute.pue, config: cfg });
       a.result = AS.assess(site, { screen: screenOf(data), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade, config: cfg, now: deps.now() });
       a.at = deps.now(); a.by = a.by || c.by;
       tx.update(sref, { assessment: plain(a) });

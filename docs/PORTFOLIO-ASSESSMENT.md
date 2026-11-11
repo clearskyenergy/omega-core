@@ -140,6 +140,65 @@ says so. `compute.economics.electricity` carries the figure and its source.
 
 No site rent, purchase or host share is in either case.
 
+### Compute by chip: the maker's pod (2026-11-11)
+
+Tommy, of the pod maker's product overview (Runware, Sonic Pod System,
+November 2026): "Let's base it off the chips this is the first real spec
+sheet we have received and it's very detailed."
+
+Until that sheet a "1 MW pod" was 1 MW of IT at an assumed PUE of 1.2. A
+real pod is 1 MW of **cooling**: what it carries depends on the chip racked
+in it. `api/_lib/pod-spec.js` is the sheet as ONE record, and a workspace
+that asks (`compute.basis: 'chips'`) is sized and priced on it:
+
+| chip in the pod | GPUs a pod | usable IT | free at the meter (peak × pPUE 1.091) |
+|---|---|---|---|
+| RTX PRO 6000 (108 four-GPU servers) | 432 | 430 kW (the maker's estimate) | 469 kW |
+| GB300 NVL72 (4 racks) | 288 | 600 kW rated, 680 kW peak | 742 kW |
+| Vera Rubin NVL72, Max Q | 288 | 748 kW | 816 kW |
+| Vera Rubin NVL72, Max P | 288 | 908 kW | 991 kW |
+
+- **One to four stand-alone pods a site**, as the maker sites them (one
+  feed a pod, no UPS or generator). More than four is its cluster design and
+  is not sized; the answer says so.
+- **Every configuration that fits is priced** by the one contract engine on
+  its own GPUs and its own energy (rated IT × pPUE), at the chip's public
+  reference price. A chip with no public price (GB300) shows no return until
+  the workspace sets one (`compute.pod.prices.gb300`); a chip the library
+  does not carry (Vera Rubin) is sized and nothing more.
+- **The answer** is the workspace's own chip where it fits
+  (`compute.chipset`), else the configuration with the highest screening
+  return, else the largest; `chosen.why` says which.
+- **Capital is the engine's estimate**, said: the sheet carries no price.
+  Once the maker quotes, `compute.pod.costUsd.<chip>` is the pod's cost.
+- **The heat** is read off the sheet's own table, never interpolated: the
+  loop carries about 850 kW at 35 °C outdoor and 420 kW at 40 °C, so GB300
+  holds full power to about 39.4 °C and Vera Rubin Max P to 34.8 °C. A site's
+  design ambient is not on file, so no capped hours are in the return; where
+  the chosen racks can be capped the answer carries the verification.
+- **The checklist follows the pod**: no water (screened, from the
+  specification), two carriers or a second separate route, the pad (21 × 9 ft,
+  60 metric tons, 2 m between pods), the feed (12 three-phase connections at
+  480Y/277 V), delivery as two 20 ft sections.
+- **The upgrade to ask for** is the workspace's chip in a pod, else the
+  pod's heaviest configuration; an upgrade request names a configuration.
+
+**This sheet is the baseline** (2026-11-11, Tommy: "We need to note that our
+baseline data comes from here"). The compute model's physical figures, GPUs a
+pod, usable IT by chip, power at the meter, pods a site, the pad, the feed
+and the heat limits, come from Runware's Sonic Pod System product overview of
+November 2026, the first maker's specification on file. `POD.baseline` in
+`pod-spec.js` says so, and it is the first note under every answer sized on
+it, on the card and in the diligence report. It is NOT the baseline for the
+money: the pod's price, the GPU-hour price and the offtake are not on the
+sheet. A later sheet or a quote replaces the figures in that one file and
+moves its `VERSION`, so stored answers on the old figures read stale.
+
+The sheet is the maker's confidential document and says of itself that it is
+not an offer: it is off for every workspace that does not ask, and its
+figures reach a browser only as that workspace's answer. Held by
+`tassess.js` C01 to C06.
+
 ### Battery: the grid value stack
 
 A battery of the free kW at four hours. Capital (hardware, soft costs,
@@ -451,6 +510,7 @@ is switched on for the workspace, the same screen also lands on
 | `supercharger.assumptions`, `.sizing` | the charging set and `kwPerPost` / `minPosts` |
 | `compute.chipset`, `.pue`, `.termMonths`, `.partnerName`, `.partnerFeePct` | the compute case's chip, PUE, term and offtake fee |
 | `compute.basis: 'partner'`, `compute.reference` | compute on the offtake partner's stated per-megawatt figures; `reference` replaces any of them (`capexUsdPerMw`, `revenueUsdPerMwYear`, `utilityUsdPerMwYear`, `gpusPerMw`) |
+| `compute.basis: 'chips'`, `compute.chipset`, `compute.pod { prices, costUsd }` | compute as the maker's 1 MW pod, by chip (`pod-spec.js`); the workspace's own chip, a price a GPU-hour and the pod's cost, each by the pod's configuration key (`rtx6000`, `gb300`, `vr-maxq`, `vr-maxp`) |
 | `funding { mode: 'committee', name, members[] }` | the funding list in place of the finance marketplace |
 | `gates { minKva, minLeaseYears, irrHurdlePct }` | the workspace's screening gates |
 | `review { name, members[] }` | its review board: every member votes own or flip |
@@ -490,6 +550,14 @@ in how the three are read side by side, and it is on the honest list below.
 ## What is not built (honest list)
 
 **The numbers**
+- **By chip, the pod's own price and the offtake are not on file.** The
+  maker's sheet has no price: capital is the engine's chipset-scaled
+  estimate (its enclosure and cooling allowance, not the pod's), and the
+  maker's monthly operating fee is not in the case. Revenue is the chip's
+  public reference price or a figure the workspace typed, never a contract.
+  GB300 has no public price and Vera Rubin is not in the chip library. Hours
+  capped by heat are not counted: no site has a design ambient on file. The
+  pod's pPUE is stated at full load and leaves out the site's transformer.
 - **The three returns are on three bases.** Compute is a project IRR on
   monthly cash, annualised, before tax, over six years; the battery a
   project IRR on yearly cash, before tax and unlevered, over ten; fast
