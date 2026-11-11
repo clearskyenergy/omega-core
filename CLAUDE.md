@@ -2062,6 +2062,28 @@ verification brief that wear no platform or tenant name.
 output to `work/`, never committed; a town-centre geocode is marked
 APPROXIMATE). `docs/FIBER-CONFIRMATION.md`.
 
+**Carrier hotels are a committed snapshot, and licensed telecom has one
+ingest** (2026-11-11). `data/peeringdb-facilities.geojson`
+(`scripts/build-peeringdb-facilities.js`, PeeringDB US facilities with
+`networks` on-net — the number that separates a carrier hotel from a
+closet) fills the `carrierhotels` layer that pointed at a file never
+built; the pin analysis names the nearest facility (licensed →
+snapshot → registry → live OSM, display only, scores nothing, a miss
+is "not evidence none exists"). A licensed Rextag delivery is ONE
+converter run: `scripts/ingest-rextag.js` on
+`scripts/_lib/rextag-map.js` (Type→class table; unknown never
+promoted; Operator and Owner kept apart) writes to gitignored
+`private-fiber/rextag/` — licensed geometry never in git, never under
+world-readable `/data/`, never through `import-published-fiber.js`
+(licensed is the opposite of published) — and is served only through
+the authenticated proxy slot (`fiber_licensed`, `dc_licensed`,
+`CLEARSKY_CONFIG.fiberProxyUrl`; the proxy function itself is not
+built). `fiberKeys` already ranks licensed first, so it becomes the
+source of record with no code change. Runbook and the discovered-
+conventions record: `docs/REXTAG-INGEST.md`; held by
+`scripts/tests/trextagmap.js` and `tcarrierhotels.js` (in
+`test:fiber`).
+
 **The route inventory grows through a vetted registry**
 (`scripts/import-state-fiber.js`, then ALWAYS
 `scripts/import-published-fiber.js`): a layer is bundled only if a public

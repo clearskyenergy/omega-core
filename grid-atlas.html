@@ -880,11 +880,31 @@ var LAYERS = {
     label:function(a){return a.name||"Colo facility";},
     meta:function(a){return (a.city||"")+(a.net_count?" · "+a.net_count+" networks":"");}
   },
+  /* Built by scripts/build-peeringdb-facilities.js — a committed national
+     snapshot of the same PeeringDB facilities the live `colo` layer asks
+     for per view. The snapshot works offline and never rate-limits; the
+     live layer is fresher. `networks` (net_count) sizes the bubble: how
+     many networks registered presence in the building, which is the one
+     free number separating a carrier hotel from a closet. */
   carrierhotels: {
-    name:"Carrier Hotels (1.6k)", color:"#8a5cd1", on:false, geom:"bubble", role:"connectivity",
+    name:"Carrier Hotels (PeeringDB)", color:"#8a5cd1", on:false, geom:"bubble", role:"connectivity",
     url:"__STATIC__", staticFile:"/data/peeringdb-facilities.geojson",
     label:function(a){return a.name||"Facility";},
-    meta:function(a){return (a.operator?a.operator+" · ":"")+(a.city||"")+(a.state?", "+a.state:"")+(a.networks?" · "+a.networks+" networks":"");}
+    meta:function(a){return (a.operator?a.operator+" · ":"")+(a.city||"")+(a.state?", "+a.state:"")+
+      (a.networks?" · "+a.networks+" networks on-net":" · network count unstated")+
+      (a.ix_count?" · "+a.ix_count+" IX":"")+" · "+(a.attrib||"PeeringDB");}
+  },
+  /* ── LICENSED data centers (Rextag telecom delivery) via the same proxy ──
+     Inert until CLEARSKY_CONFIG.fiberProxyUrl is set, exactly like
+     fiber_licensed above. scripts/ingest-rextag.js normalizes the delivery;
+     docs/REXTAG-INGEST.md is the runbook. Licensed geometry is never
+     committed to this repository (private-fiber/ is gitignored) and never
+     served from /data/ — the proxy holds it behind a signed-in token. */
+  dc_licensed: {
+    name:"Data Centers (licensed)", color:"#FF9F1C", on:false, geom:"point", role:"connectivity",
+    url:"__PROXY__", proxyKey:"datacenters",
+    label:function(a){return a.name||a.operator||"Data center";},
+    meta:function(a){return (a.operator||a.owner||"operator unstated")+(a.power_mw?" · "+a.power_mw+" MW":"")+(a.tier?" · Tier "+a.tier:"")+" · licensed source";}
   },
   /* ── FCC fiber-SERVICE coverage (the govt "fiber like water" layer) ──
      ISPs must report fiber availability to the FCC by law (Broadband DATA Act).
@@ -951,7 +971,7 @@ var LAYERS = {
     meta:function(a){return (a.TYPEPIPE||a.typepipe||"transmission")+" gas";}
   }
 };
-var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_import","fiber_cls","backbone","fiber_ca","subsea","cable_landings","dc_registry","pf_inventory","pf_design","pf_unknown","pf_routes","pf_facilities","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
+var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_import","fiber_cls","backbone","fiber_ca","subsea","cable_landings","dc_registry","pf_inventory","pf_design","pf_unknown","pf_routes","pf_facilities","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","dc_licensed","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
 
 /* ---------- EIA technology taxonomy (matches EIA energy_source_code / technology) ---------- */
 var EIA_TECH={
@@ -1254,7 +1274,10 @@ function fetchProxy(key,cb){
   user.getIdToken().then(function(token){return fetch(url,{headers:{Authorization:'Bearer '+token}});}).then(function(r){
     return r.json().then(function(json){if(!r.ok)throw new Error(json.error||'Licensed source unavailable');return json;});
   }).then(function(json){
-    var feats=validateFiberGeoJSON(json);cb(feats);
+    /* A line layer gets the fiber validator; a point layer (dc_licensed)
+       gets the same WGS84 checks on points — the fiber validator would
+       refuse every Point outright. */
+    var feats=(L2.geom==="point")?validatePointGeoJSON(json):validateFiberGeoJSON(json);cb(feats);
   }).catch(function(e){cb([],e.message||'Licensed source unavailable');});
 }
 
@@ -1426,6 +1449,16 @@ function validateFiberGeoJSON(json){
   return {props:f.properties||{},geom:g};
  });
 }
+function validatePointGeoJSON(json){
+ if(!json || json.type!=='FeatureCollection' || !Array.isArray(json.features) || json.features.length>20000) throw new Error('Use a GeoJSON FeatureCollection with at most 20,000 points.');
+ return json.features.map(function(f){
+  var g=f&&f.geometry;
+  if(!g || g.type!=='Point') throw new Error('This layer takes Point geometry.');
+  var q=g.coordinates;
+  if(!Array.isArray(q)||typeof q[0]!=='number'||typeof q[1]!=='number'||!isFinite(q[0])||!isFinite(q[1])||Math.abs(q[0])>180||Math.abs(q[1])>90) throw new Error('Use WGS84 longitude, latitude coordinates.');
+  return {props:f.properties||{},geom:g};
+ });
+}
 fiberInput.onchange=function(){
  var file=fiberInput.files[0];if(!file)return;
  if(file.size>20*1024*1024){alert('Choose a GeoJSON file under 20 MB.');return;}
@@ -1467,7 +1500,7 @@ var PRESETS=[
      "Gas pipeline (microgrid)" row, but not on the preset for the one
      project type that most often needs it — so it had to be switched on by
      hand every time, by somebody who already knew to look. */
-  {key:"datacenter", name:"Data Center / Compute", icon:"▤", dd:"compute", layers:["substations","transmission","eia_plants","pf_inventory","pf_routes","fiber","fiber_licensed","dc_registry","ixp","colo","subsea","water","flood","gas","utility_terr","iso_rto"]},
+  {key:"datacenter", name:"Data Center / Compute", icon:"▤", dd:"compute", layers:["substations","transmission","eia_plants","pf_inventory","pf_routes","fiber","fiber_licensed","dc_registry","ixp","colo","carrierhotels","subsea","water","flood","gas","utility_terr","iso_rto"]},
   {key:"ev", name:"EV Charging", icon:"⌁", layers:["substations","ev","osm_subs","utility_terr"]},
   {key:"supercharger", name:"Tesla Supercharger", icon:"⚡", dd:"supercharger", layers:["substations","transmission","osm_subs","ev","utility_terr","flood"]},
   {key:"der", name:"DER", icon:"◇", layers:["substations","transmission","osm_subs","osm_plants","bess","utility_terr","ba_area"]},
@@ -1807,6 +1840,30 @@ function analyze(ll){
 
   h+='<div class="sec">Load Context</div>';
   h+=infoRow(LAYERS.datacenters.color,"Data centers","within 40 km"+(LAYERS.datacenters.on?"":" · layer off"),String(dcN));
+  /* ── NEAREST FACILITY, NAMED ───────────────────────────────────────────
+     The count above says how busy the metro is; the siting question is
+     "what is the nearest building fiber already terminates in, and how
+     carrier-dense is it". Reads whichever data-center layers are on —
+     licensed first, then the PeeringDB snapshot (which carries networks
+     on-net), then the registry and live OSM. Display only: it scores
+     nothing, for the same reason the public-evidence section scores
+     nothing. */
+  (function(){
+    var dcKeys=['dc_licensed','carrierhotels','colo','dc_registry','datacenters'], bestDc=null, bestKey=null, anyDcOn=false;
+    for(var di=0;di<dcKeys.length;di++){
+      var dk=dcKeys[di]; if(!LAYERS[dk]||!LAYERS[dk].on) continue; anyDcOn=true;
+      var hit=nearestPoint(ll,cache[dk],LAYERS[dk]);
+      if(hit&&(!bestDc||hit.km<bestDc.km)){ bestDc=hit; bestKey=dk; }
+    }
+    if(bestDc&&bestDc.km<=80){
+      var bp=bestDc.f.props||{};
+      var det=(bp.networks?bp.networks+" networks on-net":(bp.net_count?bp.net_count+" networks on-net":(bp.mw?Math.round(+bp.mw)+" MW "+(bp.mwBasis||""):(bp.operator||bp.org_name||""))));
+      h+=infoRow(LAYERS[bestKey].color,"Nearest: "+(LAYERS[bestKey].label(bp)||"facility"),
+            (det?det+" · ":"")+LAYERS[bestKey].name,fmtKm(bestDc.km));
+    } else if(anyDcOn){
+      h+=infoRow(LAYERS.dc_registry.color,"Nearest data center","none within 80 km in the loaded layers — not evidence none exists","—");
+    }
+  })();
   h+=infoRow(LAYERS.ev.color,"EV charging sites","within 15 km"+(LAYERS.ev.on?"":" · layer off"),String(evN));
 
   h+='<div class="sec">Connectivity</div>';
