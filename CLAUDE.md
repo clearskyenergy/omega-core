@@ -2236,6 +2236,27 @@ verification brief that wear no platform or tenant name.
 output to `work/`, never committed; a town-centre geocode is marked
 APPROXIMATE). `docs/FIBER-CONFIRMATION.md`.
 
+**The market a site is in is ONE record** (2026-11-11, Tommy: "we need to
+be very accurate and the grid atlas should know what iso market we are in
+and what the rules are in those markets and this should all be given in
+the due diligence reports"): `omega-iso-market.js` (root, ES5, dual-env
+like omega-fiber-confirm.js) resolves state + serving utility → ISO/RTO —
+membership first (ComEd is PJM wherever the parcel sits), state default
+second, a split state SAID, never guessed over — and carries each
+market's REPORTED structure (capacity market or none, ancillary products,
+storage participation, 841/2222 standing, ERCOT's non-FERC jurisdiction),
+sourced and dated, never a revenue rate. The screen (`grid-screen.js
+finish`) and the assessment (`assess.js`, `ISO.VERSION` in the input
+hash) store the RESOLUTION; the rules are derived at read time so they
+never age in a record. The battery case names the site's ACTUAL market
+in its reference words (`assess-bess.js marketFit` takes `input.market`
+— the engine stays dependency-free because Solela's repo carries a
+byte-copy); the DD report prints a Wholesale-market section; the Grid
+Atlas pin reads the drawn ISO polygon first, the membership second, and
+an ISO row or market score whose LAYER did not answer says "not read",
+never "outside ISO" (the NASA polygon host down once scored Chicago
+bilateral). `scripts/tests/tisomarket.js` (in `test:portfolio`) holds it.
+
 **Carrier hotels are a committed snapshot, and licensed telecom has one
 ingest** (2026-11-11). `data/peeringdb-facilities.geojson`
 (`scripts/build-peeringdb-facilities.js`, PeeringDB US facilities with

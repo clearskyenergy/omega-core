@@ -358,6 +358,7 @@
 <script src="/grid-atlas-dd.js"></script>
 <script src="/omega-fiber-confirm.js"></script>
 <script src="/omega-zoning-watch.js"></script>
+<script src="/omega-iso-market.js"></script>
 <script>
 (function(){
 "use strict";
@@ -2108,14 +2109,40 @@ function analyze(ll){
   if(terr||iso||ba||LAYERS.utility_terr.on||LAYERS.iso_rto.on||LAYERS.ba_area.on){
     h+='<div class="sec">Market / Utility</div>';
     h+=infoRow(LAYERS.utility_terr.color,"Serving utility",
-          terr?LAYERS.utility_terr.label(terr.props):(LAYERS.utility_terr.on?"none at this point":"enable Utility Territory"),
+          terr?LAYERS.utility_terr.label(terr.props)
+              :(LAYERS.utility_terr.on?((layerHealth.utility_terr&&layerHealth.utility_terr.state==='loaded')?"none mapped at this point":"the territory layer did not answer — not read")
+              :"enable Utility Territory"),
           terr?"↳":"—");
+    /* ── THE MARKET AT THE PIN (omega-iso-market.js, the ONE record the
+       assessment and the DD report read too). The drawn ISO polygon
+       decides first (geography); the serving utility's membership second
+       (the resolver — ComEd is PJM wherever the parcel sits); an ISO row
+       whose LAYER did not answer says so instead of "outside ISO", which
+       read as a finding at a pin in the middle of PJM whenever the NASA
+       polygon service was down (2026-11-11, Chicago). "Outside" is said
+       only when the polygons LOADED and the point is in none of them AND
+       the membership road agrees there is no market. Structure facts
+       only, each sourced and dated in the module — never a revenue rate. */
+    var isoHealth=layerHealth.iso_rto&&layerHealth.iso_rto.state, isoLoaded=isoHealth==='loaded';
+    var mkKey=null, mkBasis=null;
+    if(window.OmegaIsoMarket){
+      if(iso){ mkKey=OmegaIsoMarket.fromName(LAYERS.iso_rto.label(iso.props)); mkBasis='the drawn ISO/RTO polygon at the point'; }
+      if(!mkKey&&terr){ var mkR=OmegaIsoMarket.resolve({utility:LAYERS.utility_terr.label(terr.props),state:(terr.props&&(terr.props.STATE||terr.props.state))||null}); if(mkR.basis==='utility'){ mkKey=mkR.iso; mkBasis='the serving utility’s membership ('+LAYERS.utility_terr.label(terr.props)+')'; } }
+      if(!mkKey&&!iso&&isoLoaded){ mkKey='none'; mkBasis='the loaded ISO/RTO polygons: the point is in none of them'; }
+    }
     h+=infoRow(LAYERS.iso_rto.color,"ISO / RTO",
-          iso?LAYERS.iso_rto.label(iso.props):(LAYERS.iso_rto.on?"outside ISO (bilateral)":"enable ISO / RTO"),
-          iso?"↳":"—");
+          iso?LAYERS.iso_rto.label(iso.props)
+             :(mkKey&&mkKey!=='none')?((window.OmegaIsoMarket?OmegaIsoMarket.rules(mkKey).label:mkKey)+" · by the serving utility’s membership"+(LAYERS.iso_rto.on&&!isoLoaded?" (the polygon layer did not answer)":""))
+             :(LAYERS.iso_rto.on?(isoLoaded?"outside the organized markets (bilateral)":"the ISO/RTO layer did not answer — not read, not “outside”"):"enable ISO / RTO"),
+          (iso||mkKey)?"↳":"—");
     h+=infoRow(LAYERS.ba_area.color,"Balancing authority",
           ba?LAYERS.ba_area.label(ba.props):(LAYERS.ba_area.on?"—":"enable Balancing Authority"),
           ba?"↳":"—");
+    var mkRules=mkKey?(window.OmegaIsoMarket?OmegaIsoMarket.rules(mkKey):null):null;
+    if(mkRules){
+      h+='<div class="hint" style="margin:4px 0 0;color:var(--ink)"><b>'+esc(mkRules.label)+'</b> — '+esc(mkRules.capacity.exists?mkRules.capacity.name+'. ':mkRules.capacity.words+' ')+esc(mkRules.bess)+'</div>';
+      h+='<div class="hint" style="margin:3px 0 0;color:var(--muted)">'+esc(mkRules.ancillary)+' '+esc(mkRules.storage)+(mkRules.ferc?'':' Not FERC-jurisdictional: federal wholesale orders (841/2222) do not apply.')+' Read from '+esc(mkBasis||'the map')+'. Reviewed '+esc(mkRules.reviewedAt)+' from '+esc(mkRules.sources[0].label)+' — structure, not advice; confirm with the operator before pricing.</div>';
+    }
   }
 
   // ── Data Center Site Report — composite suitability ──
@@ -2136,7 +2163,16 @@ function analyze(ll){
   var pFiber = !fiberLayersOn ? null : (fiber?Math.max(0,100-fiber.km*8):20);
   var pWater = !LAYERS.water.on ? null : (water?Math.max(0,100-water.km*10):35);
   var pFlood = !LAYERS.flood.on ? null : (floodF?(inFlood?12:58):70);
-  var pMarket = !LAYERS.iso_rto.on ? null : (containingFeature(ll,cache.iso_rto)?100:70);
+  /* the market factor follows the same honesty as the row above: an ISO
+     polygon or a utility-membership read scores organized (100), a LOADED
+     layer with the point in no polygon scores bilateral (70), and a layer
+     that did not answer is unmeasured — null, which wScore drops. mkKey is
+     the Market/Utility block's read (hoisted; undefined when that section
+     did not render). */
+  var pMarket = (typeof mkKey!=='undefined'&&mkKey) ? (mkKey==='none'?70:100)
+              : !LAYERS.iso_rto.on ? null
+              : (layerHealth.iso_rto&&layerHealth.iso_rto.state==='loaded') ? (containingFeature(ll,cache.iso_rto)?100:70)
+              : null;
   var dcW=wScore([["power",pPower,42],["fiber",pFiber,24],["water",pWater,14],["flood",pFlood,12],["market",pMarket,8]]);
   var dcScore=dcW.score;
   /* ── A LOW SCORE AND AN UNLOADED LAYER ARE NOT THE SAME THING ──────────
@@ -2179,7 +2215,8 @@ function analyze(ll){
   h+=dcFactor("Fiber / connectivity", pFiber, fiber?fmtKm(fiber.km)+" to route":"enable a fiber layer");
   h+=dcFactor("Cooling water", pWater, water?fmtKm(water.km)+" to water":"enable Water layer");
   h+=dcFactor("Flood risk", pFlood, floodF?(inFlood?"in FEMA zone "+(floodF.props.FLD_ZONE||floodF.props.fld_zone||""):"mapped low-risk zone"):"no mapped flood zone");
-  h+=dcFactor("Market liquidity", pMarket, containingFeature(ll,cache.iso_rto)?"in organized ISO/RTO":"bilateral market");
+  h+=dcFactor("Market liquidity", pMarket,
+    pMarket==null?"ISO/RTO not read":(typeof mkKey!=='undefined'&&mkKey&&mkKey!=='none')?("in "+(window.OmegaIsoMarket?OmegaIsoMarket.rules(mkKey).label:"an organized market")):(containingFeature(ll,cache.iso_rto)?"in organized ISO/RTO":"bilateral market"));
   h+='<div class="hint" style="margin:4px 0 0;color:var(--muted)">Weights: power 42%, fiber 24%, water 14%, flood 12%, market 8%. Enable Site Suitability + Fiber + Market layers for a full read. Screening only — confirm utility capacity, water rights & Phase I before acquisition.</div>';
 
   // ── Available Power Estimate — the DC-critical question ──

@@ -97,25 +97,35 @@ function irr(flows) {
 }
 function pmt(rate, n, pv) { return rate === 0 ? pv / n : pv * rate / (1 - Math.pow(1 + rate, -n)); }
 
-/* where the site sits against the set's market: zone | market | reference */
+/* where the site sits against the set's market: zone | market | reference.
+   `where.market` is the resolved ISO of the SITE (omega-iso-market.js,
+   handed in by the assessment: { iso, label, bess? } — this engine stays
+   dependency-free because the Solela workspace carries a byte-copy of it).
+   With it, a reference read NAMES the market the site is actually in and
+   what its structure pays a battery, instead of only "not in that market". */
 function marketFit(A, where) {
   where = where || {};
   var st = String(where.state || '').toUpperCase().trim(), ut = String(where.utility || '').toLowerCase();
+  var site = where.market && where.market.iso ? where.market : null;
   var inZone = !!ut && A.market.utilities.some(function (u) { return ut.indexOf(u) >= 0; });
-  if (inZone) return { key: A.market.key, label: A.market.label, fit: 'zone', words: 'Priced on the site’s own market: ' + A.market.label + '.' };
-  if (st && A.market.states.indexOf(st) >= 0) return { key: A.market.key, label: A.market.label, fit: 'market',
-    words: 'A screening figure: the site is in a ' + A.market.label.split(',')[0] + ' state, but the rates are the ' + A.market.label + ' reference, not its own zone’s' + (ut ? '' : ' (the utility is not on file)') + '.' };
-  return { key: A.market.key, label: A.market.label, fit: 'reference',
-    words: 'A screening figure at reference rates: the grid value stack is the ' + A.market.label + ' benchmark, and this site' + (st ? ' (' + st + ')' : '') + ' is not in that market. Replace the rates with its own market’s before relying on it.' };
+  if (inZone) return { key: A.market.key, label: A.market.label, fit: 'zone', siteIso: site ? site.iso : 'pjm', siteLabel: site ? site.label : A.market.label,
+    words: 'Priced on the site’s own market: ' + A.market.label + '.' };
+  if (site ? site.iso === 'pjm' : (st && A.market.states.indexOf(st) >= 0)) return { key: A.market.key, label: A.market.label, fit: 'market', siteIso: 'pjm', siteLabel: site ? site.label : A.market.label,
+    words: 'A screening figure: the site is in PJM, but the rates are the ' + A.market.label + ' reference, not its own zone’s' + (ut ? '' : ' (the utility is not on file)') + '.' };
+  var words;
+  if (site && site.iso === 'none') words = 'A screening figure at reference rates: the grid value stack priced here is the ' + A.market.label + ' benchmark, but this site has ' + site.label + (st ? ' (' + st + ')' : '') + '. ' + (site.bess ? site.bess + ' ' : '') + 'The benchmark stack does not transfer: replace it with the utility’s own programs before relying on it.';
+  else if (site) words = 'A screening figure at reference rates: the grid value stack priced here is the ' + A.market.label + ' benchmark, but this site is in ' + site.label + (st ? ' (' + st + ')' : '') + '. ' + (site.bess ? site.bess + ' ' : '') + 'Replace the rates with ' + site.label + '’s own before relying on it.';
+  else words = 'A screening figure at reference rates: the grid value stack is the ' + A.market.label + ' benchmark, and this site' + (st ? ' (' + st + ')' : '') + ' is not in that market. Replace the rates with its own market’s before relying on it.';
+  return { key: A.market.key, label: A.market.label, fit: 'reference', siteIso: site ? site.iso : null, siteLabel: site ? site.label : null, words: words };
 }
 
-/* input: { powerKw, state?, utility?, assumptions? }  →  the case */
+/* input: { powerKw, state?, utility?, market?, assumptions? }  →  the case */
 function bessCase(input) {
   input = input || {};
   var notes = [], A = merge(input.assumptions, notes), kw = num(input.powerKw);
   if (kw == null || kw < LIMITS.powerKw[0]) return { ok: false, version: VERSION, reason: 'No free capacity to size a battery on', notes: notes };
   if (kw > LIMITS.powerKw[1]) return { ok: false, version: VERSION, reason: 'A battery of ' + fmt(kw) + ' kW is outside this model’s range', notes: notes };
-  var st = String(input.state || '').toUpperCase().trim(), market = marketFit(A, { state: st, utility: input.utility });
+  var st = String(input.state || '').toUpperCase().trim(), market = marketFit(A, { state: st, utility: input.utility, market: input.market });
   var R = A.revenue, T = A.tax, PT = A.propertyTax, DB = A.debt, years = Math.min(30, Math.max(1, Math.floor(A.years)));
   var mw = kw / 1000, mwh = mw * A.durationHours, kwh = mwh * 1000;
 

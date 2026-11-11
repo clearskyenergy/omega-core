@@ -161,7 +161,9 @@ test('G08 it lands through the diligence\'s own rule, and it reads nothing it mu
   assert.deepEqual(r.diligence.gates.fiber.value.carriers, ['Lumen', 'Comcast Business']); assert.equal(r.diligence.gates.interconnection.value.utility, 'ComEd');
   var code = SRC.replace(/\/\*[\s\S]*?\*\//g, '');
   ['geodataviewer', 'fiber_verified', 'fiber_estimated', 'll_backbone', 'FIBER_VENDOR', 'FCC_BB_KEY', 'process.env', 'fetch(', 'require(\'https\')', 'require(\'http\')'].forEach(function (w) { assert.ok(code.indexOf(w) < 0, 'grid-screen reads ' + w); });
-  assert.deepEqual(code.match(/require\([^)]*\)/g), ["require('../utility-rates')"], 'the handlers are handed in; the library requires only the rate book');
+  assert.deepEqual(code.match(/require\([^)]*\)/g), ["require('../utility-rates')", "require('../../../omega-iso-market.js')"],
+    'the handlers are handed in; the library requires only the rate book and the pure, keyless market resolver');
+  assert.ok(whole.market && whole.market.iso === 'pjm' && whole.market.basis === 'utility', 'the screen resolves the market off the serving utility (ComEd → PJM)');
   assert.ok(SRC.indexOf('© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.') > 0);
 });
 
