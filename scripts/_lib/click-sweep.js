@@ -48,7 +48,13 @@
        last: '.pin-btn.remove',           // clicked after everything else (they take things away)
        served: sweep.servedBy(ROOT)       // (pathname) → true when the site serves it
      });
-     r = { controls, clicks, held[], read[], tabs[], frames[], skipped[], innerSkipped[], hidden[], problems[{ kind, control, detail }] }
+     r = { controls, clicks, held[], read[], tabs[], frames[], skipped[], innerSkipped[], hidden[], late[], problems[{ kind, control, detail }] }
+
+   skipped[] is a control the page redrew as something else before its turn;
+   hidden[] is one that was listed and is not showing at its turn, with what
+   hides it ("inside a closed details.more"). Neither is clicked, so a caller
+   that wants every control clicked prints both (2026-11-09: a count that
+   came up five short printed only skipped[], which was empty).
 
    Needs Playwright ≥ 1.23 (route.fallback). Not a test on its own: the
    caller decides what a problem fails.
@@ -137,6 +143,23 @@ function innerIn(arg) {
     });
   });
   return out;
+}
+
+/* in the page: what hides a tagged control (the nearest cause, outermost
+   last): a closed fold, display:none, visibility, no size */
+function whyHiddenIn(i) {
+  var el = document.querySelector('[data-sweep="' + i + '"]'); if (!el) return 'no longer in the page';
+  function name(e) { return e.tagName.toLowerCase() + (e.id ? '#' + e.id : e.className && typeof e.className === 'string' ? '.' + e.className.trim().split(/\s+/).join('.') : ''); }
+  var why = [];
+  for (var e = el; e && e !== document.documentElement; e = e.parentElement) {
+    var cs = getComputedStyle(e);
+    if (cs.display === 'none') why.push(name(e) + ' is display:none' + (e.style.display === 'none' ? ' (set inline)' : ''));
+    if (e.hasAttribute('hidden')) why.push(name(e) + ' is [hidden]');
+    if (e.parentElement && e.parentElement.tagName === 'DETAILS' && !e.parentElement.open && e.tagName !== 'SUMMARY') why.push('inside a closed ' + name(e.parentElement));
+  }
+  var c = getComputedStyle(el); if (c.visibility !== 'visible') why.push('visibility:' + c.visibility); if (c.opacity === '0') why.push('opacity:0');
+  var r = el.getBoundingClientRect(); if (!why.length && (!r.width || !r.height)) why.push('no size (' + Math.round(r.width) + 'x' + Math.round(r.height) + ')');
+  return (why.join('; ') || 'not visible to the browser') + ' [at ' + location.pathname.replace(/^.*\//, '/') + location.hash + ']';
 }
 
 /* in the page: how many controls are showing (to know when a view that
@@ -293,7 +316,7 @@ async function run(p, opts) {
       }
       if (it.reveal !== null && it.reveal !== undefined && reveal[it.reveal].open) { await reveal[it.reveal].open(p); await wait(settle); }
       /* an earlier click folded it away (an expander, a list that toggles): state, not a fault */
-      if (!(await p.locator('[data-sweep="' + it.i + '"]').isVisible())) { report.hidden.push(control); continue; }
+      if (!(await p.locator('[data-sweep="' + it.i + '"]').isVisible())) { report.hidden.push(control + ' — ' + await p.evaluate(whyHiddenIn, it.i).catch(function () { return 'gone'; })); continue; }
       var before = await p.evaluate(function () { return location.pathname + location.search; });
       var heldAt = held.length;
       current = control;
