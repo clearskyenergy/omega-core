@@ -271,6 +271,12 @@ var SC = 'tenants/solelacapital/';
 var scServed = files.filter(function (f) { return f.indexOf(SC) === 0; });
 ok('★ a workspace\'s diligence seed is NOT served, and its folder serves only the logo pack', ignored(SC + 'portfolio-diligence.json') && ignored('tenants/anyone/portfolio-diligence.json') &&
    scServed.length > 0 && scServed.every(function (f) { return /^tenants\/solelacapital\/logos\/[\w-]+\.svg$/.test(f); }), scServed);
+/* its white-label seed (2026-11-09): the block scripts/set-white-label.js
+   stages is not served either; the site reads the brand off the record */
+ok('★ a workspace\'s white-label seed is NOT served', ignored(SC + 'white-label.json') && ignored('tenants/anyone/white-label.json'));
+/* the logo pack is paths and nothing that runs or fetches: an SVG is a document a browser will open */
+var svgBad = scServed.filter(function (f) { return /<script|<foreignObject|href=|\son[a-z]+=|<image|<use|url\(/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')); });
+ok('★ the served logo pack carries no script, link or external reference', !svgBad.length, svgBad);
 var ccServed = files.filter(function (f) { return f.indexOf(CC) === 0; });
 ok('the served folder is tenant.json, products.json and icons/, nothing else (a new file there is a decision)',
    ccServed.every(function (f) { return f === CC + 'tenant.json' || f === CC + 'products.json' || /^tenants\/cleancell\/icons\/[\w-]+\.svg$/.test(f); }), ccServed);
