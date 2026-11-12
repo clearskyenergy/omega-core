@@ -1,0 +1,2139 @@
+{
+ "state": "OK",
+ "builtAt": "2026-11-12",
+ "sources": [
+  {
+   "label": "FCC Broadband Data Collection (December 2025) via Esri Living Atlas — provider filings per census block, aggregated for Oklahoma",
+   "attribution": "FCC (public domain); self-reported, mass-market availability"
+  },
+  {
+   "label": "FCC study-area boundaries (August 2024) — the incumbent carriers of record",
+   "attribution": "FCC (public domain)"
+  },
+  {
+   "label": "Each provider’s own website, probed live 2026-11-11",
+   "attribution": "the provider’s own door; a row without one carries null, never a guess"
+  }
+ ],
+ "note": "A row is a FILING: the provider told the FCC it offers the technology at locations in that block. It proves plant and names who to ask; it does not prove service at any one address — the provider’s own checker or a written carrier answer does. The FCC per-address page is every provider’s fallback door.",
+ "fccAddressLookup": "https://broadbandmap.fcc.gov/location-summary/fixed",
+ "providers": [
+  {
+   "name": "Fusion",
+   "fiberBsls": 2,
+   "blocks": 2,
+   "tech": {
+    "fiber": 2
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Oklahoma Fiber Network, LLC",
+   "fiberBsls": 9208,
+   "blocks": 1011,
+   "tech": {
+    "fiber": 9208
+   },
+   "kind": "regional",
+   "check": "https://www.oklahomafiber.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "TSC, Inc",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwLicensedByRule": 2637
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Resonance Broadband LLC",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 1420
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "El Reno Fast Connect",
+   "fiberBsls": 2375,
+   "blocks": 140,
+   "tech": {
+    "fiber": 2375
+   },
+   "kind": "muni",
+   "check": "https://elrenofastconnect.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "McLoud Telephone Co",
+   "fiberBsls": 1334,
+   "blocks": 80,
+   "tech": {
+    "copper": 9891,
+    "fiber": 1334
+   },
+   "kind": "regional",
+   "check": "https://www.dobson.net/",
+   "map": null,
+   "note": "Dobson Technologies: Dobson Fiber plus the Dobson, McLoud and Lavaca incumbent exchanges.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Encore Communications",
+   "fiberBsls": 350,
+   "blocks": 175,
+   "tech": {
+    "fiber": 350
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Zayo Network Services, LLC",
+   "fiberBsls": 4,
+   "blocks": 4,
+   "tech": {
+    "fiber": 4
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Lake Region Technology & Communications LLC",
+   "fiberBsls": 26072,
+   "blocks": 2032,
+   "tech": {
+    "fiber": 26072
+   },
+   "kind": "coop",
+   "check": "https://www.lakeregionfiber.com/",
+   "map": null,
+   "note": "Lake Region Electric Cooperative.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Cross Telephone Company, LLC",
+   "fiberBsls": 2194,
+   "blocks": 260,
+   "tech": {
+    "copper": 4720,
+    "fiber": 2194
+   },
+   "kind": "ilec",
+   "check": "https://www.crosstel.net/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Wifires Internet",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwLicensedByRule": 62
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Four States Fiber",
+   "fiberBsls": 188,
+   "blocks": 35,
+   "tech": {
+    "fiber": 188
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Salina Spavinaw Telephone",
+   "fiberBsls": 9294,
+   "blocks": 837,
+   "tech": {
+    "fiber": 9294,
+    "copper": 75
+   },
+   "kind": "ilec",
+   "check": "https://www.sstelco.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Centranet, LLC",
+   "fiberBsls": 24948,
+   "blocks": 2909,
+   "tech": {
+    "fiber": 24948
+   },
+   "kind": "coop",
+   "check": "https://mycentral.coop/",
+   "map": null,
+   "note": "Central Rural Electric Cooperative’s fiber subsidiary; Centranet’s own storefront did not answer at review, the co-op’s site is the door.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Rally Networks",
+   "fiberBsls": 1262,
+   "blocks": 141,
+   "tech": {
+    "copper": 1385,
+    "fiber": 1262
+   },
+   "kind": "regional",
+   "check": "https://rallynetworks.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Wave Wireless",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 110
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "United Wireless Communications, Inc.",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwLicensed": 1
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "TWN Communications",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 2
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Pine Cellular Phones",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwLicensed": 44120
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Circle B Wireless",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwLicensedByRule": 11942
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Carnegie Telephone Company DBA Lightspeed Services, LLC",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 123
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "BartNet IP LLC",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 30190
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Pioneer Long Distance, Inc.",
+   "fiberBsls": 1461,
+   "blocks": 328,
+   "tech": {
+    "fwUnlicensed": 326,
+    "fiber": 1461
+   },
+   "kind": "coop",
+   "check": "https://www.gopioneer.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Plains Internet LLC",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 21834
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Oklatel",
+   "fiberBsls": 395,
+   "blocks": 84,
+   "tech": {
+    "fwUnlicensed": 3732,
+    "copper": 402,
+    "fiber": 395
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Consolidated Communications",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "copper": 2536
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "K-PowerNet LLC",
+   "fiberBsls": 353,
+   "blocks": 24,
+   "tech": {
+    "fiber": 353
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Epic Touch",
+   "fiberBsls": 68,
+   "blocks": 26,
+   "tech": {
+    "fiber": 68
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Wichita Online Inc.",
+   "fiberBsls": 4,
+   "blocks": 4,
+   "tech": {
+    "fiber": 4
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Lost Creek Wireless LLC / Newton County Fiber LLC DBA",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 445
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Pine Cellular Phones Inc",
+   "fiberBsls": 12376,
+   "blocks": 1562,
+   "tech": {
+    "fiber": 12376
+   },
+   "kind": "regional",
+   "check": "https://www.pinecellular.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Ponca City Utility Authority",
+   "fiberBsls": 11706,
+   "blocks": 678,
+   "tech": {
+    "fiber": 11706
+   },
+   "kind": "muni",
+   "check": "https://www.poncacityok.gov/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Trace Fiber Networks",
+   "fiberBsls": 3215,
+   "blocks": 493,
+   "tech": {
+    "fiber": 3215
+   },
+   "kind": "regional",
+   "check": "https://tracefiber.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "KanOkla Telephone Association",
+   "fiberBsls": 1852,
+   "blocks": 646,
+   "tech": {
+    "fwLicensedByRule": 31,
+    "fiber": 1852,
+    "copper": 1129
+   },
+   "kind": "coop",
+   "check": "https://www.kanokla.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "ICS Advanced Technologies",
+   "fiberBsls": 2,
+   "blocks": 2,
+   "tech": {
+    "fiber": 2
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Zulu Internet Inc",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 29
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Cherokee Communications",
+   "fiberBsls": 775,
+   "blocks": 30,
+   "tech": {
+    "copper": 6004,
+    "fiber": 775
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Nextlink",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwLicensedByRule": 14425,
+    "fwUnlicensed": 86354,
+    "fwLicensed": 199959
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Xfinity",
+   "fiberBsls": 9,
+   "blocks": 8,
+   "tech": {
+    "fiber": 9
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Fusion Cloud Services, Inc.",
+   "fiberBsls": 1,
+   "blocks": 1,
+   "tech": {
+    "copper": 3,
+    "fiber": 1
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "FiberLink",
+   "fiberBsls": 1792,
+   "blocks": 130,
+   "tech": {
+    "fiber": 1792
+   },
+   "kind": "regional",
+   "check": "https://fiberlinkllc.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Pioneer Telephone Cooperative, Inc.",
+   "fiberBsls": 66019,
+   "blocks": 11014,
+   "tech": {
+    "fiber": 66019,
+    "copper": 60774
+   },
+   "kind": "coop",
+   "check": "https://www.gopioneer.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "BTC Broadband",
+   "fiberBsls": 12797,
+   "blocks": 1067,
+   "tech": {
+    "fiber": 12797,
+    "copper": 6603
+   },
+   "kind": "ilec",
+   "check": "https://www.btcbroadband.com/",
+   "map": null,
+   "note": "Bixby Telephone Company d/b/a BTC Broadband.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Viasat Inc",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "geoSat": 1732808
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "360 Broadband",
+   "fiberBsls": 1613,
+   "blocks": 76,
+   "tech": {
+    "fiber": 1613,
+    "fwUnlicensed": 8368,
+    "fwLicensedByRule": 95881
+   },
+   "kind": "regional",
+   "check": "https://360broadband.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Cim Tel Cable LLC",
+   "fiberBsls": 4243,
+   "blocks": 586,
+   "tech": {
+    "fwLicensed": 4050,
+    "fiber": 4243
+   },
+   "kind": "ilec",
+   "check": "https://www.cimtel.net/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Southern Plains Cable, LLC",
+   "fiberBsls": 15537,
+   "blocks": 1988,
+   "tech": {
+    "fiber": 15537,
+    "cable": 3966
+   },
+   "kind": "regional",
+   "check": "https://hilliary.com/",
+   "map": null,
+   "note": "Hilliary Communications operating companies.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Cogent Communication",
+   "fiberBsls": 2,
+   "blocks": 2,
+   "tech": {
+    "fiber": 2
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Rise Broadband",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 79110,
+    "fwLicensedByRule": 12274
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "HughesNet",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "geoSat": 1732794
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "South Central Telephone Assn Inc",
+   "fiberBsls": 507,
+   "blocks": 181,
+   "tech": {
+    "fiber": 507
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Chickasaw Telecommunications Services, Inc.",
+   "fiberBsls": 398,
+   "blocks": 42,
+   "tech": {
+    "fiber": 398,
+    "copper": 8754
+   },
+   "kind": "ilec",
+   "check": "https://ctcok.com/",
+   "map": null,
+   "note": "Answered 403 to automated probes (bot gate); the site is live in a browser.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Chickasaw Telephone Company",
+   "fiberBsls": 5639,
+   "blocks": 660,
+   "tech": {
+    "fiber": 5639,
+    "copper": 10040
+   },
+   "kind": "ilec",
+   "check": "https://ctcok.com/",
+   "map": null,
+   "note": "Answered 403 to automated probes (bot gate); the site is live in a browser.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Hinton CATV Company",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwLicensed": 17169
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Panhandle Telephone",
+   "fiberBsls": 14900,
+   "blocks": 3618,
+   "tech": {
+    "fwLicensed": 229,
+    "copper": 78,
+    "fiber": 14900
+   },
+   "kind": "coop",
+   "check": "https://www.ptci.net/",
+   "map": null,
+   "note": "Panhandle Telephone Cooperative (PTCI).",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "OEC Fiber",
+   "fiberBsls": 95994,
+   "blocks": 4703,
+   "tech": {
+    "fiber": 95994
+   },
+   "kind": "coop",
+   "check": "https://www.oecfiber.com/",
+   "map": "https://okcoop.maps.arcgis.com/apps/webappviewer/index.html?id=d36b60f793e348018b45e2f1e3f18aec",
+   "note": "Oklahoma Electric Cooperative; the map is OEC’s own published zones viewer.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Sparklight",
+   "fiberBsls": 106,
+   "blocks": 10,
+   "tech": {
+    "fiber": 106,
+    "cable": 121622
+   },
+   "kind": "cable",
+   "check": "https://www.sparklight.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Arbuckle Communications LLC",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 1370,
+    "fwLicensedByRule": 42110,
+    "fwLicensed": 3150
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Metronet Holdings",
+   "fiberBsls": 15298,
+   "blocks": 497,
+   "tech": {
+    "fiber": 15298
+   },
+   "kind": "regional",
+   "check": "https://www.metronet.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Logix Communications LP",
+   "fiberBsls": 9,
+   "blocks": 9,
+   "tech": {
+    "other": 10,
+    "fiber": 9
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "ecoLink",
+   "fiberBsls": 35509,
+   "blocks": 3646,
+   "tech": {
+    "fiber": 35509
+   },
+   "kind": "coop",
+   "check": "https://www.ecolink.coop/",
+   "map": null,
+   "note": "East Central Oklahoma Electric Cooperative.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Aristotle",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwLicensed": 544
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "DiamondNet",
+   "fiberBsls": 3153,
+   "blocks": 369,
+   "tech": {
+    "fiber": 3153
+   },
+   "kind": "muni",
+   "check": "https://www.diamondnet.org/",
+   "map": null,
+   "note": "City of Sallisaw municipal fiber — Oklahoma’s first.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Vyve Broadband",
+   "fiberBsls": 3648,
+   "blocks": 598,
+   "tech": {
+    "fiber": 3648,
+    "cable": 117118
+   },
+   "kind": "cable",
+   "check": "https://vyvebroadband.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Tuttle Development Authority",
+   "fiberBsls": 2788,
+   "blocks": 172,
+   "tech": {
+    "fiber": 2788
+   },
+   "kind": "muni",
+   "check": "https://www.cityoftuttle.org/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Southwest Oklahoma Telephone Company",
+   "fiberBsls": 715,
+   "blocks": 178,
+   "tech": {
+    "copper": 2,
+    "fiber": 715,
+    "fwUnlicensed": 68729
+   },
+   "kind": "regional",
+   "check": "https://hilliary.com/",
+   "map": null,
+   "note": "Hilliary Communications operating companies.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Medicine Park Telephone Company",
+   "fiberBsls": 959,
+   "blocks": 109,
+   "tech": {
+    "fiber": 959,
+    "copper": 580
+   },
+   "kind": "regional",
+   "check": "https://hilliary.com/",
+   "map": null,
+   "note": "Hilliary Communications operating companies.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Wisper ISP, LLC",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 910,
+    "fwLicensedByRule": 2,
+    "fwLicensed": 29452
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Tahlequah Cable TV",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "cable": 8122
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Beggs Telephone Company Inc",
+   "fiberBsls": 927,
+   "blocks": 128,
+   "tech": {
+    "fiber": 927,
+    "copper": 1272
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Pottawatomie Telephone Company LLC",
+   "fiberBsls": 1339,
+   "blocks": 201,
+   "tech": {
+    "fiber": 1339,
+    "copper": 2259
+   },
+   "kind": "ilec",
+   "check": "https://ptcok.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "CVEC Fiber, LLC",
+   "fiberBsls": 30144,
+   "blocks": 2901,
+   "tech": {
+    "fiber": 30144
+   },
+   "kind": "coop",
+   "check": "https://www.cvecfiber.com/",
+   "map": null,
+   "note": "Canadian Valley Electric Cooperative.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Canadian Valley Telephone Company",
+   "fiberBsls": 20,
+   "blocks": 4,
+   "tech": {
+    "copper": 1888,
+    "fiber": 20
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Bixby Telephone Co",
+   "fiberBsls": 9858,
+   "blocks": 460,
+   "tech": {
+    "copper": 6436,
+    "fiber": 9858
+   },
+   "kind": "ilec",
+   "check": "https://www.btcbroadband.com/",
+   "map": null,
+   "note": "Bixby Telephone Company d/b/a BTC Broadband.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Dobson Fiber",
+   "fiberBsls": 174925,
+   "blocks": 17393,
+   "tech": {
+    "fiber": 174925
+   },
+   "kind": "regional",
+   "check": "https://www.dobson.net/",
+   "map": null,
+   "note": "Dobson Technologies: Dobson Fiber plus the Dobson, McLoud and Lavaca incumbent exchanges.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Lavaca Telephone Company, Inc.-OK",
+   "fiberBsls": 1804,
+   "blocks": 147,
+   "tech": {
+    "fiber": 1804
+   },
+   "kind": "regional",
+   "check": "https://www.dobson.net/",
+   "map": null,
+   "note": "Dobson Technologies: Dobson Fiber plus the Dobson, McLoud and Lavaca incumbent exchanges.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Terral Telephone",
+   "fiberBsls": 456,
+   "blocks": 112,
+   "tech": {
+    "fwUnlicensed": 167,
+    "fiber": 456
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Valor Telecommunications of Texas, LP",
+   "fiberBsls": 45805,
+   "blocks": 3322,
+   "tech": {
+    "fwUnlicensed": 16,
+    "copper": 43744,
+    "fiber": 45805
+   },
+   "kind": "ilec",
+   "check": "https://www.gokinetic.com/",
+   "map": null,
+   "note": "Windstream / Kinetic brands, incl. the Valor and ALLTEL successor study areas.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Fidelity",
+   "fiberBsls": 73,
+   "blocks": 9,
+   "tech": {
+    "fiber": 73,
+    "cable": 30862
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Cross Wireless",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwLicensed": 15532
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Osage Broadband",
+   "fiberBsls": 917,
+   "blocks": 160,
+   "tech": {
+    "fwUnlicensed": 1927,
+    "fiber": 917,
+    "fwLicensed": 8088
+   },
+   "kind": "tribal",
+   "check": "https://www.osagebroadband.com/",
+   "map": null,
+   "note": "Osage Nation.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "ElektraFi LLC",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwLicensedByRule": 1253
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "PHOENIX COMMUNICATIONS SYSTEMS",
+   "fiberBsls": 2672,
+   "blocks": 516,
+   "tech": {
+    "copper": 54,
+    "fiber": 2672,
+    "fwUnlicensed": 3450
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Kwikbit",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 170
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "OzarksGo",
+   "fiberBsls": 12041,
+   "blocks": 1234,
+   "tech": {
+    "fiber": 12041
+   },
+   "kind": "coop",
+   "check": "https://www.ozarksgo.net/",
+   "map": null,
+   "note": "Ozarks Electric Cooperative (Arkansas/Oklahoma).",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Optimum",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "cable": 144596
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Cookson Hills Connect, LLC",
+   "fiberBsls": 18708,
+   "blocks": 1781,
+   "tech": {
+    "fiber": 18708
+   },
+   "kind": "coop",
+   "check": "https://www.cooksonhillsconnect.com/",
+   "map": null,
+   "note": "Cookson Hills Electric Cooperative.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Grand Telephone Company",
+   "fiberBsls": 2059,
+   "blocks": 191,
+   "tech": {
+    "copper": 3171,
+    "fiber": 2059
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Pine Telephone Company",
+   "fiberBsls": 9453,
+   "blocks": 1002,
+   "tech": {
+    "copper": 151,
+    "fiber": 9453
+   },
+   "kind": "ilec",
+   "check": "https://www.pinetelephone.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "ZAYO GROUP LLC",
+   "fiberBsls": 15,
+   "blocks": 15,
+   "tech": {
+    "fiber": 15
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Syntrio",
+   "fiberBsls": 899,
+   "blocks": 244,
+   "tech": {
+    "fiber": 899,
+    "fwUnlicensed": 2137,
+    "fwLicensedByRule": 5051
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "The World",
+   "fiberBsls": 995,
+   "blocks": 194,
+   "tech": {
+    "fiber": 995,
+    "copper": 19
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Lightspeed Services LLC",
+   "fiberBsls": 1247,
+   "blocks": 139,
+   "tech": {
+    "fiber": 1247
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Central Oklahoma Telephone Co LLC",
+   "fiberBsls": 2884,
+   "blocks": 533,
+   "tech": {
+    "fiber": 2884,
+    "copper": 696
+   },
+   "kind": "ilec",
+   "check": "https://www.cotc.net/",
+   "map": null,
+   "note": "COTC Connections.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Wake Wireless",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 33112,
+    "fwLicensedByRule": 17448
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Totah Communications Inc",
+   "fiberBsls": 1768,
+   "blocks": 259,
+   "tech": {
+    "fiber": 1768,
+    "copper": 1294
+   },
+   "kind": "ilec",
+   "check": "https://www.totah.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Windstream Communications, LLC.",
+   "fiberBsls": 45,
+   "blocks": 12,
+   "tech": {
+    "fiber": 45,
+    "copper": 3
+   },
+   "kind": "ilec",
+   "check": "https://www.gokinetic.com/",
+   "map": null,
+   "note": "Windstream / Kinetic brands, incl. the Valor and ALLTEL successor study areas.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Wave Rural Connect, LLC",
+   "fiberBsls": 4495,
+   "blocks": 289,
+   "tech": {
+    "fiber": 4495
+   },
+   "kind": "coop",
+   "check": "https://www.waveruralconnect.com/",
+   "map": null,
+   "note": "Alfalfa Electric Cooperative.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Windstream Oklahoma, LLC",
+   "fiberBsls": 1185,
+   "blocks": 213,
+   "tech": {
+    "copper": 7786,
+    "fiber": 1185
+   },
+   "kind": "ilec",
+   "check": "https://www.gokinetic.com/",
+   "map": null,
+   "note": "Windstream / Kinetic brands, incl. the Valor and ALLTEL successor study areas.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Atlink Services",
+   "fiberBsls": 152,
+   "blocks": 23,
+   "tech": {
+    "fwUnlicensed": 192637,
+    "fwLicensed": 111502,
+    "fwLicensedByRule": 336961,
+    "fiber": 152
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "T-Mobile",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwLicensed": 1098451
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "City of Coffeyville",
+   "fiberBsls": 1,
+   "blocks": 1,
+   "tech": {
+    "fiber": 1
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Craw Kan Telephone Cooperative Inc",
+   "fiberBsls": 3,
+   "blocks": 3,
+   "tech": {
+    "copper": 173,
+    "fiber": 3
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "TekWav",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwLicensedByRule": 2,
+    "fwLicensed": 688,
+    "fwUnlicensed": 863
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "KWIKOM Communications",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 1944
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Cimarron Telephone Company",
+   "fiberBsls": 3286,
+   "blocks": 322,
+   "tech": {
+    "fiber": 3286,
+    "copper": 5492
+   },
+   "kind": "ilec",
+   "check": "https://www.cimtel.net/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Oklahoma Western Telephone Company",
+   "fiberBsls": 1236,
+   "blocks": 256,
+   "tech": {
+    "fiber": 1236,
+    "copper": 1738
+   },
+   "kind": "regional",
+   "check": "https://hilliary.com/",
+   "map": null,
+   "note": "Hilliary Communications operating companies.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "KanOkla Communications",
+   "fiberBsls": 1656,
+   "blocks": 278,
+   "tech": {
+    "fwLicensedByRule": 13564,
+    "fiber": 1656
+   },
+   "kind": "coop",
+   "check": "https://www.kanokla.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "TPx Communications",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "copper": 13
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Cox Communications",
+   "fiberBsls": 104648,
+   "blocks": 7820,
+   "tech": {
+    "fiber": 104648,
+    "cable": 652102,
+    "fwLicensedByRule": 2891
+   },
+   "kind": "cable",
+   "check": "https://www.cox.com/residential/internet.html",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Verizon",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwLicensed": 1103774
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Brightspeed",
+   "fiberBsls": 23,
+   "blocks": 1,
+   "tech": {
+    "fwUnlicensed": 5,
+    "fiber": 23,
+    "copper": 1644
+   },
+   "kind": "ilec",
+   "check": "https://www.brightspeed.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "IdeaTek",
+   "fiberBsls": 11,
+   "blocks": 2,
+   "tech": {
+    "fiber": 11,
+    "fwUnlicensed": 759
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Central Cellular LLC /dba COTC Connections",
+   "fiberBsls": 1345,
+   "blocks": 160,
+   "tech": {
+    "fiber": 1345,
+    "copper": 1393
+   },
+   "kind": "ilec",
+   "check": "https://www.cotc.net/",
+   "map": null,
+   "note": "COTC Connections.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Grid Southwest",
+   "fiberBsls": 411,
+   "blocks": 31,
+   "tech": {
+    "fiber": 411
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "The Junction Internet",
+   "fiberBsls": 210,
+   "blocks": 32,
+   "tech": {
+    "fiber": 210,
+    "fwUnlicensed": 1329,
+    "fwLicensed": 32821,
+    "fwLicensedByRule": 50611
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Cross Telephone Company",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "copper": 6113
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Airosurf Communications",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 52089
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Bluepeak",
+   "fiberBsls": 132733,
+   "blocks": 10630,
+   "tech": {
+    "fiber": 132733,
+    "cable": 32
+   },
+   "kind": "regional",
+   "check": "https://www.mybluepeak.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Oklahoma Windstream, LLC",
+   "fiberBsls": 5115,
+   "blocks": 806,
+   "tech": {
+    "fwLicensedByRule": 1171,
+    "fiber": 5115,
+    "fwUnlicensed": 1476,
+    "copper": 6637
+   },
+   "kind": "ilec",
+   "check": "https://www.gokinetic.com/",
+   "map": null,
+   "note": "Windstream / Kinetic brands, incl. the Valor and ALLTEL successor study areas.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "AirLink Internet Services",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 43959
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "AT&T",
+   "fiberBsls": 452908,
+   "blocks": 19431,
+   "tech": {
+    "fiber": 452908,
+    "fwLicensed": 532309,
+    "copper": 398065
+   },
+   "kind": "ilec",
+   "check": "https://www.att.com/internet/fiber/",
+   "map": null,
+   "note": "Price-cap incumbent (Southwestern Bell-OK); address checker on the fiber page.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Starlink",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "leoSat": 1732477
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Dobson Telephone Co Inc",
+   "fiberBsls": 1893,
+   "blocks": 397,
+   "tech": {
+    "fiber": 1893,
+    "copper": 3431
+   },
+   "kind": "regional",
+   "check": "https://www.dobson.net/",
+   "map": null,
+   "note": "Dobson Technologies: Dobson Fiber plus the Dobson, McLoud and Lavaca incumbent exchanges.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Valliant Telephone Company",
+   "fiberBsls": 2499,
+   "blocks": 349,
+   "tech": {
+    "copper": 520,
+    "fiber": 2499,
+    "fwUnlicensed": 8163
+   },
+   "kind": "ilec",
+   "check": "https://www.valliant.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Hinton Telephone",
+   "fiberBsls": 4474,
+   "blocks": 649,
+   "tech": {
+    "copper": 4014,
+    "fiber": 4474
+   },
+   "kind": "ilec",
+   "check": "https://hintontelephone.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Carnegie Telephone Company",
+   "fiberBsls": 2235,
+   "blocks": 379,
+   "tech": {
+    "fwLicensedByRule": 1722,
+    "copper": 1791,
+    "fiber": 2235
+   },
+   "kind": "ilec",
+   "check": "https://www.carnegietelephone.com/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Hudson Technology Solutions",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "fwUnlicensed": 18228
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "Cross Cable Television, LLC",
+   "fiberBsls": 4235,
+   "blocks": 550,
+   "tech": {
+    "fwLicensed": 9555,
+    "fiber": 4235
+   },
+   "kind": "ilec",
+   "check": "https://www.crosstel.net/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "TDS Telecom",
+   "fiberBsls": 3674,
+   "blocks": 268,
+   "tech": {
+    "fiber": 3674,
+    "copper": 13157
+   },
+   "kind": "ilec",
+   "check": "https://tdstelecom.com/",
+   "map": null,
+   "note": "Mid-America and Oklahoma Communication Systems study areas.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "BOLT Fiber",
+   "fiberBsls": 31326,
+   "blocks": 2591,
+   "tech": {
+    "fiber": 31326
+   },
+   "kind": "coop",
+   "check": "https://boltfiber.com/",
+   "map": null,
+   "note": "Northeast Oklahoma Electric Cooperative.",
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "ProValue.Net",
+   "fiberBsls": 720,
+   "blocks": 118,
+   "tech": {
+    "fwUnlicensed": 18173,
+    "fwLicensedByRule": 42519,
+    "fiber": 720
+   },
+   "kind": "regional",
+   "check": "https://www.provalue.net/",
+   "map": null,
+   "note": null,
+   "verified": "2026-11-11"
+  },
+  {
+   "name": "Chisholm Broadband",
+   "fiberBsls": 0,
+   "blocks": 0,
+   "tech": {
+    "copper": 4,
+    "fwUnlicensed": 53725,
+    "fwLicensedByRule": 9089
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  },
+  {
+   "name": "BLS Broadband LLC",
+   "fiberBsls": 125,
+   "blocks": 33,
+   "tech": {
+    "fwLicensedByRule": 547,
+    "fwUnlicensed": 2081,
+    "fiber": 125
+   },
+   "kind": null,
+   "check": null,
+   "map": null,
+   "note": null,
+   "verified": null
+  }
+ ],
+ "ilecs": [
+  {
+   "sac": "431965",
+   "company": "ALLTEL OKLAHOMA, INC.",
+   "holding": "Windstream Holdings, Inc.",
+   "ocn": "1965",
+   "regType": "price-cap"
+  },
+  {
+   "sac": "431966",
+   "company": "ATLAS TELEPHONE CO.",
+   "holding": "Atlas Telephone Company, Inc.",
+   "ocn": "1966",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431968",
+   "company": "BEGGS TELEPHONE COMPANY",
+   "holding": "Beggs Telephone Company, Inc.",
+   "ocn": "1968",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431969",
+   "company": "BIXBY TELEPHONE CO.",
+   "holding": "Bixby Telephone Company",
+   "ocn": "1969",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431974",
+   "company": "CANADIAN VALLEY TELEPHONE CO.",
+   "holding": "Canadian Valley Telephone Company",
+   "ocn": "1974",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431976",
+   "company": "CARNEGIE TELEPHONE CO.INC.",
+   "holding": "Carnegie Telephone Company",
+   "ocn": "1976",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431977",
+   "company": "CENTRAL OKLAHOMA TELEPHONE CO.",
+   "holding": "Central Oklahoma Telephone Co., LLC",
+   "ocn": "1977",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431979",
+   "company": "CHEROKEE TELEPHONE CO.",
+   "holding": "Cherokee Telephone Company",
+   "ocn": "1979",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431980",
+   "company": "CHICKASAW TELEPHONE CO.",
+   "holding": "Chickasaw Holding Company",
+   "ocn": "1980",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431981",
+   "company": "CHOUTEAU TELEPHONE CO.",
+   "holding": "Consolidated Communications, Inc.",
+   "ocn": "1981",
+   "regType": "price-cap"
+  },
+  {
+   "sac": "431982",
+   "company": "CIMARRON TEL. CO.",
+   "holding": "NBVDS Investment, LLC",
+   "ocn": "1982",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431985",
+   "company": "CROSS TELEPHONE CO.",
+   "holding": "NBVDS Investments, LLC",
+   "ocn": "1985",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431988",
+   "company": "DOBSON TELEPHONE CO.",
+   "holding": "Dobson Technologies, Inc.",
+   "ocn": "1988",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431994",
+   "company": "GRAND TELEPHONE CO. INC.",
+   "holding": "Grand Telephone Company",
+   "ocn": "1994",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431995",
+   "company": "HINTON TELEPHONE CO.",
+   "holding": "Hinton Holding Company",
+   "ocn": "1995",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431788",
+   "company": "KANOKLA TELEPHONE ASSN.INC. - OK",
+   "holding": "KanOkla Telephone Association, Inc.",
+   "ocn": "1788",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431704",
+   "company": "LAVACA TELEPHONE CO.- OK",
+   "holding": "Dobson Technologies, Inc.",
+   "ocn": "1704",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432006",
+   "company": "MCLOUD TELEPHONE CO.",
+   "holding": "Dobson Technologies, Inc.",
+   "ocn": "2006",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432008",
+   "company": "MEDICINE PARK TELEPHONE CO.",
+   "holding": "Hilliary Communications, LLC",
+   "ocn": "2008",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432010",
+   "company": "MID-AMERICA TEL.,INC.",
+   "holding": "Telephone and Data Systems, Inc.",
+   "ocn": "2010",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432011",
+   "company": "OKLAHOMA ALLTEL, INC.",
+   "holding": "Windstream Holdings, Inc.",
+   "ocn": "2011",
+   "regType": "price-cap"
+  },
+  {
+   "sac": "431984",
+   "company": "OKLAHOMA COMMUNICATION SYSTEMS INC.",
+   "holding": "Telephone and Data Systems, Inc.",
+   "ocn": "1984",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432013",
+   "company": "OKLAHOMA TELEPHONE & TELEGRAPH INC.",
+   "holding": "First American Holdings, Inc.",
+   "ocn": "2013",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432014",
+   "company": "OKLAHOMA WESTERN TELEPHONE CO.",
+   "holding": "Hilliary Communications, LLC",
+   "ocn": "2014",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432016",
+   "company": "PANHANDLE TELEPHONE COOPERATIVE INC.",
+   "holding": "Panhandle Telephone Cooperative, Inc.",
+   "ocn": "2016",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432017",
+   "company": "PINE TELEPHONE CO INC- OK",
+   "holding": "Pine Telephone Company",
+   "ocn": "2017",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432018",
+   "company": "PIONEER TEL. COOP. INC.",
+   "holding": "Pioneer Telephone Cooperative (OK)",
+   "ocn": "2018",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432020",
+   "company": "POTTAWATOMIE TELEPHONE CO.",
+   "holding": "NBVDS Investment, LLC",
+   "ocn": "2020",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432022",
+   "company": "SALINA-SPAVINAW TEL. CO.,INC.",
+   "holding": "Salina Spavinaw Telephone Company Inc.",
+   "ocn": "2022",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432141",
+   "company": "SANTA ROSA TELEPHONE COOP. INC.",
+   "holding": "Santa Rosa Telephone Cooperative, Inc.",
+   "ocn": "2141",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432023",
+   "company": "SHIDLER TEL. CO.",
+   "holding": "KanOkla Telephone Association, Inc.",
+   "ocn": "2023",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431831",
+   "company": "SOUTH CENTRAL TEL. ASSN., INC.-OK",
+   "holding": "South Central Telephone Association, Inc.",
+   "ocn": "1831",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432025",
+   "company": "SOUTHWEST OKLAHOMA TEL. CO.",
+   "holding": "Hilliary Communications, LLC",
+   "ocn": "2025",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "435215",
+   "company": "SOUTHWESTERN BELL-OK",
+   "holding": "AT&T Inc.",
+   "ocn": "9533",
+   "regType": "price-cap"
+  },
+  {
+   "sac": "432029",
+   "company": "TERRAL TEL. CO.",
+   "holding": "Terral Telephone Company",
+   "ocn": "2029",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432030",
+   "company": "TOTAH TELEPHONE CO. INC.",
+   "holding": "Totah Communications, Inc.",
+   "ocn": "2030",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "432032",
+   "company": "VALLIANT TELEPHONE COMPANY",
+   "holding": "Valliant Telephone Company, Inc.",
+   "ocn": "2032",
+   "regType": "rate-of-return"
+  },
+  {
+   "sac": "431165",
+   "company": "VALOR TELECOMMUNICATIONS OF OKLAHOMA, LLC.",
+   "holding": "Windstream Holdings, Inc.",
+   "ocn": "1165",
+   "regType": "price-cap"
+  },
+  {
+   "sac": "432034",
+   "company": "WYANDOTTE TELEPHONE COMPANY",
+   "holding": "Oregon Telephone Corporation",
+   "ocn": "2034",
+   "regType": "rate-of-return"
+  }
+ ],
+ "counts": {
+  "providers": 134,
+  "fiber": 95,
+  "withRoad": 63,
+  "ilecs": 39
+ }
+}

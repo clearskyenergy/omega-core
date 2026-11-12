@@ -406,8 +406,28 @@
     });
   }
 
+  /* ── pure: join the ordered ask-list with a STATE REGISTER's verified
+     roads (data/fiber/ok-telecom-register.json and its siblings). Each
+     carrier gains the provider's own door — `check` (their site or
+     availability page, probed on the register's date), `map` (their own
+     published coverage map, a link and never a copy), `kind` and the
+     FCC-filed footprint — matched by sameCo, taken as the register holds
+     them, nulls kept. The list's order and reasons are untouched. ──── */
+  function roads(list, register) {
+    var provs = (register && register.providers) || [], out = [];
+    for (var i = 0; i < (list || []).length; i++) {
+      var c = list[i], hit = null, r = {}, k;
+      for (k in c) if (Object.prototype.hasOwnProperty.call(c, k)) r[k] = c[k];
+      for (var j = 0; j < provs.length && !hit; j++) if (sameCo(provs[j].name, c.name)) hit = provs[j];
+      if (hit) { r.check = hit.check || null; r.map = hit.map || null; r.kind = hit.kind || null;
+                 r.fiberBsls = hit.fiberBsls || 0; r.registerName = hit.name; r.registerVerified = hit.verified || null; }
+      out.push(r);
+    }
+    return out;
+  }
+
   var API = { SOURCE: SOURCE, TECH: TECH, FIBER: FIBER, normalize: normalize, byTech: byTech, carriers: carriers,
-              ladder: ladder, pack: pack, rfi: rfi, brief: brief, fccMapUrl: fccMapUrl, lookup: lookup, sameCo: sameCo };
+              roads: roads, ladder: ladder, pack: pack, rfi: rfi, brief: brief, fccMapUrl: fccMapUrl, lookup: lookup, sameCo: sameCo };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (global) global.OmegaFiberConfirm = API;
 })(typeof window !== 'undefined' ? window : null);

@@ -1657,6 +1657,17 @@ var ddItKw=1000, lastDD=null; /* compute profile's selected IT load / last DD re
    asked for; data undefined = not answered, null = looked and the point is
    in no block or hex; err = the lookup failed, which is not a reading. */
 var bdcState={k:null,data:undefined,err:null,loading:false};
+/* the state telecom register: fetched once, only for a pin in a covered
+   state; 0 = not asked, 1 = loading, 2 = answered (null on failure, said) */
+var okTelecomReg=null, okTelecomRegState=0;
+function okRegEnsure(){
+  if(okTelecomRegState) return;
+  okTelecomRegState=1;
+  ajax('/data/fiber/ok-telecom-register.json',function(e,j){
+    okTelecomReg=(!e&&j&&j.providers)?j:null; okTelecomRegState=2;
+    if(pinLatLng) analyze(pinLatLng);
+  });
+}
 /* THE PIN LOOKS AROUND ITSELF. Layers load for the visible map only, and an
    address search zooms to a few blocks — so the nearest substation was
    "not in view" and Power read "not measured" until somebody zoomed out
@@ -2082,9 +2093,33 @@ function analyze(ll){
       }
       if(bdc.block) h+='<div class="hint" style="margin:2px 0;color:var(--muted)">Census block '+esc(bdc.block.geoid)+' — carriers ask for it.</div>';
     }
-    if(cfCar.length){
+    /* ── THE STATE'S TELECOM REGISTER, AT THE PIN (2026-11-11, Tommy:
+       "every fiber and telecommunications offering so that we can verify
+       fiber access at an address"). For a pin in a state with a bundled
+       register (Oklahoma first: data/fiber/ok-telecom-register.json, the
+       full FCC-filed census joined with each provider's VERIFIED door),
+       every carrier on the ask-list gains its own site and, where the
+       provider publishes one, its own coverage map — links to the
+       publisher, never copies. A provider the register has no verified
+       door for falls back to the FCC's per-address page, which answers
+       for every provider. */
+    var cfInOK=!!(bdc&&((bdc.block&&String(bdc.block.geoid).slice(0,2)==="40")||(bdc.ilec&&bdc.ilec.state==="OK")));
+    if(cfInOK) okRegEnsure();
+    var cfRoads=(cfInOK&&okTelecomReg&&window.OmegaFiberConfirm)?OmegaFiberConfirm.roads(cfCar,okTelecomReg):cfCar;
+    if(cfRoads.length){
       h+='<div class="hint" style="margin:8px 0 2px"><b style="color:var(--ink)">Carriers to ask, in order</b></div>';
-      for(var cc2=0;cc2<cfCar.length&&cc2<8;cc2++) h+=infoRow(cfCar[cc2].rank<=2?"#FFB020":cfCar[cc2].rank===3?"#9aa7b5":LAYERS.fiber.color, (cc2+1)+". "+cfCar[cc2].name, cfCar[cc2].basis, "");
+      for(var cc2=0;cc2<cfRoads.length&&cc2<8;cc2++){
+        var cRow=cfRoads[cc2];
+        h+=infoRow(cRow.rank<=2?"#FFB020":cRow.rank===3?"#9aa7b5":LAYERS.fiber.color, (cc2+1)+". "+cRow.name, cRow.basis, "");
+        if(cRow.check||cRow.map){
+          h+='<div class="hint" style="margin:0 0 4px 18px">'+
+             (cRow.check?'<a href="'+esc(cRow.check)+'" target="_blank" rel="noopener" style="color:var(--amp)">their site / availability ↗</a>':'')+
+             (cRow.map?(cRow.check?' · ':'')+'<a href="'+esc(cRow.map)+'" target="_blank" rel="noopener" style="color:var(--amp)">their coverage map ↗</a>':'')+
+             (cRow.fiberBsls?' <span style="color:var(--muted)">· files fiber at '+esc(String(cRow.fiberBsls).replace(/\B(?=(\d{3})+(?!\d))/g,","))+' OK locations'+(cRow.kind?' · '+esc(cRow.kind):'')+'</span>':'')+'</div>';
+        }
+      }
+      if(cfInOK&&okTelecomReg&&okTelecomReg.counts) h+='<div class="hint" style="margin:4px 0;color:var(--muted)">Oklahoma register: '+esc(okTelecomReg.counts.fiber)+' providers file fiber in the state ('+esc(okTelecomReg.counts.providers)+' wireline/fixed in all, FCC BDC); '+esc(okTelecomReg.counts.withRoad)+' carry a verified door, the FCC per-address page answers for the rest.</div>';
+      else if(cfInOK&&okTelecomRegState===1) h+='<div class="hint" style="margin:2px 0;color:var(--muted)">Loading the Oklahoma telecom register…</div>';
       h+='<div class="hint" style="margin:2px 0"><a href="'+esc(OmegaFiberConfirm.SOURCE.filerSearch)+'" target="_blank" rel="noopener" style="color:var(--amp)">Carrier contact details — FCC filer database ↗</a></div>';
     }
     /* what "verified" is made of: three public facts, six carrier documents */

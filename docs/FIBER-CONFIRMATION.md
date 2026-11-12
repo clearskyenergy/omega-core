@@ -121,3 +121,26 @@ page wiring and the DD rows.
 - The FCC layers are third-party services: when one is slow or down the
   panel says the lookup failed — which is not a reading — and the rest of
   the pin analysis is unaffected.
+
+## The Oklahoma telecom register (2026-11-11)
+
+Tommy: "every fiber and telecommunications offering so that we can verify
+fiber access at an address in the state of Oklahoma."
+`data/fiber/ok-telecom-register.json` (built by
+`scripts/build-ok-telecom-register.js`, re-run to refresh) is the complete
+FCC-filed census for the state — every provider reporting any wireline or
+fixed technology in an Oklahoma census block, with locations served per
+technology — joined with the incumbents of record (39 study areas, holding
+company and regulation type) and, for every provider somebody verified, the
+provider's own door: its site or availability page probed live on the dated
+build, and its own published coverage map where one exists (OEC's zones
+viewer, for one) as a LINK to the publisher, never a copy.
+
+The Confirm Fiber panel loads the register only for a pin whose census
+block is Oklahoma's, joins the ask-list through the one module
+(`OmegaFiberConfirm.roads`), and renders each carrier's own links with its
+FCC-filed footprint; a provider with no verified door falls back to the
+FCC per-address page, and the panel says so. A row is a FILING — it names
+who to ask and proves plant nearby; service at one address is confirmed
+only by the provider's checker or a written carrier answer, which is what
+the RFI asks for. Held by `scripts/tests/tokregister.js` (in `test:fiber`).

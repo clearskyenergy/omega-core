@@ -103,7 +103,14 @@ function fromNetwork(r) {
   var sym = !read ? null : provs.length === 0 ? false : speedsRead ? provs.some(function (p) { return num(p.down) >= 1000 && num(p.up) >= 1000; }) : null;
   var why = st === 'skipped' ? 'carrier names need the FCC key' : st === 'failed' ? 'carrier names not read: ' + String(fcc.note || 'the FCC lookup failed').replace(/^not checked\s*[—-]\s*/, '') : null;
   var fac = b.facilities || {}, hotel = fac.nearestMajor || null, lat = b.fiber && b.fiber.lateral;
+  /* the nearest MAPPED route from the published inventory (2026-11-11,
+     Chandler OK: a wholesale route 1 km from the pin never reached the
+     diligence report). routes[] is distance-sorted; proximity only —
+     never serviceability, and the words downstream say so. */
+  var pfb = b.publicFiber || {}, pr = (Array.isArray(pfb.routes) && pfb.routes[0]) || null;
   return { ok: true, fiber: {
+    route: pr ? { operator: str(pr.operator || pr.name, 80), mi: round(num(pr.mapped_distance_m) / 1609.344, 2), status: str(pr.operational_status, 60) } : null,
+    routesIn25km: pfb.counts_in_radius ? num(pfb.counts_in_radius.routes) : null,
     carriers: read ? carriers : [], carriersRead: read, carriersStatus: read ? 'read' : st === 'skipped' ? 'needs-key' : st === 'failed' ? 'failed' : 'unknown', carriersNote: why,
     symmetric1g: sym, symmetricCount: sym == null ? null : provs.filter(function (p) { return num(p.down) >= 1000 && num(p.up) >= 1000; }).length,
     lateralMi: lat ? num(lat.mi) : null, lateralTo: lat ? str(lat.to, 160) : null,
