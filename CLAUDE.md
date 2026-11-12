@@ -1438,7 +1438,13 @@ skid untouched without one. With the switch on the pipeline IS the one
 register list (`body.dg-one`: the classic stats, filters, bulk bar and
 table stand down; search, archived and load-more fold into the pipeline). `grid-screen.js` screens sites through grid-atlas,
 network-proximity and hosting-capacity (gates move to screened, never
-confirmed; carrier names need `FCC_BB_KEY`). `loi-package.js` sends ONE
+confirmed; carrier names come from `FCC_BB_KEY`'s business-service road,
+else the keyless FCC BDC fallback — `fccViaBdc` in
+`api/network-proximity.js` on the confirm ladder's own `lookup`, the ONE
+reader — which names carriers as mass-market availability, reads no
+advertised speeds, and so leaves 1 Gbps symmetric UNREAD, never a false
+"no"; 2026-11-11, Williams Food read "Not read" while the pin named the
+carriers). `loi-package.js` sends ONE
 package to the offtake partner (Lightsmith in `partners.js`,
 `LIGHTSMITH_ENERGY_EMAIL`; 409 without it), never IRR, capex or price. Off,
 the answers carry no `diligence` and the pages draw nothing new; on, the
@@ -2229,6 +2235,49 @@ verification brief that wear no platform or tenant name.
 `scripts/fiber-confirm-portfolio.js` runs a portfolio sheet (deal data:
 output to `work/`, never committed; a town-centre geocode is marked
 APPROXIMATE). `docs/FIBER-CONFIRMATION.md`.
+
+**The market a site is in is ONE record** (2026-11-11, Tommy: "we need to
+be very accurate and the grid atlas should know what iso market we are in
+and what the rules are in those markets and this should all be given in
+the due diligence reports"): `omega-iso-market.js` (root, ES5, dual-env
+like omega-fiber-confirm.js) resolves state + serving utility → ISO/RTO —
+membership first (ComEd is PJM wherever the parcel sits), state default
+second, a split state SAID, never guessed over — and carries each
+market's REPORTED structure (capacity market or none, ancillary products,
+storage participation, 841/2222 standing, ERCOT's non-FERC jurisdiction),
+sourced and dated, never a revenue rate. The screen (`grid-screen.js
+finish`) and the assessment (`assess.js`, `ISO.VERSION` in the input
+hash) store the RESOLUTION; the rules are derived at read time so they
+never age in a record. The battery case names the site's ACTUAL market
+in its reference words (`assess-bess.js marketFit` takes `input.market`
+— the engine stays dependency-free because Solela's repo carries a
+byte-copy); the DD report prints a Wholesale-market section; the Grid
+Atlas pin reads the drawn ISO polygon first, the membership second, and
+an ISO row or market score whose LAYER did not answer says "not read",
+never "outside ISO" (the NASA polygon host down once scored Chicago
+bilateral). `scripts/tests/tisomarket.js` (in `test:portfolio`) holds it.
+
+**Carrier hotels are a committed snapshot, and licensed telecom has one
+ingest** (2026-11-11). `data/peeringdb-facilities.geojson`
+(`scripts/build-peeringdb-facilities.js`, PeeringDB US facilities with
+`networks` on-net — the number that separates a carrier hotel from a
+closet) fills the `carrierhotels` layer that pointed at a file never
+built; the pin analysis names the nearest facility (licensed →
+snapshot → registry → live OSM, display only, scores nothing, a miss
+is "not evidence none exists"). A licensed Rextag delivery is ONE
+converter run: `scripts/ingest-rextag.js` on
+`scripts/_lib/rextag-map.js` (Type→class table; unknown never
+promoted; Operator and Owner kept apart) writes to gitignored
+`private-fiber/rextag/` — licensed geometry never in git, never under
+world-readable `/data/`, never through `import-published-fiber.js`
+(licensed is the opposite of published) — and is served only through
+the authenticated proxy slot (`fiber_licensed`, `dc_licensed`,
+`CLEARSKY_CONFIG.fiberProxyUrl`; the proxy function itself is not
+built). `fiberKeys` already ranks licensed first, so it becomes the
+source of record with no code change. Runbook and the discovered-
+conventions record: `docs/REXTAG-INGEST.md`; held by
+`scripts/tests/trextagmap.js` and `tcarrierhotels.js` (in
+`test:fiber`).
 
 **The route inventory grows through a vetted registry**
 (`scripts/import-state-fiber.js`, then ALWAYS

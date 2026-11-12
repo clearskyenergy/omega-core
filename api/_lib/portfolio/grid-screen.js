@@ -42,6 +42,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var U = require('../utility-rates');
+var ISO = require('../../../omega-iso-market.js');   /* the ONE market resolver */
 
 var VERSION = 1, KM_MI = 0.621371, FCC_DAILY_CAP = 90;
 var TIMEOUT = { grid: 45000, network: 40000, hosting: 25000 };
@@ -94,12 +95,17 @@ function fromNetwork(r) {
   var fcc = b.fcc || {}, st = String(fcc.status || ''), provs = Array.isArray(fcc.providers) ? fcc.providers : [];
   var read = st === 'ok' || st === 'empty', carriers = [];
   provs.forEach(function (p) { var n = str(p && p.name, 80); if (n && carriers.indexOf(n) < 0) carriers.push(n); });
-  var sym = read ? provs.some(function (p) { return num(p.down) >= 1000 && num(p.up) >= 1000; }) : null;
+  /* The keyless BDC road names carriers but carries no advertised speeds
+     (every down/up is null). 1 Gbps symmetric is then NOT READ — null,
+     never a false "no". A read with no fiber providers at all stays an
+     honest false: nothing is offered. */
+  var speedsRead = provs.some(function (p) { return num(p.down) != null || num(p.up) != null; });
+  var sym = !read ? null : provs.length === 0 ? false : speedsRead ? provs.some(function (p) { return num(p.down) >= 1000 && num(p.up) >= 1000; }) : null;
   var why = st === 'skipped' ? 'carrier names need the FCC key' : st === 'failed' ? 'carrier names not read: ' + String(fcc.note || 'the FCC lookup failed').replace(/^not checked\s*[—-]\s*/, '') : null;
   var fac = b.facilities || {}, hotel = fac.nearestMajor || null, lat = b.fiber && b.fiber.lateral;
   return { ok: true, fiber: {
     carriers: read ? carriers : [], carriersRead: read, carriersStatus: read ? 'read' : st === 'skipped' ? 'needs-key' : st === 'failed' ? 'failed' : 'unknown', carriersNote: why,
-    symmetric1g: read ? sym : null, symmetricCount: read ? provs.filter(function (p) { return num(p.down) >= 1000 && num(p.up) >= 1000; }).length : null,
+    symmetric1g: sym, symmetricCount: sym == null ? null : provs.filter(function (p) { return num(p.down) >= 1000 && num(p.up) >= 1000; }).length,
     lateralMi: lat ? num(lat.mi) : null, lateralTo: lat ? str(lat.to, 160) : null,
     carrierHotel: hotel ? str(hotel.name, 120) : null, carrierHotelMi: hotel ? round(num(hotel.mi), 1) : null,
     verdict: b.fiber && b.fiber.verdict ? str(b.fiber.verdict, 20) : null },
@@ -130,6 +136,7 @@ function safe(fn, body) {
   });
 }
 function zipOf(site) { var a = site && site.address && typeof site.address === 'object' ? site.address : {}; return a.zip || (site && site.zip) || null; }
+function stateOf(site) { var a = site && site.address && typeof site.address === 'object' ? site.address : {}; return a.state || (site && site.state) || null; }
 
 /* ── one phase of one site (the door's job step) ───────────────────────────
    deps: { atlas(body), network(body), hosting(body) } → Promise<{status,
@@ -178,8 +185,14 @@ function step(site, prior, deps, opts) {
 function finish(s, site) {
   var sources = s.sources || {}, utility = s.utility || null;
   if (!utility) { utility = utilityByZip(zipOf(site)); if (utility) sources.utility = 'the rate book, by ZIP'; }
+  /* the wholesale market the site is in: the serving utility's membership
+     first, the state's default second, splits said — the ONE resolver
+     (omega-iso-market.js). The resolution is stored; the market's RULES
+     are derived at read time so they never age inside a record. */
+  var mkt = ISO.resolve({ state: stateOf(site), utility: utility && utility.name });
   return { v: VERSION, at: s.at || null, startedAt: s.startedAt || null, located: s.located || null, power: s.power || null,
     fiber: s.fiber || null, hosting: s.hosting || null, utility: utility,
+    market: mkt.iso ? { iso: mkt.iso, label: mkt.label, basis: mkt.basis, split: mkt.split, words: mkt.words } : null,
     sources: sources, notes: (s.notes || []).slice(0, 10), errors: (s.errors || []).slice(0, 10), fccSpent: s.fccSpent === true, complete: s.phase === 'done' };
 }
 /* run both phases (a single site, or a test): the door's job steps instead */

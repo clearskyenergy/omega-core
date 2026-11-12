@@ -167,6 +167,26 @@ ok('lateral measures to the plant, not the farther carrier', L1 && L1.mi === 2.5
 ok('lateral cost is miles × the planning band', L1 && L1.costLow === Math.round(2.5 * T.constants.LATERAL_COST_PER_MI.low) && L1.costHigh === Math.round(2.5 * T.constants.LATERAL_COST_PER_MI.high));
 ok('no evidence and no carrier → no lateral', V({}).lateral === null);
 
+/* ── the keyless FCC BDC road (the confirm ladder's own lookup, mapped) ──
+   Without FCC_BB_KEY every screen read "Not read" while the Grid Atlas pin
+   named the carriers at the same point (Williams Food, Chandler OK,
+   2026-11-11). The fallback names them; what it cannot read stays unread. */
+const bdcBlock = { asOf: 'December 2025', block: { fiber: [{ name: 'ImOn Communications LLC', totalBsls: 40 }, { name: 'AT&T Oklahoma', totalBsls: 12 }] }, hex: null, nearby: { radiusKm: 1.5, fiber: [] } };
+const fb1 = T.fccFromBdc(bdcBlock, 'FCC_BB_KEY is not set');
+ok('keyless road: fiber true with the block\'s carriers named', fb1.status === 'ok' && fb1.fiber === true && fb1.providers.length === 2 && fb1.providers[0].name === 'ImOn Communications LLC');
+ok('keyless road is marked mass-market', fb1.basis === 'mass-market');
+ok('keyless road reads no speeds: every down/up is null', fb1.providers.every(p => p.down === null && p.up === null));
+ok('the note says which road and what it could not read', /keyless/.test(fb1.note) && /speeds not read/.test(fb1.note) && /FCC_BB_KEY is not set/.test(fb1.note));
+const fb2 = T.fccFromBdc({ asOf: 'December 2025', block: { fiber: [] }, hex: { fiber: [{ name: 'Hex Co', totalBsls: 5 }] }, nearby: null }, null);
+ok('no block rows: the surrounding hex answers, and says so', fb2.fiber === true && fb2.providers[0].name === 'Hex Co' && /hex/.test(fb2.note));
+const fb3 = T.fccFromBdc({ asOf: 'December 2025', block: { fiber: [] }, hex: { fiber: [] }, nearby: { radiusKm: 1.5, fiber: [{ name: 'Ring Co' }] } }, null);
+ok('looked and found none is an honest false, with the ring named beside it', fb3.fiber === false && fb3.providers.length === 0 && /1 provider reports fiber within ~1.5 km/.test(fb3.note));
+ok('no geography at the point is empty and null, never a zero', T.fccFromBdc(null, null).status === 'empty' && T.fccFromBdc(null, null).fiber === null);
+ok('the verdict never dresses mass-market up as business fiber',
+   T.fccWord({ fccBasis: 'mass-market' }).indexOf('mass-market') >= 0 && T.fccWord({}) === 'business fiber reported');
+const vMm = T.verdict({ fccFiber: true, fccBasis: 'mass-market', nearestCarrier: null, plantMi: null, harvestMi: null, osmLineMi: null, osmExchangeMi: null, osmDataCenterMi: null });
+ok('a mass-market FCC yes still reads likely, in mass-market words', vMm.verdict === 'likely' && /mass-market/.test(vMm.reasons[0]));
+
 /* ── handler contract (fetch is never reached) ────────────────────────── */
 function handlerWith(authImpl) {
   /* network-proximity.js now requires three siblings by relative path. Inside

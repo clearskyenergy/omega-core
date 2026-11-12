@@ -50,6 +50,7 @@
 'use strict';
 var B = require('./assess-bess'), T = require('./assess-supercharger');
 var CM = require('../omega-compute-model'), CC = require('../compute-contract'), D = require('./diligence'), UR = require('../utility-rates'), PS = require('../pod-spec');
+var ISO = require('../../../omega-iso-market.js');   /* the ONE market resolver (state + utility → ISO/RTO) */
 
 var VERSION = 1, CONFIG_KEY = 'portfolioAssessment', CONTINUOUS = 0.8;
 /* the modular shelf, by IT load. The 75 kW unit is the Omega-Core skid as the
@@ -914,7 +915,7 @@ function reviewInfo(cfg, email) { var r = cfg && cfg.review; return r ? { name: 
 function inputHashOf(site, screen, parcel, cfg, upgrade) {
   site = site || {};
   var up = upgrade && typeof upgrade === 'object' && upgrade.status !== 'withdrawn' ? [upgrade.status, num(upgrade.targetKw), upgrade.askedBy || null] : null;
-  var facts = [VERSION, B.VERSION, T.VERSION, num(site.transformerKva), num(site.serviceCapacityKw), num(site.existingPeakKw), num(site.reportedPeakKw), site.peakUnresolved === true,
+  var facts = [VERSION, B.VERSION, T.VERSION, ISO.VERSION, num(site.transformerKva), num(site.serviceCapacityKw), num(site.existingPeakKw), num(site.reportedPeakKw), site.peakUnresolved === true,
     num(site.availablePowerMw), stateOf(site), zipOf(site), num(site.powerPricePerKwh), num(site.termYearsRemaining), screen ? screen.at || null : null, parcel ? parcel.at || null : null, cfg || null, up];
   if (chipsBasis(cfg)) facts.push(PS.VERSION);   /* the pod's sheet, only where it is read: every other workspace's answers keep their hash */
   return hash(JSON.stringify(facts));
@@ -925,7 +926,12 @@ function assess(site, ctx) {
   site = site || {}; ctx = ctx || {};
   var cfg = ctx.config || configOf(null), screen = ctx.screen || null, parcel = ctx.parcel || null, st = stateOf(site);
   var power = powerOf(site, screen), compute = computeOf(power, cfg, site);
-  var bess = power.availableKw > 0 ? B.bessCase({ powerKw: power.availableKw, state: st, utility: power.utility || site.utility || null, assumptions: cfg.bess }) : { ok: false, reason: power.availableKw === 0 ? 'Nothing is free on the limit and peak on file' : 'No power figure to size a battery on' };
+  /* the wholesale market: resolved HERE, not only in the screen, so a site
+     screened before the resolver existed still gets its market, and the
+     battery case can name the real one instead of "not in that market" */
+  var market = ISO.resolve({ state: st, utility: power.utility || site.utility || null });
+  var bessMarket = market.iso ? { iso: market.iso, label: market.label, bess: (ISO.rules(market.iso) || {}).bess || null } : null;
+  var bess = power.availableKw > 0 ? B.bessCase({ powerKw: power.availableKw, state: st, utility: power.utility || site.utility || null, market: bessMarket, assumptions: cfg.bess }) : { ok: false, reason: power.availableKw === 0 ? 'Nothing is free on the limit and peak on file' : 'No power figure to size a battery on' };
   var year = ctx.now ? Number(String(ctx.now).slice(0, 4)) + 1 : null;
   var sup = power.availableKw != null ? T.superchargerCase({ state: st, availableKw: power.availableKw, startYear: year, assumptions: cfg.supercharger.assumptions, sizing: cfg.supercharger.sizing }) : { ok: false, reason: 'No power figure to size posts on' };
   var upgrade = upgradeView(ctx.upgrade, power, cfg, site), upgradeAdvice = upgradeAdviceOf(power, compute, cfg, site, upgrade);
@@ -934,6 +940,7 @@ function assess(site, ctx) {
   var readiness = readinessOf(c, ctx.marks), verify = verificationsOf(c, readiness);
   var grade = { A: 'Sized on a limit and a peak on file', B: 'Sized on a figure entered by hand', C: 'Sized on a ceiling: the site’s peak is not on file', D: 'Not sized: no power figure on file' }[power.grade];
   return { v: VERSION, at: ctx.now || null, inputHash: inputHashOf(site, screen, parcel, cfg, ctx.upgrade),
+    market: market.iso ? { iso: market.iso, label: market.label, basis: market.basis, split: market.split, words: market.words } : null,
     power: power, compute: compute, pairing: pairing, upgrade: upgrade, upgradeAdvice: upgradeAdvice, bess: bess, supercharger: sup, recommend: recommendOf(compute, bess, sup), readiness: readiness, verify: verify,
     confidence: { grade: power.grade, words: grade, screened: !!(screen && screen.complete), parcel: !!(parcel && parcel.ok) },
     note: 'Compute, the battery and fast charging are each sized on the whole free capacity by itself: they are alternatives, not a stack.' };

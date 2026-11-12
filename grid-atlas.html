@@ -358,6 +358,7 @@
 <script src="/grid-atlas-dd.js"></script>
 <script src="/omega-fiber-confirm.js"></script>
 <script src="/omega-zoning-watch.js"></script>
+<script src="/omega-iso-market.js"></script>
 <script>
 (function(){
 "use strict";
@@ -880,11 +881,31 @@ var LAYERS = {
     label:function(a){return a.name||"Colo facility";},
     meta:function(a){return (a.city||"")+(a.net_count?" · "+a.net_count+" networks":"");}
   },
+  /* Built by scripts/build-peeringdb-facilities.js — a committed national
+     snapshot of the same PeeringDB facilities the live `colo` layer asks
+     for per view. The snapshot works offline and never rate-limits; the
+     live layer is fresher. `networks` (net_count) sizes the bubble: how
+     many networks registered presence in the building, which is the one
+     free number separating a carrier hotel from a closet. */
   carrierhotels: {
-    name:"Carrier Hotels (1.6k)", color:"#8a5cd1", on:false, geom:"bubble", role:"connectivity",
+    name:"Carrier Hotels (PeeringDB)", color:"#8a5cd1", on:false, geom:"bubble", role:"connectivity",
     url:"__STATIC__", staticFile:"/data/peeringdb-facilities.geojson",
     label:function(a){return a.name||"Facility";},
-    meta:function(a){return (a.operator?a.operator+" · ":"")+(a.city||"")+(a.state?", "+a.state:"")+(a.networks?" · "+a.networks+" networks":"");}
+    meta:function(a){return (a.operator?a.operator+" · ":"")+(a.city||"")+(a.state?", "+a.state:"")+
+      (a.networks?" · "+a.networks+" networks on-net":" · network count unstated")+
+      (a.ix_count?" · "+a.ix_count+" IX":"")+" · "+(a.attrib||"PeeringDB");}
+  },
+  /* ── LICENSED data centers (Rextag telecom delivery) via the same proxy ──
+     Inert until CLEARSKY_CONFIG.fiberProxyUrl is set, exactly like
+     fiber_licensed above. scripts/ingest-rextag.js normalizes the delivery;
+     docs/REXTAG-INGEST.md is the runbook. Licensed geometry is never
+     committed to this repository (private-fiber/ is gitignored) and never
+     served from /data/ — the proxy holds it behind a signed-in token. */
+  dc_licensed: {
+    name:"Data Centers (licensed)", color:"#FF9F1C", on:false, geom:"point", role:"connectivity",
+    url:"__PROXY__", proxyKey:"datacenters",
+    label:function(a){return a.name||a.operator||"Data center";},
+    meta:function(a){return (a.operator||a.owner||"operator unstated")+(a.power_mw?" · "+a.power_mw+" MW":"")+(a.tier?" · Tier "+a.tier:"")+" · licensed source";}
   },
   /* ── FCC fiber-SERVICE coverage (the govt "fiber like water" layer) ──
      ISPs must report fiber availability to the FCC by law (Broadband DATA Act).
@@ -951,7 +972,7 @@ var LAYERS = {
     meta:function(a){return (a.TYPEPIPE||a.typepipe||"transmission")+" gas";}
   }
 };
-var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_import","fiber_cls","backbone","fiber_ca","subsea","cable_landings","dc_registry","pf_inventory","pf_design","pf_unknown","pf_routes","pf_facilities","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
+var ORDER=["substations","transmission","plants","datacenters","ev","bess","osm_lines","osm_subs","osm_plants","eia_plants","fiber","fiber_import","fiber_cls","backbone","fiber_ca","subsea","cable_landings","dc_registry","pf_inventory","pf_design","pf_unknown","pf_routes","pf_facilities","ll_backbone","fiber_verified","fiber_estimated","fiber_licensed","ixp","colo","carrierhotels","dc_licensed","fcc_fiber","zayo","utility_terr","iso_rto","ba_area","flood","water","gas"];
 
 /* ---------- EIA technology taxonomy (matches EIA energy_source_code / technology) ---------- */
 var EIA_TECH={
@@ -1254,7 +1275,10 @@ function fetchProxy(key,cb){
   user.getIdToken().then(function(token){return fetch(url,{headers:{Authorization:'Bearer '+token}});}).then(function(r){
     return r.json().then(function(json){if(!r.ok)throw new Error(json.error||'Licensed source unavailable');return json;});
   }).then(function(json){
-    var feats=validateFiberGeoJSON(json);cb(feats);
+    /* A line layer gets the fiber validator; a point layer (dc_licensed)
+       gets the same WGS84 checks on points — the fiber validator would
+       refuse every Point outright. */
+    var feats=(L2.geom==="point")?validatePointGeoJSON(json):validateFiberGeoJSON(json);cb(feats);
   }).catch(function(e){cb([],e.message||'Licensed source unavailable');});
 }
 
@@ -1426,6 +1450,16 @@ function validateFiberGeoJSON(json){
   return {props:f.properties||{},geom:g};
  });
 }
+function validatePointGeoJSON(json){
+ if(!json || json.type!=='FeatureCollection' || !Array.isArray(json.features) || json.features.length>20000) throw new Error('Use a GeoJSON FeatureCollection with at most 20,000 points.');
+ return json.features.map(function(f){
+  var g=f&&f.geometry;
+  if(!g || g.type!=='Point') throw new Error('This layer takes Point geometry.');
+  var q=g.coordinates;
+  if(!Array.isArray(q)||typeof q[0]!=='number'||typeof q[1]!=='number'||!isFinite(q[0])||!isFinite(q[1])||Math.abs(q[0])>180||Math.abs(q[1])>90) throw new Error('Use WGS84 longitude, latitude coordinates.');
+  return {props:f.properties||{},geom:g};
+ });
+}
 fiberInput.onchange=function(){
  var file=fiberInput.files[0];if(!file)return;
  if(file.size>20*1024*1024){alert('Choose a GeoJSON file under 20 MB.');return;}
@@ -1467,7 +1501,7 @@ var PRESETS=[
      "Gas pipeline (microgrid)" row, but not on the preset for the one
      project type that most often needs it — so it had to be switched on by
      hand every time, by somebody who already knew to look. */
-  {key:"datacenter", name:"Data Center / Compute", icon:"▤", dd:"compute", layers:["substations","transmission","eia_plants","pf_inventory","pf_routes","fiber","fiber_licensed","dc_registry","ixp","colo","subsea","water","flood","gas","utility_terr","iso_rto"]},
+  {key:"datacenter", name:"Data Center / Compute", icon:"▤", dd:"compute", layers:["substations","transmission","eia_plants","pf_inventory","pf_routes","fiber","fiber_licensed","dc_registry","ixp","colo","carrierhotels","subsea","water","flood","gas","utility_terr","iso_rto"]},
   {key:"ev", name:"EV Charging", icon:"⌁", layers:["substations","ev","osm_subs","utility_terr"]},
   {key:"supercharger", name:"Tesla Supercharger", icon:"⚡", dd:"supercharger", layers:["substations","transmission","osm_subs","ev","utility_terr","flood"]},
   {key:"der", name:"DER", icon:"◇", layers:["substations","transmission","osm_subs","osm_plants","bess","utility_terr","ba_area"]},
@@ -1807,6 +1841,30 @@ function analyze(ll){
 
   h+='<div class="sec">Load Context</div>';
   h+=infoRow(LAYERS.datacenters.color,"Data centers","within 40 km"+(LAYERS.datacenters.on?"":" · layer off"),String(dcN));
+  /* ── NEAREST FACILITY, NAMED ───────────────────────────────────────────
+     The count above says how busy the metro is; the siting question is
+     "what is the nearest building fiber already terminates in, and how
+     carrier-dense is it". Reads whichever data-center layers are on —
+     licensed first, then the PeeringDB snapshot (which carries networks
+     on-net), then the registry and live OSM. Display only: it scores
+     nothing, for the same reason the public-evidence section scores
+     nothing. */
+  (function(){
+    var dcKeys=['dc_licensed','carrierhotels','colo','dc_registry','datacenters'], bestDc=null, bestKey=null, anyDcOn=false;
+    for(var di=0;di<dcKeys.length;di++){
+      var dk=dcKeys[di]; if(!LAYERS[dk]||!LAYERS[dk].on) continue; anyDcOn=true;
+      var hit=nearestPoint(ll,cache[dk],LAYERS[dk]);
+      if(hit&&(!bestDc||hit.km<bestDc.km)){ bestDc=hit; bestKey=dk; }
+    }
+    if(bestDc&&bestDc.km<=80){
+      var bp=bestDc.f.props||{};
+      var det=(bp.networks?bp.networks+" networks on-net":(bp.net_count?bp.net_count+" networks on-net":(bp.mw?Math.round(+bp.mw)+" MW "+(bp.mwBasis||""):(bp.operator||bp.org_name||""))));
+      h+=infoRow(LAYERS[bestKey].color,"Nearest: "+(LAYERS[bestKey].label(bp)||"facility"),
+            (det?det+" · ":"")+LAYERS[bestKey].name,fmtKm(bestDc.km));
+    } else if(anyDcOn){
+      h+=infoRow(LAYERS.dc_registry.color,"Nearest data center","none within 80 km in the loaded layers — not evidence none exists","—");
+    }
+  })();
   h+=infoRow(LAYERS.ev.color,"EV charging sites","within 15 km"+(LAYERS.ev.on?"":" · layer off"),String(evN));
 
   h+='<div class="sec">Connectivity</div>';
@@ -2051,14 +2109,40 @@ function analyze(ll){
   if(terr||iso||ba||LAYERS.utility_terr.on||LAYERS.iso_rto.on||LAYERS.ba_area.on){
     h+='<div class="sec">Market / Utility</div>';
     h+=infoRow(LAYERS.utility_terr.color,"Serving utility",
-          terr?LAYERS.utility_terr.label(terr.props):(LAYERS.utility_terr.on?"none at this point":"enable Utility Territory"),
+          terr?LAYERS.utility_terr.label(terr.props)
+              :(LAYERS.utility_terr.on?((layerHealth.utility_terr&&layerHealth.utility_terr.state==='loaded')?"none mapped at this point":"the territory layer did not answer — not read")
+              :"enable Utility Territory"),
           terr?"↳":"—");
+    /* ── THE MARKET AT THE PIN (omega-iso-market.js, the ONE record the
+       assessment and the DD report read too). The drawn ISO polygon
+       decides first (geography); the serving utility's membership second
+       (the resolver — ComEd is PJM wherever the parcel sits); an ISO row
+       whose LAYER did not answer says so instead of "outside ISO", which
+       read as a finding at a pin in the middle of PJM whenever the NASA
+       polygon service was down (2026-11-11, Chicago). "Outside" is said
+       only when the polygons LOADED and the point is in none of them AND
+       the membership road agrees there is no market. Structure facts
+       only, each sourced and dated in the module — never a revenue rate. */
+    var isoHealth=layerHealth.iso_rto&&layerHealth.iso_rto.state, isoLoaded=isoHealth==='loaded';
+    var mkKey=null, mkBasis=null;
+    if(window.OmegaIsoMarket){
+      if(iso){ mkKey=OmegaIsoMarket.fromName(LAYERS.iso_rto.label(iso.props)); mkBasis='the drawn ISO/RTO polygon at the point'; }
+      if(!mkKey&&terr){ var mkR=OmegaIsoMarket.resolve({utility:LAYERS.utility_terr.label(terr.props),state:(terr.props&&(terr.props.STATE||terr.props.state))||null}); if(mkR.basis==='utility'){ mkKey=mkR.iso; mkBasis='the serving utility’s membership ('+LAYERS.utility_terr.label(terr.props)+')'; } }
+      if(!mkKey&&!iso&&isoLoaded){ mkKey='none'; mkBasis='the loaded ISO/RTO polygons: the point is in none of them'; }
+    }
     h+=infoRow(LAYERS.iso_rto.color,"ISO / RTO",
-          iso?LAYERS.iso_rto.label(iso.props):(LAYERS.iso_rto.on?"outside ISO (bilateral)":"enable ISO / RTO"),
-          iso?"↳":"—");
+          iso?LAYERS.iso_rto.label(iso.props)
+             :(mkKey&&mkKey!=='none')?((window.OmegaIsoMarket?OmegaIsoMarket.rules(mkKey).label:mkKey)+" · by the serving utility’s membership"+(LAYERS.iso_rto.on&&!isoLoaded?" (the polygon layer did not answer)":""))
+             :(LAYERS.iso_rto.on?(isoLoaded?"outside the organized markets (bilateral)":"the ISO/RTO layer did not answer — not read, not “outside”"):"enable ISO / RTO"),
+          (iso||mkKey)?"↳":"—");
     h+=infoRow(LAYERS.ba_area.color,"Balancing authority",
           ba?LAYERS.ba_area.label(ba.props):(LAYERS.ba_area.on?"—":"enable Balancing Authority"),
           ba?"↳":"—");
+    var mkRules=mkKey?(window.OmegaIsoMarket?OmegaIsoMarket.rules(mkKey):null):null;
+    if(mkRules){
+      h+='<div class="hint" style="margin:4px 0 0;color:var(--ink)"><b>'+esc(mkRules.label)+'</b> — '+esc(mkRules.capacity.exists?mkRules.capacity.name+'. ':mkRules.capacity.words+' ')+esc(mkRules.bess)+'</div>';
+      h+='<div class="hint" style="margin:3px 0 0;color:var(--muted)">'+esc(mkRules.ancillary)+' '+esc(mkRules.storage)+(mkRules.ferc?'':' Not FERC-jurisdictional: federal wholesale orders (841/2222) do not apply.')+' Read from '+esc(mkBasis||'the map')+'. Reviewed '+esc(mkRules.reviewedAt)+' from '+esc(mkRules.sources[0].label)+' — structure, not advice; confirm with the operator before pricing.</div>';
+    }
   }
 
   // ── Data Center Site Report — composite suitability ──
@@ -2079,7 +2163,16 @@ function analyze(ll){
   var pFiber = !fiberLayersOn ? null : (fiber?Math.max(0,100-fiber.km*8):20);
   var pWater = !LAYERS.water.on ? null : (water?Math.max(0,100-water.km*10):35);
   var pFlood = !LAYERS.flood.on ? null : (floodF?(inFlood?12:58):70);
-  var pMarket = !LAYERS.iso_rto.on ? null : (containingFeature(ll,cache.iso_rto)?100:70);
+  /* the market factor follows the same honesty as the row above: an ISO
+     polygon or a utility-membership read scores organized (100), a LOADED
+     layer with the point in no polygon scores bilateral (70), and a layer
+     that did not answer is unmeasured — null, which wScore drops. mkKey is
+     the Market/Utility block's read (hoisted; undefined when that section
+     did not render). */
+  var pMarket = (typeof mkKey!=='undefined'&&mkKey) ? (mkKey==='none'?70:100)
+              : !LAYERS.iso_rto.on ? null
+              : (layerHealth.iso_rto&&layerHealth.iso_rto.state==='loaded') ? (containingFeature(ll,cache.iso_rto)?100:70)
+              : null;
   var dcW=wScore([["power",pPower,42],["fiber",pFiber,24],["water",pWater,14],["flood",pFlood,12],["market",pMarket,8]]);
   var dcScore=dcW.score;
   /* ── A LOW SCORE AND AN UNLOADED LAYER ARE NOT THE SAME THING ──────────
@@ -2122,7 +2215,8 @@ function analyze(ll){
   h+=dcFactor("Fiber / connectivity", pFiber, fiber?fmtKm(fiber.km)+" to route":"enable a fiber layer");
   h+=dcFactor("Cooling water", pWater, water?fmtKm(water.km)+" to water":"enable Water layer");
   h+=dcFactor("Flood risk", pFlood, floodF?(inFlood?"in FEMA zone "+(floodF.props.FLD_ZONE||floodF.props.fld_zone||""):"mapped low-risk zone"):"no mapped flood zone");
-  h+=dcFactor("Market liquidity", pMarket, containingFeature(ll,cache.iso_rto)?"in organized ISO/RTO":"bilateral market");
+  h+=dcFactor("Market liquidity", pMarket,
+    pMarket==null?"ISO/RTO not read":(typeof mkKey!=='undefined'&&mkKey&&mkKey!=='none')?("in "+(window.OmegaIsoMarket?OmegaIsoMarket.rules(mkKey).label:"an organized market")):(containingFeature(ll,cache.iso_rto)?"in organized ISO/RTO":"bilateral market"));
   h+='<div class="hint" style="margin:4px 0 0;color:var(--muted)">Weights: power 42%, fiber 24%, water 14%, flood 12%, market 8%. Enable Site Suitability + Fiber + Market layers for a full read. Screening only — confirm utility capacity, water rights & Phase I before acquisition.</div>';
 
   // ── Available Power Estimate — the DC-critical question ──

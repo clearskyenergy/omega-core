@@ -76,6 +76,15 @@ test('G03 the network answer: carriers only from the FCC read at the address; th
   assert.deepEqual(r.fiber.carriers, ['Lumen', 'Comcast Business'], 'one name once'); assert.equal(r.fiber.symmetric1g, true); assert.equal(r.fiber.symmetricCount, 2); assert.equal(r.sources.fcc, 'FCC broadband data (BDC)');
   var noSym = networkRead(); noSym.body.fcc.providers = [{ name: 'Comcast Business', down: 1000, up: 35 }];
   assert.equal(G.fromNetwork(noSym).fiber.symmetric1g, false);
+  /* the keyless BDC road: carriers named, no advertised speeds — 1 Gbps
+     symmetric is NOT READ (null), never a false "no" (Williams Food) */
+  var keyless = networkRead(); keyless.body.fcc = { status: 'ok', fiber: true, basis: 'mass-market',
+    providers: [{ name: 'ImOn Communications LLC', down: null, up: null }, { name: 'AT&T Oklahoma', down: null, up: null }], note: '2 providers report fiber (keyless)' };
+  var kl = G.fromNetwork(keyless);
+  assert.deepEqual(kl.fiber.carriers, ['ImOn Communications LLC', 'AT&T Oklahoma'], 'keyless road still names the carriers');
+  assert.equal(kl.fiber.carriersRead, true);
+  assert.equal(kl.fiber.symmetric1g, null, 'no speeds on the road: symmetric is unread, not "no"');
+  assert.equal(kl.fiber.symmetricCount, null, 'and the count is unread too');
   var lim = networkSkipped(); lim.body.fcc = { status: 'failed', providers: [], note: 'not checked — FCC rate limit reached' };
   assert.equal(G.fromNetwork(lim).fiber.carriersNote, 'carrier names not read: FCC rate limit reached');
   assert.equal(G.fromNetwork({ status: 504, body: { error: 'timed out' } }).ok, false);
@@ -152,7 +161,9 @@ test('G08 it lands through the diligence\'s own rule, and it reads nothing it mu
   assert.deepEqual(r.diligence.gates.fiber.value.carriers, ['Lumen', 'Comcast Business']); assert.equal(r.diligence.gates.interconnection.value.utility, 'ComEd');
   var code = SRC.replace(/\/\*[\s\S]*?\*\//g, '');
   ['geodataviewer', 'fiber_verified', 'fiber_estimated', 'll_backbone', 'FIBER_VENDOR', 'FCC_BB_KEY', 'process.env', 'fetch(', 'require(\'https\')', 'require(\'http\')'].forEach(function (w) { assert.ok(code.indexOf(w) < 0, 'grid-screen reads ' + w); });
-  assert.deepEqual(code.match(/require\([^)]*\)/g), ["require('../utility-rates')"], 'the handlers are handed in; the library requires only the rate book');
+  assert.deepEqual(code.match(/require\([^)]*\)/g), ["require('../utility-rates')", "require('../../../omega-iso-market.js')"],
+    'the handlers are handed in; the library requires only the rate book and the pure, keyless market resolver');
+  assert.ok(whole.market && whole.market.iso === 'pjm' && whole.market.basis === 'utility', 'the screen resolves the market off the serving utility (ComEd → PJM)');
   assert.ok(SRC.indexOf('© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.') > 0);
 });
 

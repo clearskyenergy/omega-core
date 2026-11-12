@@ -155,6 +155,10 @@
     h += '<div class="pa-pow"><b>' + (p.availableKw != null ? esc(kwWord(p.availableKw)) + ' ' + esc(b ? b[0] : '') : 'Power not on file') + (b ? ' <span class="pa-pill ' + b[1] + '">' + esc(b[2]) + '</span>' : '') + '</b>' + esc(p.words || '') +
       '<div>Transformer: <b style="display:inline;font-size:13px">' + (p.transformerKva ? esc(n0(p.transformerKva)) + ' kVA' : 'kVA not on file') + '</b>' +
       (p.substation && p.substation.name ? ' · Substation: ' + esc(p.substation.name) + (p.substation.kv ? ', ' + esc(p.substation.kv) + ' kV' : '') + (p.substation.distanceMi != null ? ', ' + esc(p.substation.distanceMi) + ' mi' : '') : '') + (p.utility ? ' · ' + esc(p.utility) : '') + '</div>' +
+      /* the wholesale market the site is in: the server's resolution
+         (assess.js on omega-iso-market.js); a split is said, never guessed
+         over, and no market resolved is said too */
+      (a.market ? '<div>Market: <b style="display:inline;font-size:13px">' + esc(a.market.label) + '</b>' + (a.market.basis === 'state' ? ' <span class="pa-pill">by state' + (a.market.split ? ' · split' : '') + '</span>' : '') + '</div>' : '<div class="pa-sub">Market: not resolved — no state on the record</div>') +
       (p.flags || []).map(function (f) { return '<div class="pa-flag">⚠ ' + esc(f) + '</div>'; }).join('') +
       (a.stale ? '<div class="pa-flag">↻ A fact on the site changed since this ran. Run it again.</div>' : '') + '</div>';
     var best = a.recommend ? a.recommend.best : null, c = a.compute || {}, ce = c.economics || {}, bs = a.bess || {}, br = bs.returns || {}, su = a.supercharger || {}, sr = su.returns || {};
@@ -378,6 +382,22 @@
       ['Site peak', p.peakKw != null ? esc(n0(p.peakKw)) + ' kW (' + esc(p.peakBasis || '') + ')' : 'Not on file'], ['Utility', p.utility ? esc(p.utility) : null], ['Nearest substation', p.substation && p.substation.name ? esc(p.substation.name) + (p.substation.kv ? ', ' + esc(p.substation.kv) + ' kV' : '') + (p.substation.distanceMi != null ? ', ' + esc(p.substation.distanceMi) + ' mi' : '') : null],
       ['Published load hosting', p.hosting ? esc(n0(p.hosting.loadKw)) + ' kW' + (p.hosting.circuit ? ' on ' + esc(p.hosting.circuit) : '') : null], ['Utility-side upgrade', up ? esc(up.words) + (up.compute ? ' With it: ' + esc(up.compute.label) + ' of IT' + (up.compute.irrPct != null ? ', ' + esc(pct(up.compute.irrPct)) : '') + '.' : '') : res.upgradeAdvice ? esc(res.upgradeAdvice.words) + (res.upgradeAdvice.compute && res.upgradeAdvice.compute.irrPct != null ? ' With the ' + esc(res.upgradeAdvice.label) + ': ' + esc(pct(res.upgradeAdvice.compute.irrPct)) + '.' : '') : null]]) +
       (p.flags && p.flags.length ? '<ul class="flag">' + p.flags.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' : '');
+    /* the wholesale market and its rules: the stored RESOLUTION (res.market)
+       plus the market's structure read LIVE from omega-iso-market.js, so the
+       facts in a printed report are the module's current, dated record and
+       never age inside a stored assessment */
+    var mk = res.market || null, mr = mk && window.OmegaIsoMarket ? window.OmegaIsoMarket.rules(mk.iso) : null;
+    h += '<h2>Wholesale market</h2>';
+    if (mk) {
+      h += kv([['Market', '<b>' + esc(mk.label) + '</b>'], ['How it was resolved', esc(mk.words || '')],
+        mr ? ['Capacity', esc(mr.capacity.exists ? mr.capacity.name + ' — ' + mr.capacity.words : mr.capacity.words)] : null,
+        mr ? ['Ancillary services', esc(mr.ancillary)] : null,
+        mr ? ['Storage participation', esc(mr.storage)] : null,
+        mr ? ['Aggregation', esc(mr.aggregation)] : null,
+        mr ? ['What a battery earns here', esc(mr.bess)] : null,
+        mr && !mr.ferc ? ['Jurisdiction', 'Not FERC-jurisdictional: federal wholesale orders (841/2222) do not apply.'] : null]);
+      if (mr) h += '<div class="mut">' + esc(mr.note) + ' Sources: ' + mr.sources.map(function (s) { return esc(s.label) + ' — ' + esc(s.url); }).join('; ') + ' (reviewed ' + esc(mr.reviewedAt) + ').</div>';
+    } else h += '<div class="sub">Not resolved: no state on the record. Put the site’s state on file and run the assessment again.</div>';
     /* compute */
     h += '<h2>Compute' + (c.chosen && c.chosen.klassLabel ? ' · ' + esc(c.chosen.klassLabel) : '') + '</h2>';
     if (c.fits && c.chosen) {
