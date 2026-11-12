@@ -53,6 +53,32 @@ source, and neither are wireless backhaul links.
 |---|---|---:|---:|
 | `ok-odot-broadband-lines` | Oklahoma Department of Transportation | 432 | 63,708 |
 | `ok-obo-middle-mile-projects` | Oklahoma Broadband Office | 22 | 22 |
+
+### Oklahoma deep dive (2026-11-11)
+
+The OBO source now reads `Programs_v2 / Middle_Mile_v2` instead of the bare
+`Middle_Mile_Projects` layer. Same awarded routes, three gains: each route
+carries its operating company's name (the project ids show the earlier
+layer's parent-company rows correspond one-to-one), the publisher's own
+completion rides on each record (a route reported 100% built is `existing`;
+the rest carry their phase words), and awards whose `tech` is not fiber are
+not imported, per the registry's standing rule on wireless links.
+
+Roads walked that yielded nothing importable, so nobody re-walks them:
+- The state broadband office's other services are award POINTS and
+  POLYGONS (funding footprints), not route geometry.
+- A contractor's high-level design service for one carrier exists on a
+  vendor GIS host: a design-tool upload, the class the registry excludes.
+- An electric co-op's own map publishes availability ZONES (polygons), not
+  routes; the FCC layer already answers service areas.
+- The state research network publishes its middle-mile map as an IMAGE
+  only; geometry is negotiated by IRU request, not published. Nothing is
+  traced from images.
+- No route layer was found published by the state power authority, the
+  tribal nations, or the major municipal GIS hosts (several unreachable or
+  without telecom layers); one national carrier's state map page is gone.
+- Licensed commercial telecom datasets stay out of the inventory by the
+  registry's own line; the licensed-delivery road is docs/REXTAG-INGEST.md.
 | `ok-ponca-city-fiber` | City of Ponca City, Oklahoma | 4 | 3,528 |
 | `ok-owasso-city-fiber` | City of Owasso, Oklahoma | 224 | 224 |
 | `fiberlight-published-cable` | FiberLight, LLC | 62 | 152 |

@@ -85,11 +85,31 @@ S.push({
   }
 });
 S.push({
-  id: 'ok-obo-middle-mile-projects', name: 'Oklahoma Broadband Office — Middle Mile Projects',
+  id: 'ok-obo-middle-mile-projects', name: 'Oklahoma Broadband Office — Middle Mile Projects (Programs v2)',
   publisher: 'Oklahoma Broadband Office', evidence: 'approximate_project_route',
-  lookup: ['Middle_Mile_Projects', 'Middle_Mile_Projects'],
-  fields: 'provider,project_id,tech',
-  classify: a => /fiber/i.test(txt(a.tech) || 'fiber') ? { carrier: txt(a.provider) || 'Not published', category: 'planned', routeStatus: 'Awarded middle-mile project (planned route)', networkType: 'Middle mile', name: txt(a.project_id) } : null
+  /* 2026-11-11: repointed from the bare Middle_Mile_Projects layer to the
+     OBO's Programs_v2 Middle_Mile_v2, which carries the SAME routes under
+     each operating company's own name (the old layer's "Hilliary" rows are
+     Oklahoma Western Telephone, Southwest Oklahoma Telephone and Southern
+     Plains Cable — Hilliary's opcos) PLUS the publisher's own completion:
+     Project_Status 0..1 and the phase words. A route the publisher reports
+     100% built is EXISTING, not planned — Indian Electric Cooperative's
+     four were done and still read "planned route". Resound's three awards
+     are Fixed Wireless and are not imported (the registry's own rule:
+     wireless links never are; the old layer carried no tech field to say
+     so). */
+  url: 'https://services5.arcgis.com/YjiGkfGCdfjouFLC/arcgis/rest/services/Programs_v2/FeatureServer/1',
+  fields: 'provider,project_id,tech,planned_route,Project_Status,project_completion,program',
+  classify(a) {
+    if (!/fiber/i.test(txt(a.tech))) return null;                 /* fixed wireless: never a fiber route */
+    const pct = Number(a.Project_Status), done = isFinite(pct) && pct >= 1;
+    const phase = txt(a.project_completion).replace(/^Phase \d+:\s*/, '');
+    return { carrier: txt(a.provider) || 'Not published',
+      category: done ? 'existing' : 'planned',
+      routeStatus: done ? 'Middle-mile build complete (publisher reports 100%)'
+                        : 'Awarded middle-mile build' + (phase ? ', ' + phase + ' complete' : '') + ' (as published)',
+      networkType: 'Middle mile', name: txt(a.project_id) };
+  }
 });
 S.push({ id: 'ok-ponca-city-fiber', name: 'Ponca City — buried fiber cables', publisher: 'City of Ponca City, Oklahoma', evidence: 'agency_route', tile: true,
   lookup: ['Korterra2', 'Fiber Underround'], fields: 'Layers,Cable_Type',
@@ -231,7 +251,8 @@ async function resolveUrl(src, candidates) {
   /* the discovery snapshot resolves registry lookups to service URLs once; a
      pinned url needs none */
   let candidates = [];
-  if (S.some(s => !s.url)) {
+  /* --only with pinned urls needs no snapshot: only the sources that RUN count */
+  if (S.some(s => !s.url && (!ONLY || ONLY.includes(s.id)))) {
     const f = CACHE && path.join(CACHE, 'candidates.json');
     if (!f || !fs.existsSync(f)) throw Error('Registry entries without a pinned url need <cache>/candidates.json (the discovery snapshot).');
     candidates = JSON.parse(fs.readFileSync(f, 'utf8')).filter(r => r.layer);
