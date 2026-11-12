@@ -28,6 +28,7 @@ function networkSkipped() {
 function networkRead() {
   var n = networkSkipped();
   n.body.fcc = { status: 'ok', fiber: true, providers: [{ name: 'Lumen', down: 10000, up: 10000 }, { name: 'Comcast Business', down: 1000, up: 35 }, { name: 'Lumen', down: 1000, up: 1000 }], note: '2 fiber ISPs' };
+  n.body.publicFiber = { status: 'ok', routes: [{ operator: 'Uniti', name: 'Wholesale dark fiber', mapped_distance_m: 1006, operational_status: 'Unknown' }, { operator: 'Centranet', mapped_distance_m: 1800 }], counts_in_radius: { routes: 5 } };
   return n;
 }
 function hostingRead() {
@@ -74,6 +75,12 @@ test('G03 the network answer: carriers only from the FCC read at the address; th
   assert.equal(n.sources.fcc, null); assert.equal(n.sources.peeringdb, 'PeeringDB');
   var r = G.fromNetwork(networkRead());
   assert.deepEqual(r.fiber.carriers, ['Lumen', 'Comcast Business'], 'one name once'); assert.equal(r.fiber.symmetric1g, true); assert.equal(r.fiber.symmetricCount, 2); assert.equal(r.sources.fcc, 'FCC broadband data (BDC)');
+  /* the nearest MAPPED route reaches the record (Chandler OK, 2026-11-11:
+     a wholesale route 1 km out never reached the diligence report) */
+  assert.deepEqual(r.fiber.route, { operator: 'Uniti', mi: 0.63, status: 'Unknown' }, 'the nearest published route, in miles');
+  assert.equal(r.fiber.routesIn25km, 5);
+  var noPf = networkRead(); delete noPf.body.publicFiber;
+  assert.equal(G.fromNetwork(noPf).fiber.route, null, 'no inventory answer: null, never a zero');
   var noSym = networkRead(); noSym.body.fcc.providers = [{ name: 'Comcast Business', down: 1000, up: 35 }];
   assert.equal(G.fromNetwork(noSym).fiber.symmetric1g, false);
   /* the keyless BDC road: carriers named, no advertised speeds — 1 Gbps

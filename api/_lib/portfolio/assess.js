@@ -473,9 +473,20 @@ function evidenceFor(key, c) {
   if (key === 'physical-area' && num(pa.acres) == null && c.compute.fits && c.compute.space) return hint(c.compute.space.words);
   if (key === 'physical-area' && num(pa.acres) != null) return scr('Parcel of ' + r2(num(pa.acres)) + ' acres on the parcel record; a level pad is not confirmed', 'Parcel record');
   if (f) {
-    if (key === 'conn-fiber') { if (f.carriersRead && f.carriers && f.carriers.length) return scr(f.carriers.length + ' carrier' + (f.carriers.length === 1 ? '' : 's') + ' at the address' + (f.symmetric1g === true ? ', 1 Gbps symmetric offered' : f.symmetric1g === false ? ', no 1 Gbps symmetric service read' : ''), 'FCC broadband data'); if (f.carriersNote) return hint('Fiber not read: ' + f.carriersNote + (f.lateralMi != null ? ' · lateral estimate ' + f.lateralMi + ' mi' : '')); }
+    /* the nearest mapped route rides beside the FCC answer wherever it is
+       on the screen — proximity, never serviceability (Chandler OK,
+       2026-11-11: a route 1 km out never reached the report) */
+    var routeWords = f.route ? 'nearest published route ' + f.route.mi + ' mi (' + (f.route.operator || 'operator not published') + ')' : null;
+    if (key === 'conn-fiber') {
+      if (f.carriersRead && f.carriers && f.carriers.length) return scr(f.carriers.length + ' carrier' + (f.carriers.length === 1 ? '' : 's') + ' at the address' + (f.symmetric1g === true ? ', 1 Gbps symmetric offered' : f.symmetric1g === false ? ', no 1 Gbps symmetric service read' : '') + (routeWords ? '; ' + routeWords : ''), 'FCC broadband data' + (routeWords ? ' and the route inventory' : ''));
+      if (routeWords) return scr(routeWords.charAt(0).toUpperCase() + routeWords.slice(1) + ' — proximity, not serviceability; carriers at the address ' + (f.carriersNote || 'not read'), 'Published route inventory');
+      if (f.carriersNote) return hint('Fiber not read: ' + f.carriersNote + (f.lateralMi != null ? ' · lateral estimate ' + f.lateralMi + ' mi' : ''));
+    }
     if (key === 'conn-bandwidth' && f.symmetric1g === true) return scr('1 Gbps symmetric is offered at the address; the 5–10 Gbps target needs a carrier quote', 'FCC broadband data');
-    if (key === 'conn-providers' && f.carriersRead && f.carriers && f.carriers.length) return scr(f.carriers.slice(0, 4).join(', ') + (f.carriers.length > 4 ? ' and ' + (f.carriers.length - 4) + ' more' : ''), 'FCC broadband data');
+    if (key === 'conn-providers') {
+      if (f.carriersRead && f.carriers && f.carriers.length) return scr(f.carriers.slice(0, 4).join(', ') + (f.carriers.length > 4 ? ' and ' + (f.carriers.length - 4) + ' more' : '') + (routeWords ? '; ' + routeWords + (f.routesIn25km ? ', ' + f.routesIn25km + ' published routes within 25 km' : '') : ''), 'FCC broadband data' + (routeWords ? ' and the route inventory' : ''));
+      if (routeWords) return scr(routeWords.charAt(0).toUpperCase() + routeWords.slice(1) + (f.routesIn25km ? '; ' + f.routesIn25km + ' published routes within 25 km' : ''), 'Published route inventory');
+    }
     if (key === 'conn-latency' && f.carrierHotel) return scr('Nearest carrier hotel: ' + f.carrierHotel + (f.carrierHotelMi != null ? ', ' + f.carrierHotelMi + ' mi' : ''), 'PeeringDB');
   }
   if (c.compute.byChip) {

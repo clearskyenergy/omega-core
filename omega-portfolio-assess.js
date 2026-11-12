@@ -429,6 +429,7 @@
     } else h += '<div class="sub">' + esc(su.reason || 'Not sized') + '</div>';
     /* what the screens read */
     h += '<h2>Fiber, parcel and zoning</h2>' + kv([['Carriers at the address', fb && fb.carriersRead ? (fb.carriers && fb.carriers.length ? esc(fb.carriers.slice(0, 6).join(', ')) : 'None read') : 'Not read'], ['1 Gbps symmetric', fb ? (fb.symmetric1g === true ? 'Offered' : fb.symmetric1g === false ? 'Not read at the address' : 'Not read') : 'Not read'],
+      ['Nearest published route', fb && fb.route ? esc((fb.route.operator || 'operator not published') + ', ' + fb.route.mi + ' mi') + (fb.route.status ? ' (' + esc(fb.route.status) + ')' : '') + (fb.routesIn25km ? ' · ' + esc(fb.routesIn25km) + ' routes within 25 km' : '') + ' — proximity, not serviceability' : 'Not read'],
       ['Nearest carrier hotel', fb && fb.carrierHotel ? esc(fb.carrierHotel) + (fb.carrierHotelMi != null ? ', ' + esc(fb.carrierHotelMi) + ' mi' : '') : null], ['Parcel', pa.ok ? [pa.apn ? 'APN ' + esc(pa.apn) : '', pa.acres != null ? esc(pa.acres) + ' acres' : '', pa.county ? esc(pa.county) : ''].filter(Boolean).join(' · ') : 'Not read' + (pa.reason ? ' (' + esc(pa.reason) + ')' : '')],
       ['Zoning on the parcel record', pa.ok && pa.zoning ? esc(pa.zoning) + ' (permitted uses not confirmed)' : 'Not read'], ['Owner on the public record', pa.ok && pa.owner ? esc(pa.owner) : null]]);
     /* readiness */
