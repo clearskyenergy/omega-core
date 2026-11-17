@@ -667,6 +667,11 @@ var PROGRAMS = [
     bank: { paidBy: 'ComEd, under Rider SDVPP (approved; tariff sheets effective 16 July 2026)', vehicle: 'Rider SDVPP enrolment — service begins no later than 1 March 2027', tenor: 'five-year programme term; paid per season (June–September)' },
     ref: 'ComEd\'s Rider SDVPP (the PA 104-0458 compliance filing, ICC-stamped 1 June 2026, tariff sheets effective 16 July 2026) pays $10 per kW of performance per season, measured 4–6 pm weekdays June–September. It replaced the withdrawn Rider VPP / BYODLR proposal; the $150/kW-year planning figure carried before it had no primary source and is retired.' },
 
+  { id: 'nj.powerup', name: 'PowerUp New Jersey — GSESP Phase 2 Block 1 (BTM storage)', markets: ['PJM'], states: ['NJ'], group: 'pjm-cap',
+    segments: ['residential', 'commercial'], kind: 'capacity', perKwYear: 200, minHours: 2,
+    bank: { paidBy: 'the electric distribution company, under the BPU’s PowerUp NJ budget', vehicle: 'enrolment through a registered DER Provider', tenor: 'ten programme years; paid yearly on verified dispatch performance' },
+    ref: 'New Jersey BPU order of 12 November 2026 (dockets QO26100658, QO26030099, QO26040116) establishes the PowerUp NJ Program; its GSESP Phase 2 Block 1 pays a performance-based incentive of UP TO $200 per kW-year for ten years for new behind-the-meter storage (150 MW statewide; $100 per kW-year for up to 100 MW of storage operating before 12 November 2026), residential and small commercial, enrolled through a DER Provider: the yearly payment is the rate times the awarded kW times a verified performance factor over EDC dispatch events called on forecast PJM peak (5CP/1CP) hours — never a payment for installing. NOTHING IS CLAIMABLE YET: each EDC files its programme by 12 February 2027 and enrolment opens 60 days after its approval, so roughly mid-2027. The same discharge also lowers the capacity tag, so this row shares the PJM capacity group and only the best figure is counted.' },
+
   { id: 'ny.dlm', name: 'Utility DLM (Con Edison CSRP + DLRP)', markets: ['NYISO'], group: 'ny-dlm',
     segments: SEGMENTS, kind: 'capacity', perKwYear: 30, perKwYearNyc: 120, minHours: 4,
     bank: { paidBy: 'Con Edison / the New York utility', vehicle: 'DLM programme agreement', tenor: 'summer season, annual reservation rates' },
