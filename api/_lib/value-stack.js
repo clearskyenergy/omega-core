@@ -342,7 +342,7 @@
       id: "md.rces.grant", utility: "Maryland Energy Administration", name: "Maryland RCES storage grant",
       state: "MD", nonresidential: true,
       pctOfCost: 0.30, capUsd: 150000,
-      tier: "planning", asOf: "FY2027 round open (FOA issued 2026-09-24); read 2026-11-17",
+      tier: "planning", asOf: "FY2027 round open (FOA issued 2026-09-24); read 2026-11-19 on the MyMEA portal",
       ref: "Maryland Energy Administration Residential and Commercial Energy Storage "
          + "(RCES) grant: 30% of total installed cost, up to $150,000 for a commercial "
          + "system (FY27 figures as relayed from the FOA — confirm in the FOA itself "
@@ -350,14 +350,17 @@
          + "since the end of 2024.",
       url: "https://energy.maryland.gov/Pages/Energy-Storage-Grant-Program.aspx",
       conditions: "First-come grants from a small annual budget. The FY27 round is "
-         + "OPEN: up to $4M anticipated, 25.16% of the budget requested and 18.27% "
-         + "reserved as of MEA's 2026-11-09 posting (MEA froze this page for a "
-         + "website migration on 2026-11-13 — the live meter is in the MyMEA "
-         + "portal), applications due 31 May 2027 or "
-         + "until funds exhaust, and FY27 prioritises systems enrolling in utility "
-         + "VPP pilots. Held at planning-grade because the FY27 rates are relayed "
-         + "from the portal-gated FOA, not read from it — the FY26 round (also "
-         + "30% / $150k) closed 5 June 2026 once funds ran out."
+         + "OPEN: up to $4M anticipated, 29.41% of the budget requested and 19.94% "
+         + "reserved on the MyMEA portal's own meter, calculated 2026-11-19 "
+         + "6:00 AM ET (the portal updates daily and became the live source when "
+         + "MEA froze its website pages for a migration on 2026-11-13; the frozen "
+         + "page still shows the 2026-11-09 posting), applications due 31 May 2027 "
+         + "or until funds exhaust, and FY27 prioritises systems enrolling in "
+         + "utility VPP pilots. The portal's programme page publicly states the "
+         + "caps ($5,000 residential, $150,000 commercial); held at planning-grade "
+         + "because the 30% rate is still relayed from the portal-gated FOA, not "
+         + "read from it — the FY26 round (also 30% / $150k) closed 5 June 2026 "
+         + "once funds ran out."
     },
     {
       id: "de.dnrec.pilot", utility: "DNREC (Delmarva Power territory)", name: "Delaware Solar + Storage Pilot grant",
