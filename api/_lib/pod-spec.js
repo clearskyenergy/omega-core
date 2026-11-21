@@ -34,7 +34,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 
-var VERSION = '2026-11.1';
+var VERSION = '2026-11.2';
 
 var POD = {
   key: 'sonic', maker: 'Runware', name: 'Sonic Pod', label: 'Runware Sonic Pod',
@@ -51,7 +51,17 @@ var POD = {
   /* a distributed site: stand-alone pods, each on one feed, no UPS or generator */
   site: { maxPods: 4, feedsPerPod: 1, backupPower: false },
   electrical: { voltage: '480Y/277 V', connectionsPerPod: 12 },
-  pad: { lengthFt: 21, widthFt: 9, ratedTonnes: 60, betweenPodsM: 2, betweenPodsFt: 6.5 },
+  pad: { lengthFt: 21, widthFt: 9, ratedTonnes: 60, betweenPodsM: 2, betweenPodsFt: 6.56 },
+  /* WHAT THE SITE HAS TO GIVE A POD (2026-11-21, Tommy: "Here are site screening requirements for compute"): the maker's
+     own site and power requirements sheet (issue 1, September 2026), the figures a site owner or utility needs to quote.
+     The one that moves the screen: EVERY pod's connection must carry 1 MW continuous, whatever chip is racked in it, so a
+     site is screened on 1,000 kW a pod, never on the chip's own draw. The sheet and the product overview differ on the
+     voltage at the pod (415Y/240 V here, 480Y/277 V there): both are kept and the difference is said. */
+  siting: { sheet: 'Site and power requirements, issue 1, September 2026', connectionKw: 1000, transformerKva: { min: 1250, max: 1500 },
+    supplyUs: '415Y/240 V, 3-phase, 4-wire plus protective earth, 60 Hz, at the pod', typicalKw: [500, 800], loadFactorPct: { low: 50, high: 80, typical: 65 },
+    footprintFt: { l: 20, w: 8 }, footprintSqFt: 160, heightFt: 20, weightTonnes: 17, cornerTonnes: [6, 9],
+    foundation: 'a level concrete pad or slab, or four ground screws on prepared level ground',
+    feed: 'a single radial feed; a second feed from an independent circuit, or batteries, are options', fibre: { minGbps: 10, preferredGbps: 100 } },
   shipping: { sections: 2, container: '20 ft', coolingSectionKg: 8000, computeSectionKg: 12000, commissioningHours: 48 },
   water: false,
   /* outdoor dry bulb: the operating range, and the heat the loop carries at NVIDIA's 45 °C supply ceiling */
@@ -87,9 +97,25 @@ function platformFor(chip) { chip = String(chip || '').toLowerCase(); return pla
 
 /* one pod of a platform at the meter: what must be FREE (its peak) and what it draws (its rated load) */
 function atMeter(p) {
-  var need = Math.round(p.peakItKw * POD.ppue), draw = Math.round(p.itKw * POD.ppue * 100) / 100;
-  return { needKw: need, drawKw: draw, overheadKw: need - p.peakItKw };
+  var peak = Math.round(p.peakItKw * POD.ppue), draw = Math.round(p.itKw * POD.ppue * 100) / 100, need = POD.siting.connectionKw;
+  /* needKw: the connection the maker asks for, the same for every chip. peakKw: what this chip's pod draws at its peak. */
+  return { needKw: need, peakKw: peak, drawKw: draw, overheadKw: need - p.peakItKw };
 }
+/* WHAT THE MAKER ASKS A SITE TO CONFIRM, so sites are compared on one basis: its own list, in its order */
+var QUESTIONS = [
+  ['power-price', 'Power price: all-in delivered price a kWh, and any demand charge, standing charge or minimum take'],
+  ['facility-charge', 'Facility charge: any ground or facility charge and how it is levied'],
+  ['pad', 'Pad: whether a level concrete pad or slab is in place, its size and load rating, or the cost and time to provide one'],
+  ['capacity', 'Capacity: firm capacity available now and at full build'],
+  ['timing', 'Timing: the energisation date of each tranche of capacity'],
+  ['service', 'Service: the utility service voltage and feed configuration'],
+  ['site-control', 'Site control: its status, and any permitting or ordinance dependency'],
+  ['fibre', 'Fibre: carriers on or near the site, the cost of bringing fibre to the pad, and whether BGP is available'],
+  ['security', 'Security: distance to the closest police station'],
+  ['remote-hands', 'Remote hands: for the IT load, power, and cleaning the cooling'],
+  ['address', 'Address: the exact address of the site'],
+  ['map', 'Map location: the exact point on the map']
+];
 
 /* THE HEAT. The pod rejects to outdoor air with no chiller, so the hottest
    hours decide what it carries: read off the sheet's own table, never
@@ -115,14 +141,16 @@ function thermalOf(p) {
 function requirements(pods) {
   var n = pods > 1 ? pods : 1;
   return [
-    'Power: ' + (n > 1 ? 'one feed a pod' : 'one feed') + ' of ' + POD.electrical.connectionsPerPod + ' three-phase connections at ' + POD.electrical.voltage + '. No UPS or generator in this model: a utility outage stops the pod, and it restarts when power returns. The maker asks for a utility supply of ' + POD.operations.utilityAvailabilityPct + '% availability or better.',
-    'Pad: ' + (n > 1 ? n + ' pads, each' : 'one pad') + ' at least ' + POD.pad.lengthFt + ' × ' + POD.pad.widthFt + ' ft, rated ' + POD.pad.ratedTonnes + ' metric tons' + (n > 1 ? ', with ' + POD.pad.betweenPodsM + ' m (' + POD.pad.betweenPodsFt + ' ft) between pods on all sides' : '') + ', with truck and crane access.',
+    'Power: ' + (n > 1 ? 'a connection a pod, each' : 'a connection') + ' carrying ' + fmt(POD.siting.connectionKw) + ' kW continuous whatever is racked in the pod (it typically runs at ' + POD.siting.typicalKw[0] + ' to ' + POD.siting.typicalKw[1] + ' kW, a load factor near ' + POD.siting.loadFactorPct.typical + '%). The transformer and switchgear above 1 MVA, likely ' + (POD.siting.transformerKva.min / 1000) + ' to ' + (POD.siting.transformerKva.max / 1000) + ' MVA a pod.',
+    'Supply: ' + POD.siting.supplyUs + '; any transformation from the utility’s 480Y/277 V or medium voltage is the site’s to provide. The maker’s product overview names ' + POD.electrical.voltage + ' as its standard configuration: confirm which before the one-line is drawn.',
+    'Feed: ' + POD.siting.feed + '. With one feed and no backup a utility outage stops the pod, and it restarts when power returns; the maker asks for a utility supply of ' + POD.operations.utilityAvailabilityPct + '% availability or better.',
+    'Pad: ' + (n > 1 ? n + ' pods on one prepared area, each' : 'one pod') + ' ' + POD.siting.footprintFt.l + ' × ' + POD.siting.footprintFt.w + ' ft and ' + POD.siting.heightFt + ' ft tall (two stacked containers), ' + POD.siting.weightTonnes + ' metric tons in service on four corners of ' + POD.siting.cornerTonnes[0] + ' to ' + POD.siting.cornerTonnes[1] + ' tons each. On ' + POD.siting.foundation + (n > 1 ? ', ' + POD.pad.betweenPodsM + ' m (' + POD.pad.betweenPodsFt + ' ft) between pods: they are networked together, so scattered positions need the maker’s say' : '') + '. Truck and crane access.',
     'Delivery: each pod ships as two ' + POD.shipping.container + ' container sections (about ' + fmt(POD.shipping.coolingSectionKg / 1000) + ' and up to ' + fmt(POD.shipping.computeSectionKg / 1000) + ' metric tons) and is joined on site, typically within ' + POD.shipping.commissioningHours + ' hours.',
     'Water: none. The loop is closed and rejects heat to outdoor air; coolant is topped up at maintenance.',
-    'Connectivity: ' + POD.connectivity + '.',
+    'Fibre: ' + POD.siting.fibre.minGbps + ' Gbps at least, ' + POD.siting.fibre.preferredGbps + ' Gbps or better preferred; ' + POD.connectivity + '. A site with a single provider can work but ranks lower with the maker.',
     'Operations: remote hands within a ' + POD.operations.remoteHandsMinutes + '-minute drive; perimeter fencing and site security.',
     'Commercial, as the maker states it: a minimum term of ' + POD.commercial.minTermMonths + ' months, a ' + POD.commercial.advancePct + '% advance on a managed service, power ' + POD.commercial.power + '. No price is on the sheet.'
   ];
 }
 
-module.exports = { VERSION: VERSION, POD: POD, PLATFORMS: PLATFORMS, platform: platform, platformFor: platformFor, atMeter: atMeter, thermalOf: thermalOf, requirements: requirements };
+module.exports = { VERSION: VERSION, POD: POD, PLATFORMS: PLATFORMS, QUESTIONS: QUESTIONS, platform: platform, platformFor: platformFor, atMeter: atMeter, thermalOf: thermalOf, requirements: requirements };

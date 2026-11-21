@@ -18,6 +18,12 @@
           in-process with the caller's own headers, so each runs its own
           sign-in and plan gate; a screen a plan does not carry is an error
           on the record, never a failure of the run.
+     POST assess-space { site | ids[] (10) }   the lot alone for a site already
+          screened: the parcel under its point again and the buildings on
+          it, measured (assess-space.js); the grid screen is not run
+     POST assess-solution { site | ids[], solution: runware|lightsmith|armada|omega|default, chip? }
+          the compute system picked for a site (a chip for the pod); default
+          follows the workspace's own again
      POST assess-check { site, item, state: open|done|na, note? }
           a person's mark on one readiness item; the score follows
      POST assess-approve { ids[] | site, uses: [compute|bess|supercharger], note? }
@@ -81,10 +87,10 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var crypto = require('crypto');
-var AS = require('./assess'), G = require('./grid-screen'), D = require('./diligence'), BR = require('./site-bridge');
+var AS = require('./assess'), G = require('./grid-screen'), D = require('./diligence'), BR = require('./site-bridge'), SP = require('./assess-space');
 
-var ACTIONS = ['assess-run', 'assess-screen-start', 'assess-screen-step', 'assess-check', 'assess-approve', 'assess-upgrade', 'assess-fund-submit', 'assess-fund-withdraw', 'assess-fund-decide', 'assess-fund-link', 'assess-fund-attest', 'assess-review-vote', 'assess-closing'];
-var RUN_CAP = 50, SCREEN_IDS_CAP = 200, APPROVE_CAP = 200, MARK_CAP = 200, SCREEN_FRESH_DAYS = 7, PARCEL_TIMEOUT = 12000;
+var ACTIONS = ['assess-run', 'assess-space', 'assess-solution', 'assess-screen-start', 'assess-screen-step', 'assess-check', 'assess-approve', 'assess-upgrade', 'assess-fund-submit', 'assess-fund-withdraw', 'assess-fund-decide', 'assess-fund-link', 'assess-fund-attest', 'assess-review-vote', 'assess-closing'];
+var RUN_CAP = 50, SCREEN_IDS_CAP = 200, APPROVE_CAP = 200, MARK_CAP = 200, SCREEN_FRESH_DAYS = 7, PARCEL_TIMEOUT = 12000, SPACE_CAP = 10;
 
 function owns(action) { return ACTIONS.indexOf(String(action || '')) >= 0; }
 function day(now) { return String(now).slice(0, 10); }
@@ -97,12 +103,12 @@ function idList(v, cap, fail) {
   return ids;
 }
 /* the parcel answer as the assessment keeps it: never the ring */
-function parcelOf(r, now) {
+function parcelOf(r, now, space) {
   var b = r && r.body || {};
   if (!(r && r.status === 200)) return { ok: false, reason: b.error ? String(b.error).slice(0, 200) : 'the parcel lookup did not answer (' + (r ? r.status : 'no reply') + ')', at: now };
   if (b.ok !== true) return { ok: false, reason: String(b.reason || 'no parcel record here').slice(0, 200), at: now };
   function s(v, n) { return v == null || v === '' ? null : String(v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n) || null; }
-  return { ok: true, apn: s(b.apn, 60), owner: s(b.owner, 160), acres: b.acres != null && isFinite(Number(b.acres)) ? Math.round(Number(b.acres) * 100) / 100 : null, zoning: s(b.zoning, 80), county: s(b.county, 80), source: s(b.source, 30), at: now };
+  return Object.assign({ ok: true, apn: s(b.apn, 60), owner: s(b.owner, 160), acres: b.acres != null && isFinite(Number(b.acres)) ? Math.round(Number(b.acres) * 100) / 100 : null, zoning: s(b.zoning, 80), county: s(b.county, 80), source: s(b.source, 30), at: now }, space ? { space: space } : {});
 }
 
 function make(deps) {
@@ -114,7 +120,7 @@ function make(deps) {
   function screenOf(data) { var a = data && data.assessment, d = data && data.diligence; return (a && a.screen) || (d && d.screen && d.screen.complete ? d.screen : null) || null; }
   function compute(id, data, cfg) {
     var a = (data && data.assessment) || {};
-    return AS.assess(flat(id, data), { screen: screenOf(data), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, config: cfg, now: deps.now() });
+    return AS.assess(flat(id, data), { screen: screenOf(data), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, solution: a.solution || null, config: cfg, now: deps.now() });
   }
   function mustEdit(c) { if (c.canEdit === false) throw fail(403, 'Your role in this workspace can read the assessment but not run it'); }
 
@@ -138,6 +144,68 @@ function make(deps) {
     }
     return { ok: true, ran: ran.length, sized: sized, missing: missing,
       note: ran.length + ' site' + (ran.length === 1 ? '' : 's') + ' assessed' + (ran.length - sized ? '; ' + (ran.length - sized) + ' with no power figure on file could not be sized' : '') + '.' };
+  }
+
+  /* ── THE LOT (2026-11-21, Tommy: "a space analysis on the sites as well based on the parcel"): while the parcel's
+     outline is in hand, the buildings on it are read and what is clear of both is measured (assess-space.js).
+     Only that summary is kept: the ring never is. A lookup that fails is an answer, never a stop. ── */
+  async function spaceFor(pr, hd, cfg) {
+    var b = pr && pr.status === 200 && pr.body && pr.body.ok === true ? pr.body : null;
+    if (!b || !Array.isArray(b.ring) || b.ring.length < 3) return null;
+    var built = null;
+    if (typeof hd.structures === 'function') { try { built = await hd.structures(b.ring); } catch (e) { built = { ok: false, reason: String(e && e.message || e).slice(0, 120) }; } }
+    return plain(SP.measure(b.ring, built, cfg.space || {}));
+  }
+  /* the lot alone, for sites already screened: the parcel under the point again (its outline was never kept) and the
+     buildings on it, then the assessment on what was found. The grid screen is not run again. */
+  async function space(c) {
+    mustEdit(c);
+    var ids = c.site ? [c.site] : idList(c.b.ids, SPACE_CAP, fail), billing = await billingOf(c.root), cfg = AS.configOf(billing), hd = deps.handlers(c.req), out = [], missing = [], skipped = [];
+    for (var i = 0; i < ids.length; i++) {
+      var id = ids[i], sref = c.root.collection('sites').doc(id), snap = await sref.get();
+      if (!snap.exists) { missing.push(id); continue; }
+      var loc = ((snap.data().assessment || {}).screen || {}).located;
+      if (!(loc && loc.usable && typeof hd.parcel === 'function')) { skipped.push(id); continue; }
+      var pr; try { pr = await hd.parcel({ lat: loc.lat, lng: loc.lng }); } catch (e) { pr = { status: e && e.status || 502, body: { error: String(e && e.message || e).slice(0, 200) } }; }
+      var parcel = parcelOf(pr, deps.now(), await spaceFor(pr, hd, cfg));
+      await c.db.runTransaction(async function (tx) {
+        var cur = await tx.get(sref); if (!cur.exists) return;
+        var d2 = cur.data() || {}, a = Object.assign({}, d2.assessment || {});
+        /* a lookup that failed this time never replaces a parcel already on file */
+        if (parcel.ok || !(a.parcel && a.parcel.ok)) a.parcel = parcel;
+        a.result = AS.assess(flat(id, Object.assign({}, d2, { assessment: a })), { screen: a.screen || screenOf(d2), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, solution: a.solution || null, config: cfg, now: deps.now() });
+        a.at = deps.now(); a.by = c.by;
+        tx.update(sref, { assessment: plain(a) });
+        tx.create(c.db.collection('omega_audit').doc(), { action: 'sitecrm-assess-space', orgId: c.org, siteId: id, by: c.by, at: deps.now(), parcel: parcel.ok === true, measured: !!(parcel.space && parcel.space.ok), buildings: !!(parcel.space && parcel.space.buildings && parcel.space.buildings.read) });
+      });
+      out.push({ id: id, parcel: parcel.ok === true, measured: !!(parcel.space && parcel.space.ok) });
+    }
+    var m = out.filter(function (x) { return x.measured; }).length;
+    return { ok: true, read: out.length, measured: m, missing: missing, skipped: skipped, sites: out,
+      note: m + ' lot' + (m === 1 ? '' : 's') + ' measured' + (out.length - m ? '; ' + (out.length - m) + ' with no parcel outline here' : '') + (skipped.length ? '; ' + skipped.length + ' not located yet (run the screen first)' : '') + '.' };
+  }
+
+  /* ── THE SOLUTION PICKED FOR A SITE: one of the compute systems on offer (and, for the pod, a chip), or `default` to
+     follow the workspace's own again. The site's compute answer, its space, its checklist and its upgrade follow it. ── */
+  async function pickSolution(c) {
+    mustEdit(c);
+    var ids = c.site ? [c.site] : idList(c.b.ids, APPROVE_CAP, fail), billing = await billingOf(c.root), cfg = AS.configOf(billing), pick = AS.solutionChange(c.b, { by: c.by, now: deps.now() }), done = [], missing = [];
+    for (var i = 0; i < ids.length; i++) {
+      var id = ids[i], sref = c.root.collection('sites').doc(id);
+      var ok = await c.db.runTransaction(async function (tx) {
+        var cur = await tx.get(sref); if (!cur.exists) return false;
+        var d2 = cur.data() || {}, a = Object.assign({}, d2.assessment || {}), was = a.solution ? a.solution.key + (a.solution.chip ? ':' + a.solution.chip : '') : null;
+        if (pick) a.solution = pick; else delete a.solution;
+        a.result = AS.assess(flat(id, Object.assign({}, d2, { assessment: a })), { screen: a.screen || screenOf(d2), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, solution: a.solution || null, config: cfg, now: deps.now() });
+        a.at = deps.now(); a.by = c.by;
+        tx.update(sref, { assessment: plain(a) });
+        tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-solution', orgId: c.org, siteId: id, by: c.by, at: deps.now(), from: was, to: pick ? pick.key + (pick.chip ? ':' + pick.chip : '') : null }));
+        return true;
+      });
+      if (ok) done.push(id); else missing.push(id);
+    }
+    return { ok: true, sites: done.length, missing: missing, solution: pick ? pick.key : null, chip: pick ? pick.chip : null,
+      note: done.length + ' site' + (done.length === 1 ? '' : 's') + (pick ? ' set to ' + pick.name + (pick.chip ? ' (' + pick.chip + ')' : '') : ' back on the workspace’s own solution') + '.' };
   }
 
   /* ── the screens, a job a phase at a time ────────────────────────────── */
@@ -187,7 +255,7 @@ function make(deps) {
     var parcel = null, loc = r.screen.located;
     if (loc && loc.usable && typeof hd.parcel === 'function') {
       var pr; try { pr = await hd.parcel({ lat: loc.lat, lng: loc.lng }); } catch (e) { pr = { status: e && e.status || 502, body: { error: String(e && e.message || e).slice(0, 200) } }; }
-      parcel = parcelOf(pr, deps.now());
+      parcel = parcelOf(pr, deps.now(), await spaceFor(pr, hd, cfg));
     }
     var landed = await c.db.runTransaction(async function (tx) {
       var cur = await tx.get(sref); if (!cur.exists) return null;
@@ -199,7 +267,7 @@ function make(deps) {
         var st = BR.normalize(id, d2), ch = D.change(st.diligence, 'screen', { screen: r.screen }, { site: st, config: D.configOf(billing), role: 'member', canEdit: true, by: c.by, now: deps.now() });
         patch.diligence = plain(ch.diligence); moved = ch.event.moved || []; d2 = Object.assign({}, d2, { diligence: ch.diligence });
       }
-      a.result = AS.assess(flat(id, Object.assign({}, d2, { assessment: a })), { screen: a.screen, parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, config: cfg, now: deps.now() });
+      a.result = AS.assess(flat(id, Object.assign({}, d2, { assessment: a })), { screen: a.screen, parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, solution: a.solution || null, config: cfg, now: deps.now() });
       a.at = deps.now(); a.by = c.by; patch.assessment = plain(a);
       tx.update(sref, patch);
       tx.create(c.db.collection('omega_audit').doc(), { action: 'sitecrm-assess-screen', orgId: c.org, siteId: id, by: c.by, at: deps.now(), jobId: job.id, located: !!(loc && loc.usable), parcel: !!(parcel && parcel.ok), errors: (r.screen.errors || []).length, moved: moved });
@@ -230,7 +298,7 @@ function make(deps) {
       var data = cur.data() || {}, a = Object.assign({}, data.assessment || {}), marks = Object.assign({}, a.checklist || {}), was = marks[item] ? marks[item].state : 'open';
       if (state === 'open' && !note) delete marks[item]; else marks[item] = { state: state, note: note || null, by: c.by, at: deps.now() };
       a.checklist = marks;
-      a.result = AS.assess(flat(c.site, data), { screen: screenOf(data), parcel: a.parcel || null, marks: marks, upgrade: a.upgrade || null, config: cfg, now: deps.now() });
+      a.result = AS.assess(flat(c.site, data), { screen: screenOf(data), parcel: a.parcel || null, marks: marks, upgrade: a.upgrade || null, solution: a.solution || null, config: cfg, now: deps.now() });
       a.at = deps.now(); a.by = a.by || c.by;
       tx.update(sref, { assessment: plain(a) });
       tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-check', orgId: c.org, siteId: c.site, by: c.by, at: deps.now(), item: item, from: was, to: state, note: note || null }));
@@ -308,7 +376,7 @@ function make(deps) {
       names[sref.id] = data.name || sref.id;
       var a = Object.assign({}, data.assessment || {}), site = flat(sref.id, data), pw = AS.powerOf(site, screenOf(data)), was = a.upgrade ? a.upgrade.status : null;
       a.upgrade = AS.upgradeOf(a.upgrade || null, c.b, { by: c.by, now: deps.now(), limitKw: pw.limitKw, availableKw: pw.availableKw, partner: site.portfolioPartner || data.portfolioPartner || null, pue: cfg.compute.pue, config: cfg });
-      a.result = AS.assess(site, { screen: screenOf(data), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade, config: cfg, now: deps.now() });
+      a.result = AS.assess(site, { screen: screenOf(data), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade, solution: a.solution || null, config: cfg, now: deps.now() });
       a.at = deps.now(); a.by = a.by || c.by;
       tx.update(sref, { assessment: plain(a) });
       tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-upgrade', orgId: c.org, siteId: sref.id, by: c.by, at: deps.now(), status: a.upgrade.status, was: was, targetKw: a.upgrade.targetKw, askedBy: a.upgrade.askedBy, note: a.upgrade.note }));
@@ -350,7 +418,7 @@ function make(deps) {
       names[sref.id] = data.name || sref.id;
       var a = Object.assign({}, data.assessment || {}), sc = screenOf(data), was = a.funding ? a.funding.status : null;
       /* what is submitted is what is on file NOW: assessed again, so a stale figure never reaches the committee */
-      var fresh = a.result ? AS.assess(flat(sref.id, data), { screen: sc, parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, config: cfg, now: deps.now() }) : null;
+      var fresh = a.result ? AS.assess(flat(sref.id, data), { screen: sc, parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, solution: a.solution || null, config: cfg, now: deps.now() }) : null;
       a.funding = AS.fundingChange(a.funding || null, action, c.b, { by: c.by, now: deps.now(), config: cfg, result: fresh, screened: !!(sc && sc.complete), canEdit: c.canEdit });
       if (action === 'submit') { a.result = fresh; a.at = deps.now(); }
       tx.update(sref, { assessment: plain(a) });
@@ -421,6 +489,8 @@ function make(deps) {
     if (action === 'assess-fund-link') return fund(c, 'link');
     if (action === 'assess-fund-attest') return fund(c, 'attest');
     if (action === 'assess-run') return run(c);
+    if (action === 'assess-space') return space(c);
+    if (action === 'assess-solution') return pickSolution(c);
     if (action === 'assess-screen-start') return screenStart(c);
     if (action === 'assess-screen-step') return screenStep(c);
     if (action === 'assess-check') return check(c);
@@ -459,7 +529,8 @@ function live() {
          and a path held in a variable is not one (2026-11-09: every production screen answered "Cannot find module") */
       function bind(load, timeout) { return function (body) { return G.invoke(load(), { method: 'POST', headers: headers, body: body, query: {} }, timeout); }; }
       return { atlas: bind(function () { return require('../../grid-atlas'); }, G.TIMEOUT.grid), network: bind(function () { return require('../../network-proximity'); }, G.TIMEOUT.network),
-        hosting: bind(function () { return require('../../hosting-capacity'); }, G.TIMEOUT.hosting), parcel: bind(function () { return require('../../parcel'); }, PARCEL_TIMEOUT) };
+        hosting: bind(function () { return require('../../hosting-capacity'); }, G.TIMEOUT.hosting), parcel: bind(function () { return require('../../parcel'); }, PARCEL_TIMEOUT),
+        structures: function (ring) { return require('./structures').find(ring); } };
     } });
 }
 var instance = null;

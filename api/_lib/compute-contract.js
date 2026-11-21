@@ -81,6 +81,15 @@ var PARTNER = {
      are shown. Read only by a workspace whose settings ask for the
      partner's basis (portfolio/assess.js); nothing else prices on it. */
   reference: { perMw: { capexUsd: 35000000, revenueUsdYear: 26000000, utilityUsdYear: 4000000, gpus: 504, racks: 7, chipset: 'gb200' } },
+  /* THE WRITTEN BRIEF (2026-11-21: the partner's Q4 2026 brief, their first figures on paper). It is their
+     confidential document, so only what the space analysis reads is kept here: the unit's footprint and what the
+     site has to provide. Its commercial figures are NOT recorded in the code, and the pricing above is not moved
+     onto it. Read by portfolio/assess-space.js. */
+  brief: {
+    dated: '2026-11', standing: 'As stated by the partner: modeled, not an offer',
+    unit: { container: 'a 40 ft container', sitePowerKw: 1000 },
+    site: { footprintFt: { w: 50, d: 60 }, footprintFor: 'the container and its coolers', internet: '1 Gb/s symmetric', space: 'secure, access-controlled, on a yard, lot or dock' }
+  },
   verified: false
 };
 var ROUTES = ['own', 'buy', 'lease', 'takeover'];
@@ -88,7 +97,7 @@ var RC = OC.RATE_CARD;
 var LIMITS = {
   units: [1, 3000], availableKw: [1, 200000],
   unitCostUsd: CM.LIMITS.capexCustom, termMonths: CM.LIMITS.termMonths, pricePerGpuHour: CM.LIMITS.customGpuHour,
-  takeOrPayPct: [0, 100], escalatorPct: [-10, 10], feePct: [0, 50],
+  takeOrPayPct: [0, 100], escalatorPct: [-30, 10], feePct: [0, 50],   /* a price that FALLS each contract year is a contract too (a GPU vintage's: −15% a year) */
   purchasePriceUsd: [1, 100000000], rentEscalatorPct: [0, RC.entered.maxEscalatorPct], revenueSharePct: [0, 60],
   rentPerKwMonth: [RC.entered.minMonthly / RC.computeKwPerSkid, RC.entered.maxMonthly / RC.computeKwPerSkid],
   residualPct: [0, CM.LIMITS.residualPct[1] * 100], landResidualPct: [0, 200],

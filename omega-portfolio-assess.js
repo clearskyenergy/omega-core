@@ -41,6 +41,43 @@
     return '<table' + (cls ? ' class="' + cls + '"' : '') + '><tr><th>Chip in the pod</th><th>GPUs a pod</th><th>IT a pod</th><th>At the meter</th><th>Pods</th><th>Return</th></tr>' + rows.map(function (u) {
       return '<tr><td>' + esc(u.chip || '') + '</td><td>' + (u.gpus != null ? n0(u.gpus) : '') + '</td><td>' + esc(u.label) + '</td><td>' + n0(u.meterKw) + ' kW</td><td>' + (u.fits ? esc(u.units) : 'No fit') + '</td><td>' + (u.irrPct != null ? esc(pct(u.irrPct)) : u.fits ? 'No price' : '') + '</td></tr>'; }).join('') + '</table>';
   }
+  /* SPACE ON THE LOT: the server's words and verdict, drawn; nothing is measured here */
+  function spaceMark(sp) { var u = sp && sp.uses && sp.uses.compute; return !u || u.fits == null ? '' : u.fits ? '<span class="pa-k" title="' + esc(u.words || '') + '" style="color:#1f7a4d;border-color:#b9dcc9">' + (u.upperBound ? 'room?' : 'room') + '</span>' : '<span class="pa-k" title="' + esc(u.words || '') + '" style="color:#b3261e;border-color:#f0c4c0">no room</span>'; }
+  function spaceHtml(sp, o) {
+    if (!sp) return '';
+    var u = sp.uses || {}, c = u.compute, h = '<div class="pa-box' + (c && c.fits === false ? ' on' : '') + '" id="pa-space"><b>Space on the lot</b><div>' + esc(sp.words || '') + '.</div>';
+    if (sp.score) h += '<div style="margin-top:4px"><b>' + esc(sp.score.points) + ' of 100 · ' + esc(sp.score.grade) + '</b> <span style="color:var(--ows-ink2)">' + esc(sp.score.words) + '</span></div>';
+    if (c && c.words) h += '<div style="margin-top:4px"><b>Compute:</b> ' + esc(c.words) + '</div>';
+    if (u.bess && u.bess.words) h += '<div style="color:var(--ows-ink2);margin-top:2px">Battery: ' + esc(u.bess.words) + '</div>';
+    if (u.supercharger && u.supercharger.words) h += '<div style="color:var(--ows-ink2);margin-top:2px">Fast charging: ' + esc(u.supercharger.words) + '</div>';
+    if (sp.notes && sp.notes.length) h += '<ul class="pa-list" style="margin-top:6px">' + sp.notes.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>';
+    if (o && o.canEdit && sp.ok && !sp.measured) h += '<div class="a" style="margin-top:6px"><button type="button" class="pa-btn" data-pa="space">Read the lot</button></div>';
+    return h + '</div>';
+  }
+  /* THE SOLUTIONS on this site, side by side, and the one in use: the server's rows, drawn. A pick is the door's. */
+  function solutionsHtml(sol, o, cls) {
+    if (!sol || !sol.list) return '';
+    var edit = !!(o && o.canEdit && o.pick !== false);
+    var h = '<div class="pa-box" id="pa-solutions"><b>Compute solutions</b><div>' + esc(sol.words || '') + '</div><div style="overflow:auto"><table' + (cls ? ' class="' + cls + '"' : '') + ' style="margin-top:6px"><tr><th style="text-align:left">Solution</th><th style="text-align:left">On this site</th><th>Return</th><th>Space</th>' + (edit ? '<th></th>' : '') + '</tr>' +
+      sol.list.map(function (s) {
+        var chips = s.key === 'runware' && s.chips ? s.chips.filter(function (c) { return c.fits; }) : [];
+        return '<tr' + (s.picked ? ' style="font-weight:600"' : '') + '><td style="text-align:left" title="' + esc(s.about || '') + '">' + esc(s.name) + (s.picked ? ' <span class="pa-k">in use</span>' : '') + '</td>' +
+          '<td style="text-align:left" title="' + esc(s.words || '') + '">' + (s.fits ? esc(s.size || '') + (s.gpus ? ' · ' + esc(n0(s.gpus)) + ' GPUs' : '') : '<span class="pa-no">Needs ' + (s.needKw ? esc(n0(s.needKw)) + ' kW' : 'more power') + '</span>') + '</td>' +
+          '<td>' + (s.irrPct != null ? esc(pct(s.irrPct)) + '<div class="pa-sub">' + esc(s.priceBasis === 'partner ref' ? 'partner’s figures' : s.priceBasis || '') + '</div>' : s.fits ? '<span class="pa-no">No price</span>' : '') + '</td>' +
+          '<td>' + (s.space && s.space.score != null ? esc(s.space.score) : s.space && s.space.fits === false ? '<span class="pa-no">no room</span>' : '') + '</td>' +
+          (edit ? '<td style="white-space:nowrap">' + (chips.length > 1 ? '<select data-pa-sol-chip aria-label="Chip for the pod" style="max-width:120px">' + chips.map(function (c) { return '<option value="' + esc(c.key) + '"' + (c.picked ? ' selected' : '') + '>' + esc(c.chip) + '</option>'; }).join('') + '</select> ' : '') +
+            (s.fits ? '<button type="button" class="pa-btn" data-pa-sol="' + esc(s.key) + '">' + (s.picked ? (chips.length > 1 ? 'Set chip' : 'In use') : 'Use') + '</button>' : '') + '</td>' : '') + '</tr>';
+      }).join('') + '</table></div>';
+    if (edit && !sol.isDefault) h += '<div class="a" style="margin-top:6px"><button type="button" class="pa-btn" data-pa-sol="default">Back to the workspace’s own</button></div>';
+    return h + '</div>';
+  }
+  /* what the pod's maker asks a site to confirm, against the record: the server's list, drawn */
+  function asksHtml(k, cls) {
+    if (!k || !k.list) return '';
+    var word = { 'on-file': 'On file', screened: 'Screened', missing: 'Missing' };
+    return '<div style="font-weight:600;margin:8px 0 4px">What the pod’s maker asks to quote: ' + esc(k.words) + '</div><table' + (cls ? ' class="' + cls + '"' : '') + '><tr><th style="text-align:left">Asked</th><th style="text-align:left">Standing</th><th style="text-align:left">On this site</th></tr>' +
+      k.list.map(function (q) { return '<tr><td style="text-align:left">' + esc(q.label) + '</td><td style="text-align:left;white-space:nowrap' + (q.state === 'missing' ? ';color:#b3261e' : q.state === 'on-file' ? ';color:#1f7a4d' : '') + '">' + esc(word[q.state] || q.state) + '</td><td style="text-align:left">' + esc(q.words) + '</td></tr>'; }).join('') + '</table>';
+  }
   function podWords(c) { return c.byChip && c.pod ? (c.pod.baseline ? c.pod.baseline + '. ' : 'The ' + c.pod.label + ' (' + c.pod.sheet + '). ') + c.pod.standing + '.' : ''; }
   function pct(p) { return p == null ? null : (Math.round(p * 10) / 10) + '%'; }
   var BASIS = { measured: ['free', 'pa-ok', 'Measured'], entered: ['entered', 'pa-blue', 'Entered'], ceiling: ['ceiling', 'pa-warn', 'Ceiling'] };
@@ -82,7 +119,7 @@
   function cells(a, o) {
     style(); o = o || {};
     var none = '<span class="pa-no">–</span>', f = o.funding || null;
-    if (!a || a.notRun) return { power: null, compute: none, bess: none, charge: none, fund: f ? '<span class="pa-no" title="Run and screen the site first">Not run</span>' : null, ready: a && a.decision ? '<span class="pill pill-teal" title="Approved for pre-development">' + esc(a.decision.label) + '</span>' : '<span class="pa-no">Not run</span>' };
+    if (!a || a.notRun) return { power: null, compute: none, bess: none, charge: none, fund: f ? '<span class="pa-no" title="Run and screen the site first">Not run</span>' : null, space: none, ready: a && a.decision ? '<span class="pill pill-teal" title="Approved for pre-development">' + esc(a.decision.label) + '</span>' : '<span class="pa-no">Not run</span>' };
     var p = a.power || {}, b = BASIS[p.basis] || null, stale = a.stale ? ' <span class="pa-warn" title="A fact changed since this ran: run it again">↻</span>' : '';
     var power = p.availableKw == null ? '<span class="pa-warn" title="' + esc((p.words || '') + '. Record the transformer’s kVA or the service size to size this site.') + '">Not on file</span>'
       : '<b title="' + esc(p.words || '') + '">' + esc(kwWord(p.availableKw)) + '</b>' + stale + '<div class="pa-sub"><span class="' + (b ? b[1] : '') + '">' + esc(b ? b[0] : '') + '</span> · ' + (p.transformerKva ? esc(n0(p.transformerKva)) + ' kVA' : 'kVA not on file') + '</div>';
@@ -95,7 +132,7 @@
     var near = adv && adv.next && adv.next.shortKw <= adv.next.needKw * 0.1 ? adv.next : null;
     if (adv) power += '<div class="pa-sub pa-warn" title="' + esc(adv.words || '') + '">' + (near ? '↑ ' + esc(kwWord(near.shortKw)) + ' short of a ' + esc(near.label.replace(/ (Nano|Micro) pod$/, '')) + ' pod' : '↑ ask +' + esc(kwWord(adv.shortKw)) + ' for 1 MW') + '</div>';
     var c = a.compute || {}, ce = c.economics || {}, pf = ce.proforma || null, compute = c.fits && c.chosen
-      ? '<b title="' + esc(c.words || '') + '">' + esc(unitShort(c.chosen)) + '</b>' + (c.chosen.klassLabel ? '<span class="pa-k" title="' + esc(c.chosen.klassLabel) + ': ' + (c.byChip ? 'the 1 MW pod, sized by the chip racked in it' : c.chosen.klass === 'micro' ? '1 MW of IT and up' : 'under 1 MW of IT') + '">' + esc(c.chosen.klass === 'micro' ? 'Micro' : 'Nano') + '</span>' : '') +
+      ? '<b title="' + esc(c.words || '') + '">' + esc(unitShort(c.chosen)) + '</b>' + (c.chosen.klassLabel ? '<span class="pa-k" title="' + esc(c.chosen.klassLabel) + ': ' + (c.byChip ? 'the 1 MW pod, sized by the chip racked in it' : c.chosen.klass === 'micro' ? '1 MW of IT and up' : 'under 1 MW of IT') + '">' + esc(c.chosen.klass === 'micro' ? 'Micro' : 'Nano') + '</span>' : '') + spaceMark(a.space) +
         '<div class="pa-sub" title="' + esc((ce.irrBasis || '') + (pf && pf.asStated ? '. On ' + pf.partner + '’s own utility figure: ' + pct(pf.asStated.irrPct) : '')) + '">' + (ce.irrPct != null ? esc(pct(ce.irrPct)) + (ce.basis === 'partner' ? ' · partner ref' : ' at ' + esc(ce.priceBasis || 'reference')) : 'no reference price') + '</div>'
       : unsized ? needs : '<span class="pa-no" title="' + esc(c.words || '') + '">No fit</span>';
     var bs = a.bess || {}, br = bs.returns || {}, bess = bs.ok
@@ -107,7 +144,9 @@
     var r = a.readiness || {}, ready = '<span title="' + esc((r.done || 0) + ' of ' + (r.applicable || 0) + ' items with evidence on file; ' + (r.screened || 0) + ' screened from public data') + '"><b>' + esc(r.pct || 0) + '%</b>' +
       '<div class="pa-bar"><i class="s" style="width:' + (r.screenedPct || 0) + '%"></i><i class="d" style="width:' + (r.pct || 0) + '%"></i></div></span>' +
       (a.decision ? '<div class="pa-sub"><span class="pa-ok" title="Approved for pre-development' + (a.decision.by ? ' by ' + esc(a.decision.by) : '') + '">✓ ' + esc(a.decision.label) + '</span></div>' : '<div class="pa-sub">' + esc(r.label || '') + '</div>');
-    return { power: power, compute: compute, bess: bess, charge: charge, ready: ready, fund: f ? fundCell(a, f) : null };
+    var sc = a.space && a.space.score, space = sc ? '<b title="' + esc(sc.words || '') + '"' + (sc.points < 40 ? ' style="color:#b3261e"' : '') + '>' + esc(sc.points) + '</b><div class="pa-sub" title="' + esc(sc.words || '') + '">' + esc(sc.grade + (sc.upperBound && sc.points >= 60 ? '?' : '')) + '</div>'
+      : '<span class="pa-no" title="' + esc(a.space && a.space.words ? a.space.words : 'The lot is not read yet') + '">' + (a.space && a.space.ok && !a.space.measured ? 'Not read' : '–') + '</span>';
+    return { power: power, compute: compute, bess: bess, charge: charge, space: space, ready: ready, fund: f ? fundCell(a, f) : null };
   }
 
   /* ── closing a site: purchased, the host agreement assigned, the lease in place ── */
@@ -175,6 +214,8 @@
         '<div class="n">' + esc(sr.irrBasis || '') + ' (' + esc(pct(sr.preTaxIrrPct)) + ' before tax) · NPV ' + esc(money(sr.npv)) + ' at ' + esc(sr.discountRatePct) + '%' + (sr.paybackYears != null ? ' · payback ' + esc(sr.paybackYears) + ' yr' : '') + '</div><div class="n">Capital ' + esc(money(su.capex.total)) + ' · year 1 revenue ' + esc(money(su.year1.revenue)) + ' · $' + esc(su.inputs.pricePerKwh) + '/kWh sold, $' + esc(su.inputs.electricityPerKwh) + ' paid</div>' }
         : { off: true, html: '<div class="irr na">' + (p.availableKw == null ? 'Not sized' : 'Does not fit') + '</div><div class="n">' + esc(su.reason || '') + '</div>' }) + '</div>';
     h += '<div class="ows-note" style="margin:0">' + esc(a.note || '') + (a.recommend && a.recommend.words ? ' ' + esc(a.recommend.words) + '.' : '') + ' Screening figures, not a return promise.</div>';
+    h += solutionsHtml(a.solutions, o, 'pa-tbl');
+    h += spaceHtml(a.space, o);
     if (a.pairing) h += '<div class="pa-box" id="pa-pairing"><b>Beside the pod</b><div>' + esc(a.pairing.words) + '</div><div style="color:var(--ows-ink2);margin-top:4px">Battery capital ' + esc(money(a.pairing.bess.capexUsd)) + ' (' + esc(money(a.pairing.bess.netCapexUsd)) + ' after the credit) · NPV ' + esc(money(a.pairing.bess.npv)) + '</div></div>';
     h += upgradeHtml(a, o);
     /* approve for pre-development */
@@ -201,10 +242,13 @@
     if (!pf) return '';
     function row(k, v, cls) { return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + k + '</td><td>' + v + '</td></tr>'; }
     var st = pf.asStated;
-    return '<table class="pa-pf">' + row('Investment', esc(money(pf.capexUsd))) + row('Revenue a year <span class="pa-warn" title="A stated figure, not a contract: the offtake is not confirmed">as stated</span>', esc(money(pf.revenuePerYear))) +
+    var w = pf.written === true;
+    return '<table class="pa-pf">' + row('Investment', esc(money(pf.capexUsd))) + row((w ? 'Revenue, year one ' : 'Revenue a year ') + '<span class="pa-warn" title="' + (w ? 'The partner’s modeled price, not a contract: the offtake is not confirmed' : 'A stated figure, not a contract: the offtake is not confirmed') + '">' + (w ? 'as written' : 'as stated') + '</span>', esc(money(pf.revenuePerYear))) +
+      (w && pf.revenueLastYear != null && pf.revenueLastYear !== pf.revenuePerYear ? row('Revenue, year ' + esc(pf.years) + (pf.priceChangePctYear ? ' (the price ' + (pf.priceChangePctYear < 0 ? 'falls ' : 'rises ') + esc(Math.abs(pf.priceChangePctYear)) + '% a year)' : ''), esc(money(pf.revenueLastYear))) : '') +
       row('Utility a year, ' + (pf.utilityBasis === 'site' ? 'this site' : 'as stated'), '−' + esc(money(pf.utilityPerYear).replace('$', '$'))) +
-      (pf.partnerFeePerYear ? row(esc(pf.partner) + '’s fee (' + esc(pf.reference.feePct) + '%)', '−' + esc(money(pf.partnerFeePerYear))) : '') + row('Other operating', '−' + esc(money(pf.otherOperatingPerYear))) + row('Earnings a year', esc(money(pf.ebitdaPerYear)), 't') + '</table>' +
-      '<div class="n">On ' + esc(pf.partner) + '’s figures, stated and unverified' + (st && pf.utilityBasis === 'site' ? '. With their own utility figure (' + esc(money(st.utilityPerYear)) + ' a year): ' + esc(pct(st.irrPct)) + ', payback ' + esc(st.paybackMonths) + ' months' : '') + '.</div>';
+      (pf.partnerFeePerYear ? row(esc(pf.partner) + '’s fee (' + esc(pf.reference.feePct) + '%)', '−' + esc(money(pf.partnerFeePerYear))) : '') + row('Other operating', '−' + esc(money(pf.otherOperatingPerYear))) + row(w ? 'Earnings, year one' : 'Earnings a year', esc(money(pf.ebitdaPerYear)), 't') +
+      (w && pf.irrYearEndPct != null ? row('Return on year-end cash, as a brief states it', esc(pct(pf.irrYearEndPct)) + (pf.stated && pf.stated.irrPct != null ? ' <span style="color:var(--ows-ink3)">(their brief: ' + esc(pct(pf.stated.irrPct)) + ')</span>' : '')) : '') + '</table>' +
+      '<div class="n">On ' + esc(pf.partner) + '’s figures, ' + (w ? 'as written, modeled' : 'stated') + ' and unverified' + (st && pf.utilityBasis === 'site' ? '. With their own utility figure (' + esc(money(st.utilityPerYear)) + ' a year): ' + esc(pct(st.irrPct)) + ', payback ' + esc(st.paybackMonths) + ' months' : '') + '.</div>';
   }
   /* a utility-side upgrade request: where it stands, what it would carry, and the mark */
   function upgradeHtml(a, o) { /* the mark where there is one; else the upgrade to ask for (derived), and the way to mark it */
@@ -279,7 +323,7 @@
       '<ul class="pa-list">' + (s.notes || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul></div></details>';
     var c = res.compute;
     if (c) h += '<details class="pa-sec"><summary>' + (c.byChip ? 'Compute: the pod by chip' : 'Compute: the shelf') + '<span>' + esc(c.fits && c.chosen ? unitShort(c.chosen) : 'no fit') + '</span></summary><div style="padding:0 8px 8px">' +
-      (c.byChip ? '<div style="font-size:12px;color:var(--ows-ink2);margin:0 0 6px">' + esc(podWords(c)) + (c.chosen && c.chosen.why ? ' Chosen: ' + esc(c.chosen.why) + '.' : '') + '</div>' + shelfTable(c, 'pa-tbl') + '<ul class="pa-list">' + (c.thermal ? '<li>Heat: ' + esc(c.thermal.words) + '</li>' : '') + (c.more ? '<li>' + esc(c.more) + '</li>' : '') + (c.requirements || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>'
+      (c.byChip ? '<div style="font-size:12px;color:var(--ows-ink2);margin:0 0 6px">' + esc(podWords(c)) + (c.chosen && c.chosen.why ? ' Chosen: ' + esc(c.chosen.why) + '.' : '') + '</div>' + shelfTable(c, 'pa-tbl') + '<ul class="pa-list">' + (c.thermal ? '<li>Heat: ' + esc(c.thermal.words) + '</li>' : '') + (c.transformer ? '<li>' + esc(c.transformer.words) + '</li>' : '') + (c.more ? '<li>' + esc(c.more) + '</li>' : '') + (c.requirements || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>' + asksHtml(c.asks, 'pa-tbl')
         : '<table class="pa-tbl"><tr><th>Unit (IT)</th><th>At the meter</th><th>Fits</th></tr>' + (c.shelf || []).map(function (u) { return '<tr><td>' + esc(u.label) + '</td><td>' + n0(u.meterKw) + ' kW</td><td>' + (u.fits ? (u.units > 1 ? u.units + ' ×' : 'Yes') : 'No') + '</td></tr>'; }).join('') + '</table>') +
       '<ul class="pa-list">' + ((c.economics && c.economics.notes) || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul></div></details>';
     return h;
@@ -296,6 +340,12 @@
     });
     on('[data-pa="withdraw"]', function () { if (hooks.approve) hooks.approve(site.id, []); });
     on('[data-pa="report"]', function () { if (hooks.report) hooks.report(site.id); });
+    on('[data-pa-sol]', function (b) {
+      if (!hooks.solution) return;
+      var key = b.getAttribute('data-pa-sol'), sel = key === 'runware' ? el.querySelector('[data-pa-sol-chip]') : null;
+      b.disabled = true; hooks.solution(site.id, key, sel ? sel.value : null);
+    });
+    on('[data-pa="space"]', function (b) { if (hooks.space) { b.disabled = true; b.textContent = 'Reading the lot…'; hooks.space(site.id); } });
     on('[data-pa-close]', function (b) {
       if (!hooks.closing) return;
       var step = b.getAttribute('data-pa-close'), body = { step: step, done: true };
@@ -408,10 +458,20 @@
         [['Investment', pf.capexUsd, pf.capexUsd], ['Revenue', pf.revenuePerYear, pf.revenuePerYear], ['Utility', -pf.utilityPerYear, pf.asStated ? -pf.asStated.utilityPerYear : null], [pf.partner + '’s fee', -pf.partnerFeePerYear, -pf.partnerFeePerYear], ['Other operating', -pf.otherOperatingPerYear, -pf.otherOperatingPerYear], ['Earnings', pf.ebitdaPerYear, pf.asStated ? pf.asStated.ebitdaPerYear : null]].map(function (x) { return '<tr><td>' + esc(x[0]) + '</td><td>' + usd(x[1]) + '</td>' + (pf.asStated ? '<td>' + usd(x[2]) + '</td>' : '') + '</tr>'; }).join('') +
         '<tr><td><b>Project IRR</b></td><td><b>' + esc(pct(ce.irrPct)) + '</b></td>' + (pf.asStated ? '<td><b>' + esc(pct(pf.asStated.irrPct)) + '</b></td>' : '') + '</tr><tr><td>Payback</td><td>' + esc(ce.paybackMonths) + ' months</td>' + (pf.asStated ? '<td>' + esc(pf.asStated.paybackMonths) + ' months</td>' : '') + '</tr></table>';
       if (res.pairing) h += '<h3>Beside the pod</h3><div class="sub">' + esc(res.pairing.words) + ' Battery capital ' + esc(usd(res.pairing.bess.capexUsd)) + ', ' + esc(usd(res.pairing.bess.netCapexUsd)) + ' after the credit.</div>';
-      if (c.byChip) h += '<h3>The pod by chip on this power</h3><div class="sub">' + esc(podWords(c)) + (c.chosen.why ? ' Chosen: ' + esc(c.chosen.why) + '.' : '') + '</div>' + shelfTable(c) + (c.thermal ? '<h3>Heat</h3><div class="sub">' + esc(c.thermal.words) + '</div>' : '') + '<h3>What the site has to provide</h3>' + notes((c.requirements || []).concat(c.more ? [c.more] : [])) + '<h3>How it is priced</h3>' + notes(ce.notes);
+      if (c.byChip) h += '<h3>The pod by chip on this power</h3><div class="sub">' + esc(podWords(c)) + (c.chosen.why ? ' Chosen: ' + esc(c.chosen.why) + '.' : '') + '</div>' + shelfTable(c) + (c.thermal ? '<h3>Heat</h3><div class="sub">' + esc(c.thermal.words) + '</div>' : '') + '<h3>What the site has to provide</h3>' + notes((c.requirements || []).concat(c.transformer ? [c.transformer.words] : []).concat(c.more ? [c.more] : [])) + asksHtml(c.asks) + '<h3>How it is priced</h3>' + notes(ce.notes);
       else h += '<h3>The shelf on this power</h3>' + shelfTable(c) + notes(ce.notes);
     } else h += '<div class="sub">' + esc(c.words || 'Not sized') + '</div>';
     /* battery */
+    if (res.solutions && res.solutions.list) h += '<h2>Compute solutions</h2>' + solutionsHtml(res.solutions, { pick: false }).replace(' class="pa-box" id="pa-solutions"', '');
+    var spc = res.space;
+    if (spc && spc.words) {
+      var su = spc.uses || {};
+      h += '<h2>Space on the lot</h2><div class="sub">' + esc(spc.words) + '.</div>' + kv([['Lot', spc.lotSqFt != null ? esc(n0(spc.lotSqFt)) + ' sq ft (' + esc(spc.acres) + ' acres)' : null],
+        ['Buildings', spc.buildings ? (spc.buildings.read ? esc(spc.buildings.count) + ' on ' + esc(n0(spc.buildings.sqFt)) + ' sq ft (' + esc(spc.buildings.source) + ')' : 'Not read') : null],
+        ['Clear ground', spc.clearSqFt != null ? esc(n0(spc.clearSqFt)) + ' sq ft' : null], ['Largest clear rectangle', spc.clearRect ? 'about ' + esc(spc.clearRect.wFt) + ' × ' + esc(spc.clearRect.dFt) + ' ft' : null],
+        ['Space score', spc.score ? '<b>' + esc(spc.score.points) + ' of 100 · ' + esc(spc.score.grade) + '</b>. ' + esc(spc.score.words) : 'Not scored: ' + esc(spc.measured ? 'no unit is sized' : 'the lot is not measured')],
+        ['Compute pad', su.compute ? esc(su.compute.words) : null], ['Battery', su.bess ? esc(su.bess.words) : null], ['Fast charging', su.supercharger ? esc(su.supercharger.words) : null]]) + notes(spc.notes);
+    }
     h += '<h2>Battery storage</h2>';
     if (bs.ok) {
       h += kv([['Size', esc(kwWord(bs.sizing.kw)) + ' / ' + esc(kwhWord(bs.sizing.kwh)) + ' (' + esc(bs.sizing.hours) + ' hours)'], ['Capital', esc(usd(bs.capex.total)) + ' (hardware ' + esc(usd(bs.capex.hardware)) + ', soft costs ' + esc(usd(bs.capex.softCosts)) + ', construction ' + esc(usd(bs.capex.construction)) + ', interconnection ' + esc(usd(bs.capex.interconnection)) + ')'],

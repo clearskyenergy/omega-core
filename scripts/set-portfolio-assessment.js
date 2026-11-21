@@ -74,6 +74,11 @@
      … --chip gb300                         the workspace's own chip (rtx6000, gb300, vr-maxq, vr-maxp)
      … --gpu-hour-price gb300=4.50          a price for a chip with no public one
      … --pod-cost gb300=21000000            the pod's cost, once the maker quotes
+     … --reference-json '{"unit":{"capexUsd":…,"gpus":…,"itKw":…,"sitePowerKw":…},"pricePerGpuHour":…,"priceChangePctYear":…}'
+                                            the partner's figures AS WRITTEN: the unit as sold, the price a GPU-hour and
+                                            how it moves each year, insurancePctOfCapitalYear, fixedUsdYear, uptimePct,
+                                            residualPct, leanOperating, electricityPerKwh, statedIrrPct (docs)
+     … --term-months 72 --pue 1.12          the compute case's term and PUE
      … --compute-basis spot                 back to the public reference price
      add --apply --confirm-org chileasing.com to write
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -125,7 +130,14 @@ function asked() {
   if (Object.keys(prices).length || Object.keys(costs).length) out.compute.pod = { prices: prices, costUsd: costs };
   var ref = { revenueUsdPerMwYear: money('--revenue-per-mw-year'), capexUsdPerMw: money('--capex-per-mw'), utilityUsdPerMwYear: money('--utility-per-mw-year') };
   Object.keys(ref).forEach(function (k) { if (ref[k] === undefined) delete ref[k]; });
+  /* the partner's figures AS WRITTEN (its unit, its price a GPU-hour and how it moves, the lines its model counts): one JSON object,
+     merged into compute.reference. The figures are the workspace's own and stay out of the repository: type them here, or keep them in a file outside it. */
+  var rj = arg('--reference-json');
+  if (rj != null) { var parsed; try { parsed = JSON.parse(rj); } catch (e) { throw refuse(2, '--reference-json is not JSON: ' + e.message); } if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw refuse(2, '--reference-json is one JSON object'); Object.assign(ref, parsed); }
   if (Object.keys(ref).length) out.compute.reference = ref;
+  var tm = figure('--term-months', 12, 240), pu = figure('--pue', 1.01, 2.49);
+  if (tm !== undefined) out.compute.termMonths = Math.floor(tm);
+  if (pu !== undefined) out.compute.pue = pu;
   if (out.funding === undefined && out.attest === undefined && out.review === undefined && out.closing === undefined && !Object.keys(out.compute).length && !Object.keys(out.gates).length) throw refuse(2, 'Nothing to set. Name the committee (--member "Name <address>"), the review board (--review-member), a gate (--min-kva, --min-lease-years, --irr-hurdle), the compute basis (--compute-basis partner), or a figure (--revenue-per-mw-year).');
   return out;
 }
@@ -139,7 +151,9 @@ function patch(current, ask) {
   if (Object.keys(ask.compute).length) {
     cur.compute = cur.compute && typeof cur.compute === 'object' ? cur.compute : {};
     if ('basis' in ask.compute) { if (ask.compute.basis) cur.compute.basis = ask.compute.basis; else delete cur.compute.basis; }
-    if (ask.compute.reference) cur.compute.reference = Object.assign({}, cur.compute.reference || {}, ask.compute.reference);
+    if (ask.compute.reference) { cur.compute.reference = Object.assign({}, cur.compute.reference || {}, ask.compute.reference); if (ask.compute.reference.unit && cur.compute.reference.unit) cur.compute.reference.unit = Object.assign({}, cur.compute.reference.unit, ask.compute.reference.unit); }
+    if (ask.compute.termMonths) cur.compute.termMonths = ask.compute.termMonths;
+    if (ask.compute.pue) cur.compute.pue = ask.compute.pue;
     if (ask.compute.chipset) cur.compute.chipset = ask.compute.chipset;
     if (ask.compute.pod) { var cp = cur.compute.pod && typeof cur.compute.pod === 'object' ? cur.compute.pod : {}; cur.compute.pod = { prices: Object.assign({}, cp.prices || {}, ask.compute.pod.prices), costUsd: Object.assign({}, cp.costUsd || {}, ask.compute.pod.costUsd) }; }
   }
@@ -155,7 +169,10 @@ function patch(current, ask) {
   if (ask.attest && !(read.funding && read.funding.attest && read.funding.attest.keyHash === ask.attest.keyHash)) throw refuse(2, 'Refusing: the assessment would not read that connected app back.');
   if (ask.compute.basis && read.compute.basis !== ask.compute.basis) throw refuse(2, 'Refusing: the assessment would not read that compute basis back.');
   if (ask.compute.pod) ['prices', 'costUsd'].forEach(function (g) { Object.keys(ask.compute.pod[g]).forEach(function (k) { if (read.compute.pod[g][k] !== ask.compute.pod[g][k]) throw refuse(2, 'Refusing: ' + g + '.' + k + ' = ' + ask.compute.pod[g][k] + ' is outside the range the assessment accepts.'); }); });
-  if (ask.compute.reference) Object.keys(ask.compute.reference).forEach(function (k) { if (read.compute.reference[k] !== ask.compute.reference[k]) throw refuse(2, 'Refusing: ' + k + ' = ' + ask.compute.reference[k] + ' is outside the range the assessment accepts.'); });
+  if (ask.compute.termMonths && read.compute.termMonths !== ask.compute.termMonths) throw refuse(2, 'Refusing: the assessment would not read that term back.');
+  if (ask.compute.pue && read.compute.pue !== ask.compute.pue) throw refuse(2, 'Refusing: the assessment would not read that PUE back.');
+  if (ask.compute.reference && ask.compute.reference.unit) Object.keys(ask.compute.reference.unit).forEach(function (k) { if (read.compute.reference.unit[k] !== ask.compute.reference.unit[k]) throw refuse(2, 'Refusing: unit.' + k + ' = ' + ask.compute.reference.unit[k] + ' is outside the range the assessment accepts.'); });
+  if (ask.compute.reference) Object.keys(ask.compute.reference).filter(function (k) { return k !== 'unit'; }).forEach(function (k) { if (read.compute.reference[k] !== ask.compute.reference[k]) throw refuse(2, 'Refusing: ' + k + ' = ' + ask.compute.reference[k] + ' is outside the range the assessment accepts.'); });
   return { changed: JSON.stringify(cur) !== was, config: cur, read: read };
 }
 async function write(db, org, ask, now) {
@@ -179,7 +196,7 @@ async function write(db, org, ask, now) {
 function summary(p) {
   return { changed: p.changed, funding: p.read.funding ? { name: p.read.funding.name, members: p.read.funding.members } : 'none: the finance marketplace',
     alsoDecidedIn: p.read.funding && p.read.funding.attest ? p.read.funding.attest.source : 'nowhere else: decisions are made here', computeBasis: p.read.compute.basis || 'spot (the public reference price)',
-    reference: p.read.compute.basis === 'partner' ? AS.referenceOf(p.read) : null,
+    reference: p.read.compute.basis === 'partner' ? AS.referenceOf(p.read) : null, written: p.read.compute.basis === 'partner' && p.read.compute.reference.unit.capexUsd && p.read.compute.reference.pricePerGpuHour ? 'the partner’s unit and price as written are on file: the partner basis runs them' : null,
     gates: p.read.gates || 'none', closing: p.read.closing || 'none', review: p.read.review ? { name: p.read.review.name, members: p.read.review.members } : 'none' };
 }
 

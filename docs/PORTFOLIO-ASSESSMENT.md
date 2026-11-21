@@ -183,6 +183,36 @@ that asks (`compute.basis: 'chips'`) is sized and priced on it:
 - **The upgrade to ask for** is the workspace's chip in a pod, else the
   pod's heaviest configuration; an upgrade request names a configuration.
 
+**The maker's site and power requirements** (2026-11-21, Tommy: "Here are
+site screening requirements for compute"; the maker's sheet of September
+2026, the figures a site owner or utility needs to quote) are folded into
+the same record (`POD.siting`, `QUESTIONS`) and change the screen:
+
+- **A pod needs a connection carrying 1,000 kW continuous, whatever chip is
+  racked in it.** The table above is what each chip DRAWS; the site is
+  screened on 1,000 kW free a pod for every one of them, and the
+  electricity in the return stays on what the chip draws. A 500 kW site
+  that read "carries an RTX pod" no longer does.
+- **The transformer**: above 1 MVA, likely 1.25 to 1.5 MVA a pod, judged
+  against the one on file (`compute.transformer`: ok, short or unknown) and
+  the first verification where it is short or not on file. The maker's
+  1.25 MVA for 1 MW is this assessment's own 0.8 continuous rule.
+- **Supply**: 415Y/240 V at the pod, the transformation from 480Y/277 V or
+  medium voltage in the site's scope. The product overview names 480Y/277 V
+  as standard: both are kept and the answer says to confirm which.
+- **The ground**: a pod is 20 × 8 ft and 20 ft tall (two stacked
+  containers), 17 metric tons in service on four corners of 6 to 9 tons
+  each, on a concrete pad or four ground screws; pods on one site sit on
+  one prepared area 2 m apart because they are networked together.
+- **Fibre**: 10 Gbps at least, 100 Gbps preferred, two carriers or a
+  separate second route; a single provider can work but ranks lower.
+- **The maker's twelve questions** (`compute.asks`): power price, facility
+  charge, pad, capacity, timing, service, site control, fibre and BGP,
+  distance to the police station, remote hands, address, map point. Each is
+  On file (a person's figure or evidence), Screened (public data: not yet an
+  answer to quote on) or Missing, read off the site's record and never
+  invented; the card and the report print the list and the tally.
+
 **This sheet is the baseline** (2026-11-11, Tommy: "We need to note that our
 baseline data comes from here"). The compute model's physical figures, GPUs a
 pod, usable IT by chip, power at the meter, pods a site, the pad, the feed
@@ -198,6 +228,147 @@ The sheet is the maker's confidential document and says of itself that it is
 not an offer: it is off for every workspace that does not ask, and its
 figures reach a browser only as that workspace's answer. Held by
 `tassess.js` C01 to C06.
+
+### The solutions, side by side, and the one picked for a site (2026-11-21)
+
+Tommy: "we should show a runware system set up and a lightsmith energy and
+an armada … there are various sizes of pods and various chip configurations
+these are for our solutions we have available so we should be able to
+select that based on the site."
+
+Every assessment now carries `solutions`: each compute system on offer,
+sized on the site's free power by ITS OWN rule, with its return and its
+space score, in one table.
+
+| solution | how it is sized | how it is priced |
+|---|---|---|
+| Runware Sonic Pod | 1 MW pods by chip, 1,000 kW of connection a pod, one to four a site | each chip's public reference, else the workspace's price; capital the engine's estimate until quoted |
+| the offtake partner's container | the partner's unit (as written where the settings carry it, else its megawatt reference by IT load) | the partner's own figures |
+| Armada Leviathan | the one Armada unit with a published specification on file: 1.77 MW of IT at the workspace's PUE, on 119 × 45 ft, closed loop, no site water, 480 V | its chips and price are NOT on file: whole nodes of the workspace's chip in that IT load, the engine's estimate |
+| Omega-Core skid and pods by size | the 75 kW skid, the Nano pods, the 1 MW Micro pod | the chip's public reference |
+
+The workspace's own basis (its settings) is the default for every site.
+**A person picks a solution for a site** (and a chip, for the pod) from the
+table: `assess-solution { site | ids[], solution, chip? }` stores
+`assessment.solution { key, chip, by, at }`, audited, and that solution is
+the site's compute answer from then on: the unit, the return, the space on
+the lot, the checklist, the upgrade to ask for and the recommendation all
+follow it. `default` follows the workspace's own again. The returns sit on
+different bases (a partner's figures, a public spot price, an estimate), and
+the table says so: it compares fit, not deals.
+
+Held by `tassess.js` V01 to V03.
+
+### Space on the lot (2026-11-21)
+
+Tommy: "We need to have a space analysis on the sites as well based on the
+parcel." The assessment sized everything on a site's free power and said of
+the ground only "the pad is not on file". Two makers have now put a
+footprint in writing, and the screen already reads the parcel under the
+point, so the answer carries a second question: is there room.
+
+**Measured once, while the parcel's outline is in hand**
+(`api/_lib/portfolio/assess-space.js measure`). The screen's parcel step,
+and `assess-space` for a site already screened, read the lot's outline from
+`api/parcel.js` and the building footprints on it from FEMA's USA
+Structures (`structures.js`, the service Omega Maximus reads in the
+browser), and measure on a raster (`site-fit.js`, for its reasons), square
+to the lot's own longest edge:
+
+- the lot's area and the buildings' area on it (their count, their share);
+- what is CLEAR: inside the lot line by a setback (10 ft) and off every
+  building by a clearance (10 ft), both stated assumptions the workspace may
+  set (`portfolioAssessment.space { setbackFt, buildingClearFt }`);
+- the largest clear rectangle, and for a ladder of widths (8 to 300 ft) the
+  longest clear run that wide.
+
+Only that summary is kept, on `assessment.parcel.space`. The outline itself
+is never stored (the assessment's rule, unchanged).
+
+**Judged at every assessment** (`spaceOf`, pure): each use's pad against the
+summary. A pad fits when a clear run at least as wide as its short side
+(rounded UP to the ladder) is at least as long as its long side.
+
+| unit | pad | whose figure |
+|---|---|---|
+| the maker's pod, by chip | 21 × 9 ft a pod, 6.5 ft between pods | the pod maker's sheet (`pod-spec.js`) |
+| a 1 MW container (the Micro pod) | 50 × 60 ft, the container and its coolers | the offtake partner's written brief (`PARTNER.brief`) |
+| the 75 kW skid | 28 × 7.25 ft | the skid as recorded |
+| a 150 to 750 kW unit | none on file: judged against the container's 50 × 60 ft as an upper bound, said | |
+| a battery, the dispensers | none on file: NOT judged, said | |
+
+The row carries a mark beside the compute size (room · room? · no room; the
+question mark is an upper bound: buildings not read, or no footprint for
+that unit), the card and the diligence report a *Space on the lot* box, the
+checklist's *Adequate level area* reads Screened where the pad fits (never
+Done: a person confirms a level pad on the site plan) and stays Open with
+the reason where it does not, and a pad with no clear rectangle is the first
+verification.
+
+**What "clear" does not mean.** It is open ground on the public record.
+Paving, parking stalls, drive aisles, canopies, fuel tanks, easements,
+slope and the zoning setback are not read. On a charging site most of the
+clear ground is parking: a fit says a clear rectangle that size exists, not
+that the pad goes there.
+
+**The space score** (Tommy: "add that as something we can look at and score
+in the portfolio and IRR tool"). One number a site, 0 to 100, for the
+compute unit's pad on the clear ground (`scoreOf`): 60 and up FITS (60 where
+the clear ground is just the pad, 100 at ten pads' worth), 85 and up reads
+Ample, under 40 does NOT fit (by how much of the pad the largest clear
+rectangle covers), and an upper bound is held at 70. Not judged is no
+score, never a zero. The register carries it as its own *Space* column,
+sortable like the returns; the card and the diligence report print the
+score with its rule in words.
+
+`assess-space { site | ids[] (10) }` reads the lot alone for sites screened
+before this existed (the parcel again and the buildings, never the grid
+screen; one metered parcel lookup a site where the county has no public
+layer). A lookup that fails never replaces a parcel on file. Held by
+`tassess.js` S01 to S05.
+
+### The offtake partner's figures as written (2026-11-21)
+
+Tommy, of the offtake partner's Q4 2026 brief: "use these numbers to update
+the logic and engine for IRR calculation on compute." The brief is the first
+time their figures are on paper, and they are not the megawatt of flat
+revenue the partner basis ran on. It is their confidential document, so its
+figures are the WORKSPACE'S SETTINGS (`compute.reference`), never the
+repository's: the code keeps only the unit's footprint
+(`compute-contract.js PARTNER.brief`).
+
+Where a workspace on the partner basis has the unit and the price on file
+(`reference.unit { capexUsd, gpus, itKw, sitePowerKw, racks, label }` and
+`reference.pricePerGpuHour`; incomplete is no record and the megawatt
+reference stands), `writtenCase` runs them through the one contract engine:
+
+- **The unit as sold.** The shelf's top unit is the partner's, on the site
+  power it asks for; a Nano pod is that unit by its IT load, said.
+- **A price that moves each contract year** (`priceChangePctYear`; the
+  engine's escalator now reaches −30% a year: a GPU vintage's price falls).
+- **The partner's fee off gross**, and **the operating lines its own model
+  counts**: insurance as a share of capital, a fixed sum a year
+  (`insurancePctOfCapitalYear`, `fixedUsdYear`), and with `leanOperating`
+  nothing else. `uptimePct`, `residualPct` (0: no value at the end) and
+  `electricityEscalationPct` are theirs to state too.
+- **Electricity is the site's own**, with the partner's own price
+  (`electricityPerKwh`) run beside it.
+- **Two conventions, one cash.** The engine's return is on monthly cash; a
+  brief usually states one sum at each year's end, which reads lower on
+  identical cash. Both are answered (`irrPct`, `irrYearEndPct`), and where
+  the brief's own return is on file (`statedIrrPct`) the answer says what
+  this engine gives on the brief's inputs and convention.
+
+Checked against the brief itself, off the repository: on the brief's own
+inputs the engine reproduces its year-one revenue, its fee, its other
+operating costs and its payback, and its return to within half a point on
+the brief's year-end convention. The difference left is electricity: the
+engine draws the unit's IT load times its PUE, the brief its IT load alone.
+On monthly cash the same case reads about seven points higher.
+
+`scripts/set-portfolio-assessment.js --compute-basis partner --term-months …
+--pue … --reference-json '{…}'` stages it. Held by `tassess.js` W01 to W03
+on stand-in figures.
 
 ### Battery: the grid value stack
 
@@ -516,6 +687,7 @@ is switched on for the workspace, the same screen also lands on
 | `compute.chipset`, `.pue`, `.termMonths`, `.partnerName`, `.partnerFeePct` | the compute case's chip, PUE, term and offtake fee |
 | `compute.basis: 'partner'`, `compute.reference` | compute on the offtake partner's stated per-megawatt figures; `reference` replaces any of them (`capexUsdPerMw`, `revenueUsdPerMwYear`, `utilityUsdPerMwYear`, `gpusPerMw`) |
 | `compute.basis: 'chips'`, `compute.chipset`, `compute.pod { prices, costUsd }` | compute as the maker's 1 MW pod, by chip (`pod-spec.js`); the workspace's own chip, a price a GPU-hour and the pod's cost, each by the pod's configuration key (`rtx6000`, `gb300`, `vr-maxq`, `vr-maxp`) |
+| `space { setbackFt, buildingClearFt }` | the space analysis's two assumptions: clear of the lot line, clear of a building (10 ft each unless set) |
 | `funding { mode: 'committee', name, members[] }` | the funding list in place of the finance marketplace |
 | `gates { minKva, minLeaseYears, irrHurdlePct }` | the workspace's screening gates |
 | `review { name, members[] }` | its review board: every member votes own or flip |
@@ -555,6 +727,21 @@ in how the three are read side by side, and it is on the honest list below.
 ## What is not built (honest list)
 
 **The numbers**
+- **Armada is one unit, on its published size alone.** Only the Leviathan
+  is on file (its IT load, footprint, cooling and voltage, from Armada's
+  product page). Its chips, its price, its PUE and its smaller models are
+  not: it is priced as generic compute of that size. Send its sheet and it
+  becomes a record like the pod's.
+- **The partner's written figures are modeled, not contracted.** Every hour
+  billed from year one with no ramp, a price the partner modeled, no tax, no
+  debt, no value at the end. A workspace whose settings do not carry them
+  still prices on the megawatt reference as told.
+- **Space is the public record's clear ground, and only compute is judged.**
+  Parking, paving, easements and the zoning setback are not read; no
+  footprint is on file for a battery of a given size or for the dispensers'
+  equipment pad, so neither is judged; a 150 to 750 kW unit is judged
+  against the 1 MW container's pad. Truck and crane access is not counted.
+  Buildings under about 450 sq ft are not in the structures service.
 - **By chip, the pod's own price and the offtake are not on file.** The
   maker's sheet has no price: capital is the engine's chipset-scaled
   estimate (its enclosure and cooling allowance, not the pod's), and the
