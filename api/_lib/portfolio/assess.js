@@ -402,7 +402,7 @@ function podEconomics(p, units, cfg, site) {
   notes.push(pod.baseline.words + '.');
   notes.push('The pod is the ' + pod.label + ' as its maker specifies it (' + pod.sheet.title + ', ' + pod.sheet.dated + '). ' + pod.sheet.standing + '.');
   notes.push('By chip: one pod carries ' + fmt(p.gpus) + ' ' + p.name + ' GPUs (' + p.hardware + '), ' + fmt(p.itKw) + ' kW of usable IT' + (p.peakItKw > p.itKw ? ' rated and ' + fmt(p.peakItKw) + ' kW at peak' : '') + ', inside 1 MW of liquid cooling' + (p.estimate ? '; ' + p.estimate : '') + '.');
-  notes.push('At the meter: ' + fmt(m.needKw) + ' kW free a pod (' + (p.peakItKw > p.itKw ? 'the peak' : 'the IT') + ' at the pod’s design pPUE of ' + pod.ppue + ', stated at 1 MW full load). The site’s own transformer losses are not in it.');
+  notes.push('At the meter: the maker asks for a connection carrying ' + fmt(m.needKw) + ' kW continuous a pod, whatever is racked in it (its ' + pod.siting.sheet.toLowerCase() + '), so that is what a site is screened on. This configuration draws about ' + fmt(m.peakKw) + ' kW at its peak (the pod’s design pPUE of ' + pod.ppue + '), and its electricity is counted on what it draws, not on the connection.');
   notes.push(quoted != null ? 'Capital is this workspace’s own figure for the pod, $' + fmt(quoted) + ' a pod.' : 'Capital is the engine’s chipset-scaled midpoint for ' + fmt(p.gpus) + ' ' + chip.name + ' GPUs, an estimate, not a quote: the maker’s sheet carries no price, so the enclosure and cooling are the engine’s allowance, not the pod’s.');
   notes.push(set ? 'Priced at $' + price + ' a GPU-hour, this workspace’s own figure: not a contract.' : at ? 'Priced at the chip’s public ' + at.basis + ' reference ($' + at.price + ' a GPU-hour): no contract price is set, so this is a screening figure.' : 'The chip has no public reference price, so no return is shown until a price is set for it.');
   notes.push(rate ? 'Electricity: ' + rate.words + '.' : 'Electricity is the engine’s default ($' + CM.DEFAULTS.electricity + ' a kWh): no ZIP, state or power price is on file for this site.');
@@ -439,10 +439,16 @@ function podCompute(power, cfg, site, want) {
   var p = PS.platform(pick.key), units = pick.units;
   out.fits = true;
   out.chosen = { key: pick.key, label: pick.label, chip: pick.chip, klass: pick.klass, klassLabel: pick.klassLabel, units: units, itKw: pick.itKw * units, gpus: pick.gpus * units, meterKw: pick.meterKw * units, coolingKw: pick.coolingKw * units, leftKw: r2(kw - pick.meterKw * units), why: why };
-  out.words = (units > 1 ? units + ' pods' : 'One pod') + ' of ' + fmt(pick.gpus) + ' ' + pick.chip + ' GPUs' + (units > 1 ? ' each' : '') + ' (' + fmt(out.chosen.itKw) + ' kW of IT, ' + fmt(out.chosen.meterKw) + ' kW at the meter at pPUE ' + pod.ppue + ') on ' + fmt(kw) + ' kW' +
+  out.words = (units > 1 ? units + ' pods' : 'One pod') + ' of ' + fmt(pick.gpus) + ' ' + pick.chip + ' GPUs' + (units > 1 ? ' each' : '') + ' (' + fmt(out.chosen.itKw) + ' kW of IT, on the ' + fmt(pod.siting.connectionKw) + ' kW a pod its maker asks for) on ' + fmt(kw) + ' kW' +
     (power.basis === 'ceiling' ? ', a ceiling' : power.basis === 'upgrade' ? ' after the upgrade' : ' free') + ': ' + why;
-  out.cooling = { kw: out.chosen.coolingKw, words: fmt(out.chosen.coolingKw) + ' kW of the ' + fmt(out.chosen.meterKw) + ' kW at the meter is the dry cooler’s fans, the pumps and the air units (design pPUE ' + pod.ppue + ' at full load). The loop is closed and rejects to outdoor air: no chiller and no water' };
-  out.space = { pods: units, words: (units > 1 ? units + ' pads, each' : 'One pad') + ' at least ' + pod.pad.lengthFt + ' × ' + pod.pad.widthFt + ' ft and rated ' + pod.pad.ratedTonnes + ' metric tons' + (units > 1 ? ', ' + pod.pad.betweenPodsM + ' m (' + pod.pad.betweenPodsFt + ' ft) between pods' : '') + ', with truck and crane access: the maker’s figures. Confirm the site has it before the site is approved' };
+  var mm = PS.atMeter(p);
+  out.cooling = { kw: (mm.peakKw - p.peakItKw) * units, words: 'Of the ' + fmt(out.chosen.meterKw) + ' kW asked for, the IT takes ' + fmt(p.peakItKw * units) + ' kW at its peak and the dry cooler’s fans, the pumps and the air units about ' + fmt((mm.peakKw - p.peakItKw) * units) + ' kW more (design pPUE ' + pod.ppue + '); the rest is the headroom the maker asks for. The loop is closed and rejects to outdoor air: no chiller and no water' };
+  /* the transformer the maker asks for, against the one on file */
+  var needKva = pod.siting.transformerKva.min * units, haveKva = num(power.transformerKva);
+  out.transformer = { needKva: needKva, haveKva: haveKva, state: haveKva == null ? 'unknown' : haveKva >= needKva ? 'ok' : 'short',
+    words: 'The maker sizes the transformer and switchgear above 1 MVA, likely ' + (pod.siting.transformerKva.min / 1000) + ' to ' + (pod.siting.transformerKva.max / 1000) + ' MVA a pod: ' + fmt(needKva) + ' kVA or more for ' + (units > 1 ? units + ' pods' : 'this pod') + '. ' +
+      (haveKva == null ? 'No transformer size is on file.' : fmt(haveKva) + ' kVA is on file' + (haveKva >= needKva ? '.' : ': short of it.')) };
+  out.space = { pods: units, words: (units > 1 ? units + ' pods on one prepared area, each' : 'One pod,') + ' ' + pod.siting.footprintFt.l + ' × ' + pod.siting.footprintFt.w + ' ft on a pad of at least ' + pod.pad.lengthFt + ' × ' + pod.pad.widthFt + ' ft, ' + pod.siting.weightTonnes + ' metric tons in service' + (units > 1 ? ', ' + pod.pad.betweenPodsM + ' m (' + pod.pad.betweenPodsFt + ' ft) between pods' : '') + ', with truck and crane access: the maker’s figures. Confirm the site has it before the site is approved' };
   out.thermal = PS.thermalOf(p);
   out.requirements = PS.requirements(units);
   if (kw >= shelf[0].meterKw * (max + 1)) out.more = 'The maker sites one to ' + max + ' stand-alone pods; more than that on one site is its cluster design (five pods to a unit, two feeds a pod), which is not sized here.';
@@ -578,7 +584,12 @@ function evidenceFor(key, c) {
     if (key === 'physical-cooling') return scr('The pod is a closed loop that rejects heat to outdoor air: no water supply or discharge. Coolant is topped up at maintenance', 'Pod specification');
     if (key === 'conn-diversity') return f && f.carriersRead && f.carriers && f.carriers.length > 1 ? scr(f.carriers.length + ' carriers at the address; the pod’s maker asks for ' + P.connectivity + ', and separate routes are not confirmed', 'FCC broadband data') : hint('The pod’s maker asks for ' + P.connectivity);
     if (key === 'physical-access') return hint('Each pod ships as two ' + P.shipping.container + ' container sections (about ' + (P.shipping.coolingSectionKg / 1000) + ' and up to ' + (P.shipping.computeSectionKg / 1000) + ' metric tons): road access for the trucks and room for a crane');
-    if (key === 'power-oneline') return hint('Each pod takes one feed of ' + P.electrical.connectionsPerPod + ' three-phase connections at ' + P.electrical.voltage + '; no UPS or generator in this model');
+    if (key === 'power-oneline') return hint('Each pod takes ' + P.siting.supplyUs + ', on ' + P.siting.feed + '. Transformation from the utility voltage is the site’s to provide; the maker’s overview names ' + P.electrical.voltage + ', so confirm which');
+    if (key === 'power-protection' && c.compute.transformer) return hint(c.compute.transformer.words);
+    if (key === 'physical-geotech') return hint('Each pod is ' + P.siting.weightTonnes + ' metric tons in service on four corners of ' + P.siting.cornerTonnes[0] + ' to ' + P.siting.cornerTonnes[1] + ' tons each, on ' + P.siting.foundation);
+    if (key === 'zoning-setbacks') return hint('Each pod is ' + P.siting.footprintFt.l + ' × ' + P.siting.footprintFt.w + ' ft and ' + P.siting.heightFt + ' ft tall (two stacked containers)');
+    if (key === 'physical-security') return hint('The maker asks for perimeter fencing and access control, and for the distance to the closest police station');
+    if (key === 'conn-bandwidth') return hint((f && f.symmetric1g === true ? '1 Gbps symmetric is offered at the address; t' : 'T') + 'he pod’s maker asks for ' + P.siting.fibre.minGbps + ' Gbps at least and prefers ' + P.siting.fibre.preferredGbps + ' Gbps or better');
     if (key === 'package-liquid' && c.compute.fits && c.compute.thermal) return hint(c.compute.thermal.words);
   }
   if (key === 'package-alignment' && c.compute.fits) return scr('Sized: ' + c.compute.words, 'This assessment');
@@ -601,6 +612,32 @@ function readinessOf(c, marks) {
     label: of && done === of ? 'Shovel ready' : done ? 'In diligence' : screened ? 'Screened' : 'Not started' };
 }
 
+/* WHAT THE POD'S MAKER ASKS A SITE TO CONFIRM (its own list, pod-spec.js QUESTIONS), against what is on this site's
+   record: On file (a person's figure or evidence), Screened (read off public data: not yet an answer the maker can
+   quote on), or Missing. Read, never invented: a question the record cannot answer stays Missing with what is asked. */
+function makerAsksOf(c, readiness) {
+  var site = c.site || {}, p = c.power, sc = c.screen || {}, f = sc.fiber || null, sp = c.space || {}, rate = rateOf(site);
+  function item(key) { var hit = null; readiness.sections.forEach(function (s) { s.items.forEach(function (i) { if (i.key === key) hit = i; }); }); return hit; }
+  var ctl = item('control-evidence'), addr = site.address && typeof site.address === 'object' ? [site.address.line1 || site.address.street, site.address.city, site.address.state, site.address.zip].filter(Boolean).join(', ') : typeof site.address === 'string' ? site.address : null;
+  var rent = num(site.rentMonthly) != null ? '$' + fmt(num(site.rentMonthly)) + ' a month' : num(site.rentPerKwMonth) != null ? '$' + num(site.rentPerKwMonth) + ' a kW-month' : null, su = sp.uses && sp.uses.compute;
+  var ans = {
+    'power-price': num(site.powerPricePerKwh) > 0 ? ['on-file', '$' + num(site.powerPricePerKwh) + ' a kWh on the site record; demand, standing charge and minimum take are not'] : rate ? ['screened', rate.words] : ['missing', 'No power price, ZIP or state on file'],
+    'facility-charge': rent ? ['on-file', rent + ' on the site record'] : ['missing', 'No ground or facility charge on file'],
+    'pad': su && su.fits === true ? ['screened', 'Clear ground for it on the public record; whether a pad is in place, its size and its rating are not on file'] : ['missing', su && su.fits === false ? 'No clear ground for it on the public record, and no pad on file' : 'Whether a pad is in place is not on file'],
+    'capacity': p.basis === 'measured' || p.basis === 'entered' ? ['on-file', p.words + '. Capacity at full build is not on file'] : p.basis === 'ceiling' ? ['screened', p.words] : ['missing', p.words],
+    'timing': p.basis === 'measured' || p.basis === 'entered' ? ['screened', 'The capacity is on a service already energised; no date is on file for any more'] : ['missing', 'No energisation date on file'],
+    'service': p.transformerKva ? ['screened', fmt(p.transformerKva) + ' kVA transformer on file; the service voltage and feed configuration are not'] : ['missing', 'The service voltage, feed and transformer are not on file'],
+    'site-control': ctl && ctl.state === 'done' ? ['on-file', 'Site-control evidence is on file'] : ctl && ctl.state === 'screened' ? ['screened', ctl.words] : ['missing', 'No site-control document on file'],
+    'fibre': f && f.carriersRead && f.carriers && f.carriers.length ? ['screened', f.carriers.slice(0, 4).join(', ') + ' reported at the address; the cost to the pad and BGP are not on file'] : ['missing', 'Carriers, the cost to the pad and BGP are not on file'],
+    'security': ['missing', 'Not read'], 'remote-hands': ['missing', 'Not on file'],
+    'address': addr ? ['on-file', addr] : ['missing', 'No address on file'],
+    'map': sc.located && sc.located.usable && !sc.located.approximate ? ['screened', 'Located at ' + (Math.round(sc.located.lat * 1e5) / 1e5) + ', ' + (Math.round(sc.located.lng * 1e5) / 1e5) + ' by the screen; confirm the point'] : ['missing', sc.located && sc.located.approximate ? 'The address matched only approximately' : 'Not located yet: run the screen']
+  };
+  var list = PS.QUESTIONS.map(function (q) { var a = ans[q[0]] || ['missing', 'Not on file']; return { key: q[0], label: q[1], state: a[0], words: a[1] }; });
+  function n(st) { return list.filter(function (x) { return x.state === st; }).length; }
+  return { list: list, onFile: n('on-file'), screened: n('screened'), missing: n('missing'), of: list.length,
+    words: n('on-file') + ' of the ' + list.length + ' answers the pod’s maker asks for are on file, ' + n('screened') + ' more are screened from public data, ' + n('missing') + ' are missing' };
+}
 /* the verifications that would move the answer most, power first */
 function verificationsOf(c, readiness) {
   var out = c.power.verify.slice(), sc = c.screen || null, pa = c.parcel || null, f = sc && sc.fiber;
@@ -614,6 +651,8 @@ function verificationsOf(c, readiness) {
   if (open('conn-fiber') && !(f && f.carriersRead && f.carriers && f.carriers.length)) out.push({ key: 'fiber', label: 'Get a carrier’s quote for dedicated symmetrical fiber to the site' });
   if (c.compute.byChip && c.compute.fits) {
     if (c.compute.thermal && c.compute.thermal.derates) out.push({ key: 'pod-ambient', label: 'Get the site’s design ambient (its hottest-hour dry bulb) and the maker’s derate for it: ' + c.compute.thermal.words.split('. ')[0].replace(/^Full power/, 'the chosen racks hold full power') });
+    var tr = c.compute.transformer;
+    if (tr && tr.state !== 'ok') out.unshift({ key: 'pod-transformer', label: tr.state === 'short' ? 'The transformer on file (' + fmt(tr.haveKva) + ' kVA) is under the ' + fmt(tr.needKva) + ' kVA the pod’s maker asks for: confirm it, or plan the larger one' : 'Confirm the transformer: the pod’s maker asks for ' + fmt(tr.needKva) + ' kVA or more, and none is on file' });
     if (open('conn-diversity')) out.push({ key: 'pod-routes', label: 'Confirm ' + PS.POD.connectivity + ' to the site: the pod’s maker asks for it' });
   }
   var sus = c.space && c.space.uses && c.space.uses.compute;
@@ -1037,6 +1076,7 @@ function assess(site, ctx) {
   var space = SP.spaceOf(parcel, { compute: compute, bess: bess, supercharger: sup });
   var c = { site: site, power: power, compute: compute, screen: screen, parcel: parcel, upgrade: upgrade, space: space };
   var readiness = readinessOf(c, ctx.marks), verify = verificationsOf(c, readiness);
+  if (compute.byChip) compute.asks = makerAsksOf(c, readiness);
   var grade = { A: 'Sized on a limit and a peak on file', B: 'Sized on a figure entered by hand', C: 'Sized on a ceiling: the site’s peak is not on file', D: 'Not sized: no power figure on file' }[power.grade];
   return { v: VERSION, at: ctx.now || null, inputHash: inputHashOf(site, screen, parcel, cfg, ctx.upgrade),
     market: market.iso ? { iso: market.iso, label: market.label, basis: market.basis, split: market.split, words: market.words } : null,
@@ -1053,7 +1093,7 @@ function listView(a, site, ctx) {
   /* only what the row and the card draw: the notes, the streams, the loan, the shelf and the limits ride on the one-site view */
   if (r.bess) { delete r.bess.projections; delete r.bess.notes; delete r.bess.revenue; delete r.bess.debt; delete r.bess.energyAtEnd; }
   if (r.supercharger) { delete r.supercharger.projections; delete r.supercharger.notes; }
-  if (r.compute) { r.compute.shelf = (r.compute.shelf || []).map(function (u) { var row = { key: u.key, label: u.label, klassLabel: u.klassLabel, meterKw: u.meterKw, fits: u.fits }; if (u.chip) { row.chip = u.chip; row.gpus = u.gpus; row.units = u.units; row.irrPct = u.irrPct == null ? null : u.irrPct; } return row; }); delete r.compute.requirements; if (r.compute.economics) delete r.compute.economics.notes; if (r.compute.space) delete r.compute.space; }
+  if (r.compute) { r.compute.shelf = (r.compute.shelf || []).map(function (u) { var row = { key: u.key, label: u.label, klassLabel: u.klassLabel, meterKw: u.meterKw, fits: u.fits }; if (u.chip) { row.chip = u.chip; row.gpus = u.gpus; row.units = u.units; row.irrPct = u.irrPct == null ? null : u.irrPct; } return row; }); delete r.compute.requirements; if (r.compute.asks) r.compute.asks = { onFile: r.compute.asks.onFile, screened: r.compute.asks.screened, missing: r.compute.asks.missing, of: r.compute.asks.of }; if (r.compute.economics) delete r.compute.economics.notes; if (r.compute.space) delete r.compute.space; }
   if (r.upgrade && r.upgrade.compute) delete r.upgrade.compute.words;
   if (r.space) { delete r.space.notes; var cu = r.space.uses && r.space.uses.compute; r.space.uses = cu ? { compute: { fits: cu.fits, needFt: cu.needFt || null, upperBound: cu.upperBound === true, words: cu.words } } : {}; }
   if (r.power) { delete r.power.limits; delete r.power.verify; }

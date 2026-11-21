@@ -578,17 +578,20 @@ test('D11 a closing step through the door: 409 with none in the settings; an edi
    and it's very detailed") ── */
 var PS = require('../../api/_lib/pod-spec');
 function chips(extra) { return A.configOf({ portfolioAssessment: { compute: Object.assign({ basis: 'chips' }, extra || {}) } }); }
-test('C01 the pod’s sheet is ONE record: what a pod carries by chip, at the meter at its own design pPUE, and the heat read off the sheet’s own table', function () {
+test('C01 the pod’s sheet is ONE record: what a pod carries by chip, the 1 MW connection its maker asks for whatever is racked, and the heat read off the sheet’s own table', function () {
   assert.equal(PS.POD.ppue, 1.091); assert.equal(PS.POD.coolingKw, 1000); assert.equal(PS.POD.site.maxPods, 4); assert.equal(PS.POD.commercial.priced, false);
-  assert.deepStrictEqual(PS.PLATFORMS.map(function (p) { return [p.key, p.gpus, p.itKw, p.peakItKw, PS.atMeter(p).needKw]; }),
-    [['rtx6000', 432, 430, 430, 469], ['gb300', 288, 600, 680, 742], ['vr-maxq', 288, 748, 748, 816], ['vr-maxp', 288, 908, 908, 991]]);
-  PS.PLATFORMS.forEach(function (p) { assert.ok(PS.atMeter(p).needKw < 1000, p.key + ' stays under 1 MW of facility load a pod'); });
-  assert.equal(PS.platformFor('gb300').key, 'gb300'); assert.equal(PS.platformFor('vr-maxp').key, 'vr-maxp'); assert.equal(PS.platformFor('h100'), null);
-  /* the heat: GB300 is whole to 35 °C and 89% at 40 °C (420 of 473 kW); Vera Rubin Max P is capped at both; the RTX pod is not judged */
+  /* the site is screened on the connection (1,000 kW a pod, every chip); the chip's own peak is what it draws */
+  assert.deepStrictEqual(PS.PLATFORMS.map(function (p) { var m = PS.atMeter(p); return [p.key, p.gpus, p.itKw, m.needKw, m.peakKw]; }),
+    [['rtx6000', 432, 430, 1000, 469], ['gb300', 288, 600, 1000, 742], ['vr-maxq', 288, 748, 1000, 816], ['vr-maxp', 288, 908, 1000, 991]]);
+  var S = PS.POD.siting; assert.equal(S.connectionKw, 1000); assert.deepStrictEqual(S.transformerKva, { min: 1250, max: 1500 }); assert.deepStrictEqual(S.footprintFt, { l: 20, w: 8 }); assert.equal(S.weightTonnes, 17); assert.equal(S.fibre.minGbps, 10);
+  assert.equal(S.transformerKva.min * A.CONTINUOUS, S.connectionKw, 'the maker’s 1.25 MVA is this assessment’s own 0.8 continuous rule for 1 MW');
+  assert.equal(PS.QUESTIONS.length, 12); assert.equal(PS.platformFor('gb300').key, 'gb300'); assert.equal(PS.platformFor('vr-maxp').key, 'vr-maxp'); assert.equal(PS.platformFor('h100'), null);
   var g = PS.thermalOf(PS.platform('gb300')); assert.deepStrictEqual(g.rows.map(function (r) { return r.share; }), [1, 0.89]); assert.equal(g.derates, true); assert.ok(/Full power to about 39\.4 °C/.test(g.words));
   var v = PS.thermalOf(PS.platform('vr-maxp')); assert.deepStrictEqual(v.rows.map(function (r) { return r.share; }), [0.97, 0.48]);
   var x = PS.thermalOf(PS.platform('rtx6000')); assert.equal(x.derates, false); assert.ok(/gives no figure/.test(x.words));
-  assert.ok(PS.requirements(2).some(function (w) { return /2 pads, each at least 21 × 9 ft, rated 60 metric tons, with 2 m/.test(w); })); assert.ok(PS.requirements(1).some(function (w) { return /No price is on the sheet/.test(w); }));
+  var req = PS.requirements(2).join(' | ');
+  assert.ok(/carrying 1,000 kW continuous whatever is racked/.test(req)); assert.ok(/1\.25 to 1\.5 MVA a pod/.test(req)); assert.ok(/415Y\/240 V/.test(req) && /480Y\/277 V as its standard configuration: confirm which/.test(req));
+  assert.ok(/20 × 8 ft and 20 ft tall \(two stacked containers\), 17 metric tons in service on four corners of 6 to 9 tons each/.test(req)); assert.ok(/four ground screws/.test(req)); assert.ok(/10 Gbps at least, 100 Gbps or better preferred/.test(req)); assert.ok(/No price is on the sheet/.test(req));
 });
 test('C02 off by default: a workspace that does not ask keeps the shelf and its hash; asking is `compute.basis: chips`, and its own figures are read by the pod’s keys only', function () {
   var plain = A.configOf(null), c = chips({ pod: { prices: { gb300: 4.5, h100: 3, 'vr-maxp': 0 }, costUsd: { gb300: 21000000, rtx6000: 5 } } });
@@ -596,55 +599,70 @@ test('C02 off by default: a workspace that does not ask keeps the shelf and its 
   assert.equal(c.compute.basis, 'chips'); assert.deepStrictEqual(c.compute.pod, { prices: { gb300: 4.5 }, costUsd: { gb300: 21000000 } });
   var site = { serviceCapacityKw: 1500, state: 'OK' };
   assert.notEqual(A.inputHashOf(site, null, null, chips(), null), A.inputHashOf(site, null, null, plain, null));
-  assert.deepStrictEqual(A.unitsOf(plain).map(function (u) { return u.needKw; }), [90, 180, 420, 600, 900, 1200]); assert.deepStrictEqual(A.unitsOf(chips()).map(function (u) { return u.key; }), ['rtx6000', 'gb300', 'vr-maxq', 'vr-maxp']);
+  assert.deepStrictEqual(A.unitsOf(plain).map(function (u) { return u.needKw; }), [90, 180, 420, 600, 900, 1200]); assert.deepStrictEqual(A.unitsOf(chips()).map(function (u) { return u.needKw; }), [1000, 1000, 1000, 1000]);
 });
-test('C03 sized by chip: one to four pods on the free power, every configuration that fits priced by the contract engine on its own GPUs, the answer the highest screening return', function () {
+test('C03 sized by chip on the connection the maker asks for: 1,000 kW free a pod whatever is racked, one to four pods, every configuration priced on its own GPUs and its own draw', function () {
   var cfg = chips(), site = { address: { state: 'OK', zip: '74834' } };
-  var none = A.computeOf({ availableKw: 400, basis: 'measured' }, cfg, site); assert.equal(none.fits, false); assert.equal(none.needKw, 469); assert.ok(/does not carry a pod: the lightest configuration \(RTX PRO 6000, 430 kW of IT\) needs 469 kW/.test(none.words));
-  var c = A.computeOf({ availableKw: 1000, basis: 'measured' }, cfg, site);
-  assert.equal(c.byChip, true); assert.equal(c.pue, 1.091); assert.deepStrictEqual(c.shelf.map(function (u) { return [u.key, u.meterKw, u.units]; }), [['rtx6000', 469, 2], ['gb300', 742, 1], ['vr-maxq', 816, 1], ['vr-maxp', 991, 1]]);
-  assert.equal(c.chosen.key, 'rtx6000'); assert.equal(c.chosen.units, 2); assert.equal(c.chosen.gpus, 864); assert.equal(c.chosen.itKw, 860); assert.equal(c.chosen.meterKw, 938); assert.equal(c.chosen.leftKw, 62); assert.ok(/highest screening return/.test(c.chosen.why));
-  assert.ok(/2 pods of 432 RTX PRO 6000 GPUs each \(860 kW of IT, 938 kW at the meter at pPUE 1\.091\) on 1,000 kW free/.test(c.words));
-  var e = c.economics; assert.ok(e.ok); assert.equal(e.basis, 'chips'); assert.equal(e.gpus, 864); assert.equal(e.itKw, 860); assert.equal(e.priceBasis, 'spot'); assert.equal(e.capexBasis, 'estimate'); assert.ok(e.irrPct > 0); assert.ok(e.capexUsd > 0);
-  assert.ok(/^Baseline: .*Runware’s Sonic Pod System product overview of November 2026.*not the baseline for the money/.test(e.notes[0])); assert.equal(c.pod.baseline, PS.POD.baseline.words);
+  var none = A.computeOf({ availableKw: 900, basis: 'measured' }, cfg, site); assert.equal(none.fits, false); assert.equal(none.needKw, 1000); assert.ok(/does not carry a pod: the lightest configuration \(RTX PRO 6000, 430 kW of IT\) needs 1,000 kW/.test(none.words));
+  var c = A.computeOf({ availableKw: 1000, basis: 'measured', transformerKva: 1000 }, cfg, site);
+  assert.equal(c.byChip, true); assert.equal(c.pue, 1.091); assert.deepStrictEqual(c.shelf.map(function (u) { return [u.key, u.meterKw, u.units]; }).sort(), [['gb300', 1000, 1], ['rtx6000', 1000, 1], ['vr-maxp', 1000, 1], ['vr-maxq', 1000, 1]]);
+  assert.equal(c.chosen.key, 'rtx6000'); assert.equal(c.chosen.units, 1); assert.equal(c.chosen.gpus, 432); assert.equal(c.chosen.itKw, 430); assert.equal(c.chosen.meterKw, 1000); assert.equal(c.chosen.leftKw, 0); assert.ok(/highest screening return/.test(c.chosen.why));
+  assert.ok(/One pod of 432 RTX PRO 6000 GPUs \(430 kW of IT, on the 1,000 kW a pod its maker asks for\) on 1,000 kW free/.test(c.words));
+  var e = c.economics; assert.ok(e.ok); assert.equal(e.basis, 'chips'); assert.equal(e.gpus, 432); assert.equal(e.itKw, 430); assert.equal(e.priceBasis, 'spot'); assert.equal(e.capexBasis, 'estimate'); assert.ok(e.irrPct > 0); assert.ok(e.capexUsd > 0);
   assert.ok(e.notes.some(function (n) { return /not an offer/.test(n); })); assert.ok(e.notes.some(function (n) { return /the maker’s sheet carries no price/.test(n); })); assert.ok(e.notes.some(function (n) { return /hours capped by heat/.test(n); }));
-  /* a chip with no public price shows no return; one the library does not carry is sized and nothing more */
-  var gb = c.shelf[1], vr = c.shelf[3]; assert.equal(gb.priced, true); assert.equal(gb.irrPct, null); assert.ok(gb.capexUsd > 0); assert.equal(vr.priced, false); assert.equal(vr.irrPct, null); assert.equal(vr.capexUsd, null);
-  /* never more than four stand-alone pods, and it says so */
-  var big = A.computeOf({ availableKw: 6000, basis: 'measured' }, cfg, site); assert.equal(big.chosen.units, 4); assert.ok(big.shelf.every(function (u) { return u.units === 4; })); assert.ok(/one to 4 stand-alone pods/.test(big.more));
-  assert.ok(/1 MW of IT|pads, each at least 21 × 9 ft/.test(big.space.words)); assert.ok(/no chiller and no water/.test(big.cooling.words));
+  assert.ok(e.notes.some(function (n) { return /a connection carrying 1,000 kW continuous a pod, whatever is racked in it/.test(n) && /draws about 469 kW at its peak/.test(n) && /counted on what it draws, not on the connection/.test(n); }));
+  assert.ok(/^Baseline: /.test(e.notes[0])); assert.equal(c.pod.baseline, PS.POD.baseline.words);
+  /* the transformer the maker asks for, against the one on file */
+  assert.equal(c.transformer.state, 'short'); assert.equal(c.transformer.needKva, 1250); assert.ok(/1,000 kVA is on file: short of it/.test(c.transformer.words));
+  assert.equal(A.computeOf({ availableKw: 1000, basis: 'measured', transformerKva: 1500 }, cfg, site).transformer.state, 'ok'); assert.equal(A.computeOf({ availableKw: 1000, basis: 'measured' }, cfg, site).transformer.state, 'unknown');
+  var gb = c.shelf.filter(function (u) { return u.key === 'gb300'; })[0], vr = c.shelf.filter(function (u) { return u.key === 'vr-maxp'; })[0]; assert.equal(gb.priced, true); assert.equal(gb.irrPct, null); assert.ok(gb.capexUsd > 0); assert.equal(vr.priced, false); assert.equal(vr.capexUsd, null);
+  var big = A.computeOf({ availableKw: 6000, basis: 'measured' }, cfg, site); assert.equal(big.chosen.units, 4); assert.ok(big.shelf.every(function (u) { return u.units === 4; })); assert.ok(/one to 4 stand-alone pods/.test(big.more)); assert.equal(big.transformer.needKva, 5000);
+  assert.ok(/4 pods on one prepared area, each 20 × 8 ft on a pad of at least 21 × 9 ft, 17 metric tons in service, 2 m \(6\.56 ft\) between pods/.test(big.space.words)); assert.ok(/no chiller and no water/.test(big.cooling.words));
 });
-test('C04 the workspace’s own chip, its own price and the pod’s own cost: the named chip is the answer where it fits, priced on the figure set, and said to be the workspace’s', function () {
-  var site = { address: { state: 'AZ', zip: '85201' } }, c = A.computeOf({ availableKw: 1000, basis: 'measured' }, chips({ chipset: 'gb300', pod: { prices: { gb300: 4.5 } } }), site), e = c.economics;
-  assert.equal(c.chosen.key, 'gb300'); assert.equal(c.chosen.why, 'this workspace’s chip'); assert.equal(c.chosen.units, 1); assert.equal(c.chosen.leftKw, 258);
+test('C04 the workspace’s own chip, its own price and the pod’s own cost: the named chip is the answer, priced on the figure set, and said to be the workspace’s', function () {
+  var site = { address: { state: 'AZ', zip: '85201' } }, c = A.computeOf({ availableKw: 1500, basis: 'measured' }, chips({ chipset: 'gb300', pod: { prices: { gb300: 4.5 } } }), site), e = c.economics;
+  assert.equal(c.chosen.key, 'gb300'); assert.equal(c.chosen.why, 'this workspace’s chip'); assert.equal(c.chosen.units, 1); assert.equal(c.chosen.leftKw, 500);
   assert.equal(e.pricePerGpuHour, 4.5); assert.equal(e.priceBasis, 'workspace price'); assert.ok(/the workspace’s own price/.test(e.irrBasis)); assert.ok(e.irrPct > 0); assert.equal(e.gpus, 288);
-  var q = A.computeOf({ availableKw: 1000, basis: 'measured' }, chips({ chipset: 'gb300', pod: { prices: { gb300: 4.5 }, costUsd: { gb300: 30000000 } } }), site).economics;
+  var q = A.computeOf({ availableKw: 1500, basis: 'measured' }, chips({ chipset: 'gb300', pod: { prices: { gb300: 4.5 }, costUsd: { gb300: 30000000 } } }), site).economics;
   assert.equal(q.capexUsd, 30000000); assert.equal(q.capexBasis, 'entered'); assert.ok(q.irrPct < e.irrPct); assert.ok(q.notes.some(function (n) { return /this workspace’s own figure for the pod/.test(n); }));
-  /* the named chip does not fit: the answer falls to what does, and the upgrade to ask for is the named chip's pod */
+  /* a site short of the connection carries no pod, and the upgrade to ask for is the 1,000 kW the named chip's pod needs */
   var r = A.assess({ address: { state: 'AZ', zip: '85201' }, serviceCapacityKw: 600, existingPeakKw: 0 }, { config: chips({ chipset: 'gb300' }), now: NOW });
-  assert.equal(r.compute.chosen.key, 'rtx6000'); assert.equal(r.upgradeAdvice.unit, 'gb300'); assert.equal(r.upgradeAdvice.needKw, 742); assert.equal(r.upgradeAdvice.shortKw, 142); assert.ok(/carries a 430 kW RTX PRO 6000 pod today\. A 600 kW GB300 NVL72 pod needs 742 kW free/.test(r.upgradeAdvice.words));
-  assert.equal(r.pairing.leftKw, 131); assert.ok(/Beside the 430 kW RTX PRO 6000 pod/.test(r.pairing.words)); assert.equal(r.recommend.fits[0].size, '430 kW RTX PRO 6000');
+  assert.equal(r.compute.fits, false); assert.equal(r.upgradeAdvice.unit, 'gb300'); assert.equal(r.upgradeAdvice.needKw, 1000); assert.equal(r.upgradeAdvice.shortKw, 400); assert.ok(/carries no pod today\. A 600 kW GB300 NVL72 pod needs 1,000 kW free/.test(r.upgradeAdvice.words));
+  var p = A.assess({ address: { state: 'AZ', zip: '85201' }, serviceCapacityKw: 1500, existingPeakKw: 0 }, { config: chips({ chipset: 'gb300' }), now: NOW });
+  assert.equal(p.pairing.leftKw, 500); assert.ok(/Beside the 600 kW GB300 NVL72 pod/.test(p.pairing.words)); assert.equal(p.recommend.fits[0].size, '600 kW GB300 NVL72');
 });
-test('C05 the readiness and the verifications follow the pod: no water, two routes, the pad, the feed, and the design ambient where the chosen racks are capped in the heat', function () {
-  var r = A.assess({ address: { state: 'AZ', zip: '85201' }, serviceCapacityKw: 1000, existingPeakKw: 0 }, { config: chips({ chipset: 'gb300' }), now: NOW });
+test('C05 the readiness, the verifications and the maker’s own questions follow the pod: no water, two routes, the footprint and weight, the supply, the transformer, and what is on file of what the maker asks', function () {
+  var site = { address: { line1: '1812 E 1st St', city: 'Chandler', state: 'AZ', zip: '85201' }, serviceCapacityKw: 1000, existingPeakKw: 0, powerPricePerKwh: 0.09 };
+  var r = A.assess(site, { config: chips({ chipset: 'gb300' }), now: NOW });
   function item(k) { var hit = null; r.readiness.sections.forEach(function (s) { s.items.forEach(function (i) { if (i.key === k) hit = i; }); }); return hit; }
   assert.equal(item('physical-cooling').state, 'screened'); assert.equal(item('physical-cooling').source, 'Pod specification'); assert.ok(/no water supply or discharge/.test(item('physical-cooling').words));
   assert.equal(item('conn-diversity').state, 'open'); assert.ok(/two carriers, or one carrier with a physically separate second route/.test(item('conn-diversity').words));
-  assert.ok(/21 × 9 ft and rated 60 metric tons/.test(item('physical-area').words)); assert.ok(/12 three-phase connections at 480Y\/277 V/.test(item('power-oneline').words)); assert.ok(/two 20 ft container sections/.test(item('physical-access').words));
+  assert.ok(/20 × 8 ft on a pad of at least 21 × 9 ft, 17 metric tons in service/.test(item('physical-area').words)); assert.ok(/415Y\/240 V/.test(item('power-oneline').words) && /confirm which/.test(item('power-oneline').words));
+  assert.ok(/17 metric tons in service on four corners of 6 to 9 tons each/.test(item('physical-geotech').words)); assert.ok(/20 ft tall/.test(item('zoning-setbacks').words)); assert.ok(/10 Gbps at least and prefers 100 Gbps/.test(item('conn-bandwidth').words));
+  assert.ok(/two 20 ft container sections/.test(item('physical-access').words)); assert.ok(/No transformer size is on file/.test(item('power-protection').words));
   assert.ok(r.compute.thermal.derates); assert.ok(r.verify.some(function (v) { return v.key === 'pod-ambient' && /39\.4 °C/.test(v.label); })); assert.ok(r.verify.some(function (v) { return v.key === 'pod-routes'; }));
-  assert.ok(r.compute.requirements.length >= 6);
+  assert.equal(r.verify[0].key, 'pod-transformer'); assert.ok(/asks for 1,250 kVA or more, and none is on file/.test(r.verify[0].label)); assert.ok(r.compute.requirements.length >= 7);
+  /* the maker's twelve questions, against the record: read, never invented */
+  var k = r.compute.asks, by = {}; k.list.forEach(function (q) { by[q.key] = q; }); assert.equal(k.of, 12); assert.equal(k.onFile + k.screened + k.missing, 12);
+  assert.equal(by['power-price'].state, 'on-file'); assert.ok(/\$0\.09 a kWh on the site record; demand, standing charge and minimum take are not/.test(by['power-price'].words));
+  assert.equal(by.capacity.state, 'on-file'); assert.equal(by.timing.state, 'screened'); assert.equal(by.address.state, 'on-file'); assert.ok(/1812 E 1st St, Chandler, AZ, 85201/.test(by.address.words));
+  ['facility-charge', 'pad', 'service', 'site-control', 'fibre', 'security', 'remote-hands', 'map'].forEach(function (q) { assert.equal(by[q].state, 'missing', q); });
+  assert.ok(/3 of the 12 answers the pod’s maker asks for are on file, 1 more are screened from public data, 8 are missing/.test(k.words));
+  /* a ceiling is screened, never on file; a site with nothing has nothing */
+  var ceil = A.assess({ address: { state: 'OK', zip: '74834' }, transformerKva: 1500 }, { config: chips(), now: NOW }).compute.asks, cb = {}; ceil.list.forEach(function (q) { cb[q.key] = q; });
+  assert.equal(cb.capacity.state, 'screened'); assert.equal(cb['power-price'].state, 'screened'); assert.equal(cb.service.state, 'screened'); assert.equal(cb.timing.state, 'missing');
   /* the RTX pod is not capped on the sheet: no ambient verification is invented for it */
-  var x = A.assess({ address: { state: 'AZ', zip: '85201' }, serviceCapacityKw: 500, existingPeakKw: 0 }, { config: chips(), now: NOW }); assert.ok(!x.verify.some(function (v) { return v.key === 'pod-ambient'; }));
-  /* the register's row carries the chips, not the requirements */
-  var row = A.listView({ result: r }, { address: { state: 'AZ', zip: '85201' }, serviceCapacityKw: 1000, existingPeakKw: 0 }, { config: chips({ chipset: 'gb300' }) });
-  assert.equal(row.compute.requirements, undefined); assert.deepStrictEqual(row.compute.shelf.map(function (u) { return u.chip; }), ['RTX PRO 6000', 'GB300 NVL72', 'Vera Rubin NVL72, Max Q', 'Vera Rubin NVL72, Max P']); assert.equal(row.stale, false);
+  var x = A.assess({ address: { state: 'AZ', zip: '85201' }, serviceCapacityKw: 1000, existingPeakKw: 0 }, { config: chips(), now: NOW }); assert.ok(!x.verify.some(function (v) { return v.key === 'pod-ambient'; }));
+  /* the register's row carries the chips and the tally, not the requirements or the list */
+  var row = A.listView({ result: r }, site, { config: chips({ chipset: 'gb300' }) });
+  assert.equal(row.compute.requirements, undefined); assert.equal(row.compute.asks.list, undefined); assert.equal(row.compute.asks.of, 12); assert.equal(row.compute.shelf.length, 4); assert.equal(row.stale, false);
 });
 test('C06 through the door: a workspace on the chip basis is run and stored by chip, and an upgrade request names a pod configuration, never a unit of the other shelf', async function () {
   var w = world({ billing: { portfolioAssessment: { compute: { basis: 'chips' } } } });
   await w.post({ action: 'assess-run', ids: ['s1', 's2'] });
-  var a = w.site('s1').assessment.result; assert.equal(a.compute.byChip, true); assert.equal(a.compute.chosen.key, 'rtx6000'); assert.equal(a.compute.chosen.units, 3); assert.equal(a.compute.pod.maker, 'Runware');
+  var a = w.site('s1').assessment.result; assert.equal(a.compute.byChip, true); assert.equal(a.compute.chosen.key, 'rtx6000'); assert.equal(a.compute.chosen.units, 1); assert.equal(a.compute.pod.maker, 'Runware'); assert.equal(a.compute.asks.of, 12);
   assert.equal(w.site('s2').assessment.result.compute.fits, false);
-  var up = await w.post({ action: 'assess-upgrade', site: 's2', unit: 'gb300' }); assert.equal(w.site('s2').assessment.upgrade.targetKw, 782);   /* 120 kW limit, 80 free: 742 short by 662 */
+  var up = await w.post({ action: 'assess-upgrade', site: 's2', unit: 'gb300' }); assert.equal(w.site('s2').assessment.upgrade.targetKw, 1040);   /* 120 kW limit, 80 free: 1,000 short by 920 */
   assert.equal(w.site('s2').assessment.result.upgrade.compute.label, '600 kW GB300 NVL72'); assert.ok(up);
   await rejects(w.post({ action: 'assess-upgrade', site: 's2', unit: 'm350' }), 400, /not a unit on the compute shelf/);
 });
@@ -672,7 +690,7 @@ test('S02 the pad each unit needs is its maker’s own figure: the pod’s 21 ×
   function need(kw, cfg) { return SP.computeNeed(A.computeOf({ availableKw: kw, basis: 'measured' }, cfg, {})); }
   assert.deepStrictEqual(need(1500, plain).pad, { wFt: 50, dFt: 60 }); assert.equal(need(1500, plain).basis, 'maker'); assert.deepStrictEqual(need(3700, plain).pad, { wFt: 150, dFt: 60 });
   assert.deepStrictEqual(need(90, plain).pad, { wFt: 28, dFt: 7.25 }); assert.equal(need(500, plain).basis, 'upper-bound'); assert.ok(/No footprint is on file for a 350 kW unit/.test(need(500, plain).words));
-  assert.deepStrictEqual(need(500, chip).pad, { wFt: 9, dFt: 21 }); assert.deepStrictEqual(need(1000, chip).pad, { wFt: 24.5, dFt: 21 }); assert.equal(need(50, plain), null);
+  assert.deepStrictEqual(need(1000, chip).pad, { wFt: 9, dFt: 21 }); assert.deepStrictEqual(need(2000, chip).pad, { wFt: 24.6, dFt: 21 }); assert.equal(need(500, chip), null); assert.equal(need(50, plain), null);
   assert.equal(plain.space, undefined); assert.deepStrictEqual(A.configOf({ portfolioAssessment: { space: { setbackFt: 25, buildingClearFt: 999 } } }).space, { setbackFt: 25 });
 });
 test('S03 the answer carries the space: the lot, the buildings, the clear ground and whether the compute unit’s pad fits; the battery and the dispensers are said not to be judged; the checklist and the verifications follow', function () {

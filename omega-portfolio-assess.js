@@ -54,6 +54,13 @@
     if (o && o.canEdit && sp.ok && !sp.measured) h += '<div class="a" style="margin-top:6px"><button type="button" class="pa-btn" data-pa="space">Read the lot</button></div>';
     return h + '</div>';
   }
+  /* what the pod's maker asks a site to confirm, against the record: the server's list, drawn */
+  function asksHtml(k, cls) {
+    if (!k || !k.list) return '';
+    var word = { 'on-file': 'On file', screened: 'Screened', missing: 'Missing' };
+    return '<div style="font-weight:600;margin:8px 0 4px">What the pod’s maker asks to quote: ' + esc(k.words) + '</div><table' + (cls ? ' class="' + cls + '"' : '') + '><tr><th style="text-align:left">Asked</th><th style="text-align:left">Standing</th><th style="text-align:left">On this site</th></tr>' +
+      k.list.map(function (q) { return '<tr><td style="text-align:left">' + esc(q.label) + '</td><td style="text-align:left;white-space:nowrap' + (q.state === 'missing' ? ';color:#b3261e' : q.state === 'on-file' ? ';color:#1f7a4d' : '') + '">' + esc(word[q.state] || q.state) + '</td><td style="text-align:left">' + esc(q.words) + '</td></tr>'; }).join('') + '</table>';
+  }
   function podWords(c) { return c.byChip && c.pod ? (c.pod.baseline ? c.pod.baseline + '. ' : 'The ' + c.pod.label + ' (' + c.pod.sheet + '). ') + c.pod.standing + '.' : ''; }
   function pct(p) { return p == null ? null : (Math.round(p * 10) / 10) + '%'; }
   var BASIS = { measured: ['free', 'pa-ok', 'Measured'], entered: ['entered', 'pa-blue', 'Entered'], ceiling: ['ceiling', 'pa-warn', 'Ceiling'] };
@@ -298,7 +305,7 @@
       '<ul class="pa-list">' + (s.notes || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul></div></details>';
     var c = res.compute;
     if (c) h += '<details class="pa-sec"><summary>' + (c.byChip ? 'Compute: the pod by chip' : 'Compute: the shelf') + '<span>' + esc(c.fits && c.chosen ? unitShort(c.chosen) : 'no fit') + '</span></summary><div style="padding:0 8px 8px">' +
-      (c.byChip ? '<div style="font-size:12px;color:var(--ows-ink2);margin:0 0 6px">' + esc(podWords(c)) + (c.chosen && c.chosen.why ? ' Chosen: ' + esc(c.chosen.why) + '.' : '') + '</div>' + shelfTable(c, 'pa-tbl') + '<ul class="pa-list">' + (c.thermal ? '<li>Heat: ' + esc(c.thermal.words) + '</li>' : '') + (c.more ? '<li>' + esc(c.more) + '</li>' : '') + (c.requirements || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>'
+      (c.byChip ? '<div style="font-size:12px;color:var(--ows-ink2);margin:0 0 6px">' + esc(podWords(c)) + (c.chosen && c.chosen.why ? ' Chosen: ' + esc(c.chosen.why) + '.' : '') + '</div>' + shelfTable(c, 'pa-tbl') + '<ul class="pa-list">' + (c.thermal ? '<li>Heat: ' + esc(c.thermal.words) + '</li>' : '') + (c.transformer ? '<li>' + esc(c.transformer.words) + '</li>' : '') + (c.more ? '<li>' + esc(c.more) + '</li>' : '') + (c.requirements || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>' + asksHtml(c.asks, 'pa-tbl')
         : '<table class="pa-tbl"><tr><th>Unit (IT)</th><th>At the meter</th><th>Fits</th></tr>' + (c.shelf || []).map(function (u) { return '<tr><td>' + esc(u.label) + '</td><td>' + n0(u.meterKw) + ' kW</td><td>' + (u.fits ? (u.units > 1 ? u.units + ' ×' : 'Yes') : 'No') + '</td></tr>'; }).join('') + '</table>') +
       '<ul class="pa-list">' + ((c.economics && c.economics.notes) || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul></div></details>';
     return h;
@@ -428,7 +435,7 @@
         [['Investment', pf.capexUsd, pf.capexUsd], ['Revenue', pf.revenuePerYear, pf.revenuePerYear], ['Utility', -pf.utilityPerYear, pf.asStated ? -pf.asStated.utilityPerYear : null], [pf.partner + '’s fee', -pf.partnerFeePerYear, -pf.partnerFeePerYear], ['Other operating', -pf.otherOperatingPerYear, -pf.otherOperatingPerYear], ['Earnings', pf.ebitdaPerYear, pf.asStated ? pf.asStated.ebitdaPerYear : null]].map(function (x) { return '<tr><td>' + esc(x[0]) + '</td><td>' + usd(x[1]) + '</td>' + (pf.asStated ? '<td>' + usd(x[2]) + '</td>' : '') + '</tr>'; }).join('') +
         '<tr><td><b>Project IRR</b></td><td><b>' + esc(pct(ce.irrPct)) + '</b></td>' + (pf.asStated ? '<td><b>' + esc(pct(pf.asStated.irrPct)) + '</b></td>' : '') + '</tr><tr><td>Payback</td><td>' + esc(ce.paybackMonths) + ' months</td>' + (pf.asStated ? '<td>' + esc(pf.asStated.paybackMonths) + ' months</td>' : '') + '</tr></table>';
       if (res.pairing) h += '<h3>Beside the pod</h3><div class="sub">' + esc(res.pairing.words) + ' Battery capital ' + esc(usd(res.pairing.bess.capexUsd)) + ', ' + esc(usd(res.pairing.bess.netCapexUsd)) + ' after the credit.</div>';
-      if (c.byChip) h += '<h3>The pod by chip on this power</h3><div class="sub">' + esc(podWords(c)) + (c.chosen.why ? ' Chosen: ' + esc(c.chosen.why) + '.' : '') + '</div>' + shelfTable(c) + (c.thermal ? '<h3>Heat</h3><div class="sub">' + esc(c.thermal.words) + '</div>' : '') + '<h3>What the site has to provide</h3>' + notes((c.requirements || []).concat(c.more ? [c.more] : [])) + '<h3>How it is priced</h3>' + notes(ce.notes);
+      if (c.byChip) h += '<h3>The pod by chip on this power</h3><div class="sub">' + esc(podWords(c)) + (c.chosen.why ? ' Chosen: ' + esc(c.chosen.why) + '.' : '') + '</div>' + shelfTable(c) + (c.thermal ? '<h3>Heat</h3><div class="sub">' + esc(c.thermal.words) + '</div>' : '') + '<h3>What the site has to provide</h3>' + notes((c.requirements || []).concat(c.transformer ? [c.transformer.words] : []).concat(c.more ? [c.more] : [])) + asksHtml(c.asks) + '<h3>How it is priced</h3>' + notes(ce.notes);
       else h += '<h3>The shelf on this power</h3>' + shelfTable(c) + notes(ce.notes);
     } else h += '<div class="sub">' + esc(c.words || 'Not sized') + '</div>';
     /* battery */

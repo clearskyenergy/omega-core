@@ -1568,7 +1568,15 @@ the same day, each in Tommy's words in the doc:
   library does not carry is sized only; capital is the engine's estimate
   until the maker quotes (`compute.pod.costUsd`). The heat is the sheet's
   table, never interpolated; the checklist reads no water, two routes, the
-  pad and the feed off it. **It is the BASELINE** (Tommy: "We need to note
+  pad and the feed off it. **The maker's site and power requirements**
+  (2026-11-21, Tommy: "Here are site screening requirements for compute";
+  `POD.siting`, `QUESTIONS`): a pod is SCREENED on a connection carrying
+  1,000 kW continuous whatever chip is racked (the chip's own draw prices
+  the electricity, never the fit), the transformer on file is judged
+  against 1.25 MVA a pod (`compute.transformer`), the supply is 415Y/240 V
+  at the pod (the overview's 480Y/277 V kept and the difference said), and
+  the maker's twelve questions are answered off the record as On file,
+  Screened or Missing (`compute.asks`), never invented. **It is the BASELINE** (Tommy: "We need to note
   that our baseline data comes from here"): `POD.baseline` names what it
   covers (the physical figures) and what it does not (the pod's price, the
   GPU-hour price, the offtake), and is the first note under every answer

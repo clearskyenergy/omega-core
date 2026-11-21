@@ -183,6 +183,36 @@ that asks (`compute.basis: 'chips'`) is sized and priced on it:
 - **The upgrade to ask for** is the workspace's chip in a pod, else the
   pod's heaviest configuration; an upgrade request names a configuration.
 
+**The maker's site and power requirements** (2026-11-21, Tommy: "Here are
+site screening requirements for compute"; the maker's sheet of September
+2026, the figures a site owner or utility needs to quote) are folded into
+the same record (`POD.siting`, `QUESTIONS`) and change the screen:
+
+- **A pod needs a connection carrying 1,000 kW continuous, whatever chip is
+  racked in it.** The table above is what each chip DRAWS; the site is
+  screened on 1,000 kW free a pod for every one of them, and the
+  electricity in the return stays on what the chip draws. A 500 kW site
+  that read "carries an RTX pod" no longer does.
+- **The transformer**: above 1 MVA, likely 1.25 to 1.5 MVA a pod, judged
+  against the one on file (`compute.transformer`: ok, short or unknown) and
+  the first verification where it is short or not on file. The maker's
+  1.25 MVA for 1 MW is this assessment's own 0.8 continuous rule.
+- **Supply**: 415Y/240 V at the pod, the transformation from 480Y/277 V or
+  medium voltage in the site's scope. The product overview names 480Y/277 V
+  as standard: both are kept and the answer says to confirm which.
+- **The ground**: a pod is 20 × 8 ft and 20 ft tall (two stacked
+  containers), 17 metric tons in service on four corners of 6 to 9 tons
+  each, on a concrete pad or four ground screws; pods on one site sit on
+  one prepared area 2 m apart because they are networked together.
+- **Fibre**: 10 Gbps at least, 100 Gbps preferred, two carriers or a
+  separate second route; a single provider can work but ranks lower.
+- **The maker's twelve questions** (`compute.asks`): power price, facility
+  charge, pad, capacity, timing, service, site control, fibre and BGP,
+  distance to the police station, remote hands, address, map point. Each is
+  On file (a person's figure or evidence), Screened (public data: not yet an
+  answer to quote on) or Missing, read off the site's record and never
+  invented; the card and the report print the list and the tally.
+
 **This sheet is the baseline** (2026-11-11, Tommy: "We need to note that our
 baseline data comes from here"). The compute model's physical figures, GPUs a
 pod, usable IT by chip, power at the meter, pods a site, the pad, the feed
