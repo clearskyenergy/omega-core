@@ -1589,11 +1589,24 @@ the same day, each in Tommy's words in the doc:
   paving, easements and the zoning setback are not read, so a fit is never
   "the pad goes there" and the checklist item is Screened, never Done.
   `tassess.js` S01 to S05.
-- **The offtake partner's written brief** (Q4 2026) is their confidential
-  document: `compute-contract.js PARTNER.brief` keeps only the unit's
-  footprint and site needs, never its commercial figures, and the partner
-  basis still prices on `PARTNER.reference` (the figures as told) until the
-  workspace says otherwise.
+- **The space score** (Tommy: "something we can look at and score in the
+  portfolio"): `assess-space.js scoreOf`, 0 to 100 for the compute pad on
+  the clear ground (60 and up fits, 85 ample, under 40 no room, an upper
+  bound held at 70, not judged is no score), its own sortable *Space*
+  column on the register, printed with its rule on the card and report.
+- **The offtake partner's figures AS WRITTEN** (2026-11-21, Tommy: "use
+  these numbers to update the logic and engine for IRR calculation on
+  compute"): the brief is the partner's confidential document, so its
+  figures are the workspace's settings (`compute.reference.unit` and
+  `.pricePerGpuHour`, staged with `set-portfolio-assessment.js
+  --reference-json`), NEVER the repository's (`PARTNER.brief` keeps the
+  footprint alone; tests use stand-ins). With them on file the partner basis
+  runs `writtenCase`: the unit as sold on the site power it asks for, a
+  price moving each contract year (the engine's escalator reaches −30%),
+  the fee off gross, insurance as a share of capital and a fixed sum a year
+  (`leanOperating`: nothing else), and BOTH conventions on the same cash
+  (`irrPct` monthly, `irrYearEndPct` the brief's). Incomplete settings are
+  no settings: the megawatt reference stands. `tassess.js` W01 to W03.
 - **A utility-side upgrade request is a mark** (`assess-upgrade`): it sizes
   nothing today; what it would carry rides beside the answer. Every sized
   site under 1 MW carries the upgrade TO ASK FOR (`upgradeAdvice`, derived:

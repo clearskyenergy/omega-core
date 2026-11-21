@@ -150,6 +150,30 @@ function computeNeed(compute) {
   return { pad: one, sqFt: Math.round(one.wFt * one.dFt), basis: 'upper-bound', words: 'No footprint is on file for a ' + ch.label + ' unit. The 1 MW container and its coolers take ' + F.w + ' × ' + F.d + ' ft, which a smaller unit will not exceed' };
 }
 
+/* THE SPACE SCORE (2026-11-21, Tommy: "add that as something we can look at and score in the portfolio"): one number
+   a site, 0 to 100, for the compute unit's pad on the clear ground, so a register of sites can be ranked on room as
+   it is on power and return. 60 and up FITS: 60 where the clear ground is just the pad, rising to 100 at ten pads'
+   worth. Under 40 does NOT fit: by how much of the pad the largest clear rectangle covers. Capped at 70 where the
+   judgement is an upper bound (the buildings not read, or no footprint on file for that unit). Not judged is no
+   score, never a zero. The rule is stated with every score. */
+var SCORE = { fits: 60, ample: 85, upperBoundCap: 70, padsForFull: 10, missMax: 39 };
+function scoreOf(space, need, fit, bound) {
+  if (fit == null || !space || !space.clear) return null;
+  var pts, why;
+  if (fit) {
+    var pads = need.sqFt > 0 ? space.clear.sqFt / need.sqFt : 1;
+    pts = Math.round(SCORE.fits + (100 - SCORE.fits) * Math.min(1, Math.max(0, pads - 1) / (SCORE.padsForFull - 1)));
+    why = 'the pad fits, with ' + (Math.round(pads * 10) / 10) + ' pads’ worth of clear ground';
+    if (bound && pts > SCORE.upperBoundCap) { pts = SCORE.upperBoundCap; why += '; held at ' + SCORE.upperBoundCap + ' because the judgement is an upper bound'; }
+  } else {
+    var r = space.clear.rect, cover = r && need.sqFt > 0 ? Math.min(1, (r.wFt * r.dFt) / need.sqFt) : 0;
+    pts = Math.min(SCORE.missMax, Math.round(SCORE.missMax * cover));
+    why = r ? 'no clear rectangle the pad’s size; the largest covers ' + Math.round(cover * 100) + '% of it' : 'no clear rectangle at all';
+  }
+  var grade = pts >= SCORE.ample ? 'Ample' : pts >= SCORE.fits ? 'Fits' : 'No room';
+  return { points: pts, grade: grade, upperBound: !!bound, words: 'Space score ' + pts + ' of 100 (' + grade + (bound && fit ? ', an upper bound' : '') + '): ' + why + '. ' + SCORE.fits + ' and up fits, ' + SCORE.ample + ' and up is ample, under ' + (SCORE.missMax + 1) + ' does not fit.' };
+}
+
 /* parcel: the stored parcel answer ({ ok, acres, space? }). res: { compute, bess, supercharger }. */
 function spaceOf(parcel, res) {
   parcel = parcel || null; res = res || {};
@@ -174,7 +198,9 @@ function spaceOf(parcel, res) {
   var need = computeNeed(res.compute);
   if (need) {
     var fit = measured ? fitsIn(sp, need.pad.wFt, need.pad.dFt) : null, pct = lotSqFt ? Math.round(need.sqFt / lotSqFt * 1000) / 10 : null, bound = measured && !(sp.buildings && sp.buildings.read);
-    out.uses.compute = { needFt: need.pad, needSqFt: need.sqFt, basis: need.basis, fits: fit, lotPct: pct, upperBound: bound || need.basis === 'upper-bound',
+    var ub = bound || need.basis === 'upper-bound', score = scoreOf(sp, need, fit, ub);
+    out.score = score;
+    out.uses.compute = { needFt: need.pad, needSqFt: need.sqFt, basis: need.basis, fits: fit, lotPct: pct, upperBound: ub, score: score ? score.points : null,
       words: need.words + '. In all ' + need.pad.wFt + ' × ' + need.pad.dFt + ' ft, ' + fmt(need.sqFt) + ' sq ft' + (pct != null ? ' (' + pct + '% of the lot)' : '') + '. ' +
         (fit === true ? 'It fits the clear ground on the record' + (bound ? ', judged without the buildings' : '') + '.' : fit === false ? 'No clear rectangle that size is on the record' + (sp.clear.rect ? ' (the largest is about ' + sp.clear.rect.wFt + ' × ' + sp.clear.rect.dFt + ' ft)' : '') + '.' : 'Not judged: the lot’s outline is not measured.') };
   } else if (res.compute && !res.compute.fits) out.uses.compute = { fits: null, words: 'No compute unit is sized on this site’s power, so no pad is judged.' };
@@ -184,4 +210,4 @@ function spaceOf(parcel, res) {
   return out;
 }
 
-module.exports = { VERSION: VERSION, DEFAULTS: DEFAULTS, WIDTHS: WIDTHS, configOf: configOf, measure: measure, fitsIn: fitsIn, computeNeed: computeNeed, spaceOf: spaceOf };
+module.exports = { VERSION: VERSION, DEFAULTS: DEFAULTS, WIDTHS: WIDTHS, SCORE: SCORE, scoreOf: scoreOf, configOf: configOf, measure: measure, fitsIn: fitsIn, computeNeed: computeNeed, spaceOf: spaceOf };

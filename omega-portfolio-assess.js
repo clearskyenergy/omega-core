@@ -46,6 +46,7 @@
   function spaceHtml(sp, o) {
     if (!sp) return '';
     var u = sp.uses || {}, c = u.compute, h = '<div class="pa-box' + (c && c.fits === false ? ' on' : '') + '" id="pa-space"><b>Space on the lot</b><div>' + esc(sp.words || '') + '.</div>';
+    if (sp.score) h += '<div style="margin-top:4px"><b>' + esc(sp.score.points) + ' of 100 · ' + esc(sp.score.grade) + '</b> <span style="color:var(--ows-ink2)">' + esc(sp.score.words) + '</span></div>';
     if (c && c.words) h += '<div style="margin-top:4px"><b>Compute:</b> ' + esc(c.words) + '</div>';
     if (u.bess && u.bess.words) h += '<div style="color:var(--ows-ink2);margin-top:2px">Battery: ' + esc(u.bess.words) + '</div>';
     if (u.supercharger && u.supercharger.words) h += '<div style="color:var(--ows-ink2);margin-top:2px">Fast charging: ' + esc(u.supercharger.words) + '</div>';
@@ -94,7 +95,7 @@
   function cells(a, o) {
     style(); o = o || {};
     var none = '<span class="pa-no">–</span>', f = o.funding || null;
-    if (!a || a.notRun) return { power: null, compute: none, bess: none, charge: none, fund: f ? '<span class="pa-no" title="Run and screen the site first">Not run</span>' : null, ready: a && a.decision ? '<span class="pill pill-teal" title="Approved for pre-development">' + esc(a.decision.label) + '</span>' : '<span class="pa-no">Not run</span>' };
+    if (!a || a.notRun) return { power: null, compute: none, bess: none, charge: none, fund: f ? '<span class="pa-no" title="Run and screen the site first">Not run</span>' : null, space: none, ready: a && a.decision ? '<span class="pill pill-teal" title="Approved for pre-development">' + esc(a.decision.label) + '</span>' : '<span class="pa-no">Not run</span>' };
     var p = a.power || {}, b = BASIS[p.basis] || null, stale = a.stale ? ' <span class="pa-warn" title="A fact changed since this ran: run it again">↻</span>' : '';
     var power = p.availableKw == null ? '<span class="pa-warn" title="' + esc((p.words || '') + '. Record the transformer’s kVA or the service size to size this site.') + '">Not on file</span>'
       : '<b title="' + esc(p.words || '') + '">' + esc(kwWord(p.availableKw)) + '</b>' + stale + '<div class="pa-sub"><span class="' + (b ? b[1] : '') + '">' + esc(b ? b[0] : '') + '</span> · ' + (p.transformerKva ? esc(n0(p.transformerKva)) + ' kVA' : 'kVA not on file') + '</div>';
@@ -119,7 +120,9 @@
     var r = a.readiness || {}, ready = '<span title="' + esc((r.done || 0) + ' of ' + (r.applicable || 0) + ' items with evidence on file; ' + (r.screened || 0) + ' screened from public data') + '"><b>' + esc(r.pct || 0) + '%</b>' +
       '<div class="pa-bar"><i class="s" style="width:' + (r.screenedPct || 0) + '%"></i><i class="d" style="width:' + (r.pct || 0) + '%"></i></div></span>' +
       (a.decision ? '<div class="pa-sub"><span class="pa-ok" title="Approved for pre-development' + (a.decision.by ? ' by ' + esc(a.decision.by) : '') + '">✓ ' + esc(a.decision.label) + '</span></div>' : '<div class="pa-sub">' + esc(r.label || '') + '</div>');
-    return { power: power, compute: compute, bess: bess, charge: charge, ready: ready, fund: f ? fundCell(a, f) : null };
+    var sc = a.space && a.space.score, space = sc ? '<b title="' + esc(sc.words || '') + '"' + (sc.points < 40 ? ' style="color:#b3261e"' : '') + '>' + esc(sc.points) + '</b><div class="pa-sub" title="' + esc(sc.words || '') + '">' + esc(sc.grade + (sc.upperBound && sc.points >= 60 ? '?' : '')) + '</div>'
+      : '<span class="pa-no" title="' + esc(a.space && a.space.words ? a.space.words : 'The lot is not read yet') + '">' + (a.space && a.space.ok && !a.space.measured ? 'Not read' : '–') + '</span>';
+    return { power: power, compute: compute, bess: bess, charge: charge, space: space, ready: ready, fund: f ? fundCell(a, f) : null };
   }
 
   /* ── closing a site: purchased, the host agreement assigned, the lease in place ── */
@@ -214,10 +217,13 @@
     if (!pf) return '';
     function row(k, v, cls) { return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + k + '</td><td>' + v + '</td></tr>'; }
     var st = pf.asStated;
-    return '<table class="pa-pf">' + row('Investment', esc(money(pf.capexUsd))) + row('Revenue a year <span class="pa-warn" title="A stated figure, not a contract: the offtake is not confirmed">as stated</span>', esc(money(pf.revenuePerYear))) +
+    var w = pf.written === true;
+    return '<table class="pa-pf">' + row('Investment', esc(money(pf.capexUsd))) + row((w ? 'Revenue, year one ' : 'Revenue a year ') + '<span class="pa-warn" title="' + (w ? 'The partner’s modeled price, not a contract: the offtake is not confirmed' : 'A stated figure, not a contract: the offtake is not confirmed') + '">' + (w ? 'as written' : 'as stated') + '</span>', esc(money(pf.revenuePerYear))) +
+      (w && pf.revenueLastYear != null && pf.revenueLastYear !== pf.revenuePerYear ? row('Revenue, year ' + esc(pf.years) + (pf.priceChangePctYear ? ' (the price ' + (pf.priceChangePctYear < 0 ? 'falls ' : 'rises ') + esc(Math.abs(pf.priceChangePctYear)) + '% a year)' : ''), esc(money(pf.revenueLastYear))) : '') +
       row('Utility a year, ' + (pf.utilityBasis === 'site' ? 'this site' : 'as stated'), '−' + esc(money(pf.utilityPerYear).replace('$', '$'))) +
-      (pf.partnerFeePerYear ? row(esc(pf.partner) + '’s fee (' + esc(pf.reference.feePct) + '%)', '−' + esc(money(pf.partnerFeePerYear))) : '') + row('Other operating', '−' + esc(money(pf.otherOperatingPerYear))) + row('Earnings a year', esc(money(pf.ebitdaPerYear)), 't') + '</table>' +
-      '<div class="n">On ' + esc(pf.partner) + '’s figures, stated and unverified' + (st && pf.utilityBasis === 'site' ? '. With their own utility figure (' + esc(money(st.utilityPerYear)) + ' a year): ' + esc(pct(st.irrPct)) + ', payback ' + esc(st.paybackMonths) + ' months' : '') + '.</div>';
+      (pf.partnerFeePerYear ? row(esc(pf.partner) + '’s fee (' + esc(pf.reference.feePct) + '%)', '−' + esc(money(pf.partnerFeePerYear))) : '') + row('Other operating', '−' + esc(money(pf.otherOperatingPerYear))) + row(w ? 'Earnings, year one' : 'Earnings a year', esc(money(pf.ebitdaPerYear)), 't') +
+      (w && pf.irrYearEndPct != null ? row('Return on year-end cash, as a brief states it', esc(pct(pf.irrYearEndPct)) + (pf.stated && pf.stated.irrPct != null ? ' <span style="color:var(--ows-ink3)">(their brief: ' + esc(pct(pf.stated.irrPct)) + ')</span>' : '')) : '') + '</table>' +
+      '<div class="n">On ' + esc(pf.partner) + '’s figures, ' + (w ? 'as written, modeled' : 'stated') + ' and unverified' + (st && pf.utilityBasis === 'site' ? '. With their own utility figure (' + esc(money(st.utilityPerYear)) + ' a year): ' + esc(pct(st.irrPct)) + ', payback ' + esc(st.paybackMonths) + ' months' : '') + '.</div>';
   }
   /* a utility-side upgrade request: where it stands, what it would carry, and the mark */
   function upgradeHtml(a, o) { /* the mark where there is one; else the upgrade to ask for (derived), and the way to mark it */
@@ -432,6 +438,7 @@
       h += '<h2>Space on the lot</h2><div class="sub">' + esc(spc.words) + '.</div>' + kv([['Lot', spc.lotSqFt != null ? esc(n0(spc.lotSqFt)) + ' sq ft (' + esc(spc.acres) + ' acres)' : null],
         ['Buildings', spc.buildings ? (spc.buildings.read ? esc(spc.buildings.count) + ' on ' + esc(n0(spc.buildings.sqFt)) + ' sq ft (' + esc(spc.buildings.source) + ')' : 'Not read') : null],
         ['Clear ground', spc.clearSqFt != null ? esc(n0(spc.clearSqFt)) + ' sq ft' : null], ['Largest clear rectangle', spc.clearRect ? 'about ' + esc(spc.clearRect.wFt) + ' × ' + esc(spc.clearRect.dFt) + ' ft' : null],
+        ['Space score', spc.score ? '<b>' + esc(spc.score.points) + ' of 100 · ' + esc(spc.score.grade) + '</b>. ' + esc(spc.score.words) : 'Not scored: ' + esc(spc.measured ? 'no unit is sized' : 'the lot is not measured')],
         ['Compute pad', su.compute ? esc(su.compute.words) : null], ['Battery', su.bess ? esc(su.bess.words) : null], ['Fast charging', su.supercharger ? esc(su.supercharger.words) : null]]) + notes(spc.notes);
     }
     h += '<h2>Battery storage</h2>';

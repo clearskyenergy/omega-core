@@ -97,7 +97,7 @@ var RC = OC.RATE_CARD;
 var LIMITS = {
   units: [1, 3000], availableKw: [1, 200000],
   unitCostUsd: CM.LIMITS.capexCustom, termMonths: CM.LIMITS.termMonths, pricePerGpuHour: CM.LIMITS.customGpuHour,
-  takeOrPayPct: [0, 100], escalatorPct: [-10, 10], feePct: [0, 50],
+  takeOrPayPct: [0, 100], escalatorPct: [-30, 10], feePct: [0, 50],   /* a price that FALLS each contract year is a contract too (a GPU vintage's: −15% a year) */
   purchasePriceUsd: [1, 100000000], rentEscalatorPct: [0, RC.entered.maxEscalatorPct], revenueSharePct: [0, 60],
   rentPerKwMonth: [RC.entered.minMonthly / RC.computeKwPerSkid, RC.entered.maxMonthly / RC.computeKwPerSkid],
   residualPct: [0, CM.LIMITS.residualPct[1] * 100], landResidualPct: [0, 200],

@@ -126,7 +126,13 @@ function configOf(billing) {
          figures for it, by the pod's platform key: a price a GPU-hour where the chip has no public one, the pod's cost once the maker quotes */
       pod: { prices: podFigures(obj(c.pod).prices, 0.05, 100), costUsd: podFigures(obj(c.pod).costUsd, 1e5, 5e8) },
       reference: { capexUsdPerMw: within(ref.capexUsdPerMw, 1e5, 5e8), revenueUsdPerMwYear: within(ref.revenueUsdPerMwYear, 1e4, 5e8), utilityUsdPerMwYear: within(ref.utilityUsdPerMwYear, 0, 5e8),
-        gpusPerMw: within(ref.gpusPerMw, 1, 1e5), racksPerMw: within(ref.racksPerMw, 1, 1000), chipset: typeof ref.chipset === 'string' && CM.chipset(ref.chipset) ? ref.chipset : null } },
+        gpusPerMw: within(ref.gpusPerMw, 1, 1e5), racksPerMw: within(ref.racksPerMw, 1, 1000), chipset: typeof ref.chipset === 'string' && CM.chipset(ref.chipset) ? ref.chipset : null,
+        /* THE PARTNER'S FIGURES AS WRITTEN (its brief): one whole unit as it is sold, a price a GPU-hour and how it moves each year, and the operating lines its own model counts. The workspace's own
+           settings, never core's: the brief is the partner's confidential document. Read whole or not at all (writtenOf). */
+        unit: (function (u) { u = obj(u); return { label: clean(u.label, 60), capexUsd: within(u.capexUsd, 1e5, 1e9), gpus: within(u.gpus, 1, 1e5), itKw: within(u.itKw, 1, 1e5), sitePowerKw: within(u.sitePowerKw, 1, 2e5), racks: within(u.racks, 1, 1000) }; })(ref.unit),
+        pricePerGpuHour: within(ref.pricePerGpuHour, 0.05, 100), priceChangePctYear: within(ref.priceChangePctYear, -30, 10), electricityPerKwh: within(ref.electricityPerKwh, 0, 1), electricityEscalationPct: within(ref.electricityEscalationPct, -10, 20),
+        insurancePctOfCapitalYear: within(ref.insurancePctOfCapitalYear, 0, 10), fixedUsdYear: within(ref.fixedUsdYear, 0, 5e6), uptimePct: within(ref.uptimePct, 50, 100), residualPct: within(ref.residualPct, 0, 60),
+        leanOperating: ref.leanOperating === true, statedIrrPct: within(ref.statedIrrPct, -100, 1000), statedPaybackYears: within(ref.statedPaybackYears, 0, 50), source: clean(ref.source, 120) } },
     funding: funding,
     gates: gates.minKva != null || gates.minLeaseYears != null || gates.irrHurdlePct != null ? gates : null,
     review: reviewers.length ? { name: clean(rv.name, 60) || 'Executive Review', members: reviewers } : null,
@@ -200,6 +206,13 @@ function rateOf(site) {
     words: (rec.name || 'The serving utility') + '’s planning rates for ' + (by === 'zip' ? 'ZIP ' + zip : st) + ': $' + energy + ' a kWh plus $' + demand + ' a kW-month of demand, $' + per + ' a kWh on a flat load. A planning figure, not the site’s tariff' };
 }
 
+/* the shelf's units for a workspace: where the partner's unit is on file as written, IT is the top unit, on the site power it asks for */
+function modularsOf(cfg, pue) {
+  var W = cfg && cfg.compute && cfg.compute.basis === 'partner' ? writtenOf(cfg) : null;
+  if (!W) return MODULARS;
+  var top = MODULARS[MODULARS.length - 1], need = W.unit.sitePowerKw || Math.round(W.unit.itKw * pue);
+  return MODULARS.filter(function (m) { return m !== top && m.itKw < W.unit.itKw; }).concat([{ key: top.key, itKw: r2(W.unit.itKw), label: fmt(W.unit.itKw) + ' kW', repeats: true, written: true, needKw: Math.round(need) }]);
+}
 /* ── compute: the shelf on the free power, and the chosen unit's return ── */
 var econCache = {};
 function unitFor(m, chip, pue) {
@@ -216,6 +229,67 @@ function referenceOf(cfg) {
     own: ['capexUsdPerMw', 'revenueUsdPerMwYear', 'utilityUsdPerMwYear', 'gpusPerMw'].filter(function (k) { return o[k] != null; }) };
 }
 function musd(n) { return '$' + (Math.round(n / 1e4) / 100) + 'M'; }
+/* THE PARTNER'S FIGURES AS WRITTEN (2026-11-21, Tommy, of the offtake partner's brief: "use these numbers to update
+   the logic and engine for IRR calculation on compute"). Where the workspace's settings carry the unit as it is sold
+   (its capital, its GPUs, its IT load, the site power it asks for) and its price a GPU-hour, the partner basis runs
+   THAT, not a megawatt of flat revenue: the whole unit for the Micro pod, the same unit by its IT load for a Nano
+   pod, the price moving each contract year as written, the partner's fee off gross, and the operating lines its own
+   model counts (insurance as a share of capital, a fixed sum a year). Incomplete settings are no settings: the
+   megawatt reference stands. The figures are the workspace's; core carries none of them. */
+function writtenOf(cfg) {
+  var o = cfg.compute.reference || {}, u = o.unit || {};
+  if (!(u.capexUsd > 0 && u.gpus >= 1 && u.itKw > 0 && o.pricePerGpuHour > 0)) return null;
+  return { unit: u, price: o.pricePerGpuHour, change: o.priceChangePctYear != null ? o.priceChangePctYear : 0, insurancePct: o.insurancePctOfCapitalYear || 0, fixedUsdYear: o.fixedUsdYear || 0,
+    uptimePct: o.uptimePct, residualPct: o.residualPct, lean: o.leanOperating === true, statedElec: o.electricityPerKwh, elecEsc: o.electricityEscalationPct, statedIrrPct: o.statedIrrPct, statedPaybackYears: o.statedPaybackYears, source: o.source || null };
+}
+/* the IRR of a capital outlay and one sum at each year's end, by bisection; null where the cash never pays the capital back */
+function yearEndIrrPct(capital, yearly) {
+  if (!(capital > 0) || !yearly.length) return null;
+  function npv(r) { var v = -capital; for (var i = 0; i < yearly.length; i++) v += yearly[i] / Math.pow(1 + r, i + 1); return v; }
+  var lo = -0.99, hi = 10; if (npv(lo) < 0 || npv(hi) > 0) return null;
+  for (var k = 0; k < 80; k++) { var mid = (lo + hi) / 2; if (npv(mid) > 0) lo = mid; else hi = mid; }
+  return Math.round((lo + hi) / 2 * 10000) / 100;
+}
+function writtenCase(m, units, cfg, REF, W, rate, term) {
+  var chip = CM.chipset(REF.chipset) || CM.chipset(CM.DEFAULTS.chipset), pue = cfg.compute.pue || CM.DEFAULTS.pue, k = klassOf(m.itKw), whole = !!m.written;
+  var frac = whole ? 1 : m.itKw / W.unit.itKw, gpus = Math.floor(W.unit.gpus * frac + 1e-9), cost = Math.round(W.unit.capexUsd * frac), it = r2(W.unit.itKw * frac);
+  if (!(gpus >= 1) || !(cost > 0)) return { ok: false, reason: 'The partner’s unit does not size a ' + m.label + ' unit' };
+  var name = W.unit.label || 'the partner’s unit', unit = { label: whole ? name : m.label + ' ' + k.label, word: whole ? 'container' : 'pod', kw: r2(it * pue), itKw: it, gpus: gpus, costUsd: cost };
+  if (whole && W.unit.racks) unit.racks = W.unit.racks;
+  var fixedMonthly = Math.round((W.insurancePct / 100 * cost + W.fixedUsdYear * frac) / 12);
+  function run(elec) {
+    var op = { electricity: elec, fixedOpexMonthly: fixedMonthly };
+    if (W.lean) { op.networkStoragePct = 0; op.otherVariablePct = 0; op.maintenanceReservePct = 0; op.fixedOpexEscalationPct = 0; }
+    if (W.uptimePct != null) op.uptime = W.uptimePct / 100;
+    if (W.elecEsc != null) op.electricityEscalationPct = W.elecEsc / 100;
+    var input = { chipset: chip.key, units: units, unit: unit, contract: { termMonths: term, pricePerGpuHour: W.price, escalatorPct: W.change, partner: REF.feePct > 0 ? { name: REF.name, feePct: REF.feePct } : false }, site: { route: 'own' }, operating: op };
+    if (W.residualPct != null) input.residualPct = W.residualPct;
+    var out; try { out = CC.contractCase(input, {}); } catch (e) { out = null; }
+    return out && out.ok !== false && out.priced && out.returns && out.lines && out.lines.length ? out : null;
+  }
+  var here = rate ? run(rate.perKwh) : null, stated = W.statedElec != null ? run(W.statedElec) : null, main = here || stated || run(CM.DEFAULTS.electricity);
+  if (!main) return { ok: false, reason: 'The compute engine could not price this unit on the partner’s written figures' };
+  var y1 = main.lines[0], last = main.lines[main.lines.length - 1], sy = stated ? stated.lines[0] : null, notes = [], years = Math.round(term / 12);
+  /* THE SAME CASH ON THE OTHER CONVENTION. The engine's return is on monthly cash; a partner's brief is usually on one sum at each year's end, which reads lower on identical cash. Both are answered, so the two are compared like for like. */
+  function yearEnd(o) { return o ? yearEndIrrPct(o.totals.capital, o.lines.map(function (y) { return y.projectCashFlow; })) : null; }
+  var ye = yearEnd(main), yeStated = yearEnd(stated);
+  notes.push(REF.name + '’s figures are as written in its own brief' + (W.source ? ' (' + W.source + ')' : '') + ', modeled and unverified: ' + musd(W.unit.capexUsd) + ' for ' + name + ' of ' + fmt(W.unit.gpus) + ' ' + chip.name + ' GPUs drawing ' + fmt(W.unit.itKw) + ' kW of IT' + (W.unit.sitePowerKw ? ' on ' + fmt(W.unit.sitePowerKw) + ' kW of site power' : '') + '.');
+  if (!whole) notes.push('This ' + m.label + ' ' + k.label + ' is that unit scaled by its IT load (× ' + (Math.round(frac * 1000) / 1000) + '): ' + fmt(gpus) + ' GPUs, ' + musd(cost) + ', not whole racks. Its own price is not on file.');
+  notes.push('Revenue is $' + W.price + ' a GPU-hour in year one' + (W.change ? (W.change < 0 ? ', falling ' : ', rising ') + Math.abs(W.change) + '% each year after' : ', flat') + ', every hour the unit is up billed, with no ramp: ' + musd(y1.revenue) + ' in year one' + (last !== y1 ? ' and ' + musd(last.revenue) + ' in year ' + years : '') + '. A modeled price, not a contract: the offtake is not confirmed.');
+  notes.push(here ? 'Electricity is this site’s own: ' + rate.words + (stated ? '. On ' + REF.name + '’s own $' + W.statedElec + ' a kWh the return is ' + stated.returns.projectIrrPct + '%' : '') + '.'
+    : stated ? 'Electricity is ' + REF.name + '’s own $' + W.statedElec + ' a kWh: no ZIP, state or power price is on file to price this site’s own.' : 'Electricity is the engine’s default ($' + CM.DEFAULTS.electricity + ' a kWh): no ZIP, state or power price is on file for this site.');
+  notes.push('Operating: ' + (W.insurancePct ? 'insurance at ' + W.insurancePct + '% of capital a year' : 'no insurance line') + (W.fixedUsdYear ? ', $' + fmt(W.fixedUsdYear * frac) + ' a year of network, host and support' : '') + (W.lean ? ', and nothing else: the lines ' + REF.name + '’s model counts.' : ', plus the engine’s own network, other variable and maintenance lines.') + (REF.feePct > 0 ? ' ' + REF.name + ' takes ' + REF.feePct + '% of gross revenue (' + musd(y1.partnerFee) + ' in year one).' : ''));
+  notes.push('The return is the project IRR on monthly cash over the ' + term + '-month term, annualised, before tax and without debt' + (W.residualPct === 0 ? ', with no value counted at the end' : '') + '. No site rent, purchase or host share is in the case.');
+  if (ye != null) notes.push('The same cash counted once at each year’s end, the way a brief usually states a return, is ' + ye + '%' + (yeStated != null && here ? ' (' + yeStated + '% on ' + REF.name + '’s own power price)' : '') + '. The difference from the figure above is timing alone: the cash is identical.');
+  if (W.statedIrrPct != null) notes.push(REF.name + '’s own brief states ' + W.statedIrrPct + '%' + (W.statedPaybackYears != null ? ' and a ' + W.statedPaybackYears + '-year payback' : '') + ' on its own power price' + (yeStated != null ? '; this engine, on the same inputs and the same year-end convention, gives ' + yeStated + '%' + (stated.returns.paybackMonths != null ? ' and ' + (Math.round(stated.returns.paybackMonths / 1.2) / 10) + ' years' : '') : '') + '.');
+  return { ok: true, basis: 'partner', written: true, chipset: { key: chip.key, name: chip.name }, gpus: main.sizing.gpus, itKw: main.sizing.itKw, capexUsd: main.totals.capital, termMonths: term,
+    irrPct: main.returns.projectIrrPct, irrBasis: 'project IRR over ' + term + ' months on ' + REF.name + '’s written figures' + (here ? ', electricity at this site’s rate' : ''),
+    irrYearEndPct: ye, pricePerGpuHour: W.price, priceChangePctYear: W.change, priceBasis: 'partner ref', paybackMonths: main.returns.paybackMonths,
+    proforma: { partner: REF.name, verified: false, written: true, reference: { feePct: REF.feePct }, years: years, priceChangePctYear: W.change, capexUsd: main.totals.capital, revenuePerYear: y1.revenue, revenueLastYear: last.revenue, partnerFeePerYear: y1.partnerFee, utilityPerYear: y1.power, utilityBasis: here ? 'site' : stated ? 'stated' : 'default',
+      otherOperatingPerYear: y1.opex, ebitdaPerYear: y1.ebitda, irrWithoutFeePct: main.returns.irrWithoutFeePct, stated: W.statedIrrPct != null ? { irrPct: W.statedIrrPct, paybackYears: W.statedPaybackYears, engineYearEndPct: yeStated } : null, irrYearEndPct: ye,
+      asStated: stated && here ? { utilityPerYear: sy.power, electricityPerKwh: W.statedElec, ebitdaPerYear: sy.ebitda, irrPct: stated.returns.projectIrrPct, paybackMonths: stated.returns.paybackMonths } : null },
+    notes: notes };
+}
 /* A COMPUTE PRO FORMA ON WHAT THE OFFTAKE PARTNER SHOWED (2026-11-09, Tommy:
    "a compute pro forma that goes off of what lightsmith energy showed us …
    for 1mW of compute its a 35m investement and … about 26m a year and cost
@@ -261,10 +335,12 @@ function partnerCase(m, units, cfg, REF, rate, term) {
 function computeEconomics(m, units, cfg, site) {
   var rate = rateOf(site), term = cfg.compute.termMonths || COMPUTE_TERM_MONTHS, partner = cfg.compute.basis === 'partner' && !m.skid, REF = partner ? referenceOf(cfg) : null;
   var chip = CM.chipset(cfg.compute.chipset || CM.DEFAULTS.chipset) || CM.chipset(CM.DEFAULTS.chipset), pue = cfg.compute.pue || CM.DEFAULTS.pue;
-  var key = [m.key, units, chip.key, pue, rate ? rate.perKwh + rate.words : null, term, cfg.compute.partnerFeePct, cfg.compute.partnerName, REF ? JSON.stringify(REF) : ''].join('|');
+  var key = [m.key, units, chip.key, pue, rate ? rate.perKwh + rate.words : null, term, cfg.compute.partnerFeePct, cfg.compute.partnerName, REF ? JSON.stringify(REF) + JSON.stringify(cfg.compute.reference) : ''].join('|');
   if (econCache[key]) return econCache[key];
   var res;
-  if (partner) res = partnerCase(m, units, cfg, REF, rate, term);
+  var W = partner ? writtenOf(cfg) : null;
+  if (W) res = writtenCase(m, units, cfg, REF, W, rate, term);
+  else if (partner) res = partnerCase(m, units, cfg, REF, rate, term);
   else {
     var input = { chipset: chip.key, units: units, contract: { termMonths: term, partner: cfg.compute.partnerFeePct != null ? { name: cfg.compute.partnerName || 'the offtake partner', feePct: cfg.compute.partnerFeePct } : false }, site: { route: 'own' }, operating: {} };
     if (cfg.compute.pue) input.operating.pue = cfg.compute.pue;
@@ -306,7 +382,7 @@ function unitName(u) { return u.chip ? u.label + ' ' + u.chip + ' pod' : u.label
 function unitsOf(cfg, pue) {
   if (chipsBasis(cfg)) return PS.PLATFORMS.map(function (p) { var m = PS.atMeter(p); return { key: p.key, label: fmt(p.itKw) + ' kW', itKw: p.itKw, needKw: m.needKw, chip: p.short }; }).sort(function (a, b) { return a.needKw - b.needKw; });
   pue = pue || (cfg && cfg.compute && cfg.compute.pue) || CM.DEFAULTS.pue;
-  return MODULARS.map(function (m) { return { key: m.key, label: m.label, itKw: m.itKw, needKw: Math.round(m.itKw * pue), chip: null }; });
+  return modularsOf(cfg, pue).map(function (m) { return { key: m.key, label: m.label, itKw: m.itKw, needKw: m.needKw != null ? m.needKw : Math.round(m.itKw * pue), chip: null }; });
 }
 function podEconomics(p, units, cfg, site) {
   var rate = rateOf(site), term = cfg.compute.termMonths || COMPUTE_TERM_MONTHS, chip = p.chipset ? CM.chipset(p.chipset) : null, own = cfg.compute.pod || { prices: {}, costUsd: {} };
@@ -376,17 +452,19 @@ function podCompute(power, cfg, site, want) {
 function computeOf(power, cfg, site, want) {
   if (chipsBasis(cfg)) return podCompute(power, cfg, site, want);
   var pue = cfg.compute.pue || CM.DEFAULTS.pue, kw = power.availableKw;
-  var shelf = MODULARS.map(function (m) { var need = Math.round(m.itKw * pue), k = klassOf(m.itKw), n = kw != null ? Math.floor(kw / need + 1e-9) : 0; return { key: m.key, label: m.label, klass: k.key, klassLabel: k.label, itKw: m.itKw, meterKw: need, coolingKw: need - m.itKw, fits: kw != null && kw >= need, units: m.repeats ? n : Math.min(n, 1) }; });
+  var W = cfg.compute.basis === 'partner' ? writtenOf(cfg) : null, mods = modularsOf(cfg, pue);
+  var shelf = mods.map(function (m) { var need = m.needKw != null ? m.needKw : Math.round(m.itKw * pue), k = klassOf(m.written ? MICRO_FROM_KW : m.itKw), n = kw != null ? Math.floor(kw / need + 1e-9) : 0; return { key: m.key, label: m.label, klass: k.key, klassLabel: k.label, itKw: m.itKw, meterKw: need, coolingKw: need - m.itKw, fits: kw != null && kw >= need, units: m.repeats ? n : Math.min(n, 1) }; });
   var out = { pue: pue, shelf: shelf, chosen: null, fits: false, basis: power.basis, words: null };
   if (kw == null) { out.words = 'No power figure to size compute on'; return out; }
   var pick = null; shelf.forEach(function (s) { if (s.fits) pick = s; });
   if (!pick) { out.words = fmt(kw) + ' kW does not carry the smallest unit (' + shelf[0].label + ' of IT needs ' + fmt(shelf[0].meterKw) + ' kW at the meter)'; out.needKw = shelf[0].meterKw; return out; }
-  var m = MODULARS.filter(function (x) { return x.key === pick.key; })[0], units = pick.units;
+  var m = mods.filter(function (x) { return x.key === pick.key; })[0], units = pick.units;
   out.fits = true;
   out.chosen = { key: pick.key, label: pick.label, klass: pick.klass, klassLabel: pick.klassLabel, units: units, itKw: pick.itKw * units, meterKw: pick.meterKw * units, coolingKw: pick.coolingKw * units, leftKw: r2(kw - pick.meterKw * units) };
-  out.words = (units > 1 ? units + ' × ' : '') + pick.label + ' of IT (' + fmt(out.chosen.meterKw) + ' kW at the meter at PUE ' + pue + ') on ' + fmt(kw) + ' kW' + (power.basis === 'ceiling' ? ', a ceiling' : power.basis === 'upgrade' ? ' after the upgrade' : ' free');
+  out.words = (units > 1 ? units + ' × ' : '') + pick.label + ' of IT (' + fmt(out.chosen.meterKw) + (m.written ? ' kW of site power, as the partner’s unit asks' : ' kW at the meter at PUE ' + pue) + ') on ' + fmt(kw) + ' kW' + (power.basis === 'ceiling' ? ', a ceiling' : power.basis === 'upgrade' ? ' after the upgrade' : ' free');
   /* the chiller, in power and in space */
-  out.cooling = { kw: out.chosen.coolingKw, words: fmt(out.chosen.coolingKw) + ' kW of the ' + fmt(out.chosen.meterKw) + ' kW at the meter is the chiller, pumps and losses (PUE ' + pue + '); ' + fmt(out.chosen.itKw) + ' kW reaches the IT' };
+  out.cooling = { kw: out.chosen.coolingKw, words: m.written ? fmt(out.chosen.itKw) + ' kW is the IT’s continuous load; the other ' + fmt(out.chosen.coolingKw) + ' kW of the ' + fmt(out.chosen.meterKw) + ' kW asked for is its cooling and the headroom for its peak'
+    : fmt(out.chosen.coolingKw) + ' kW of the ' + fmt(out.chosen.meterKw) + ' kW at the meter is the chiller, pumps and losses (PUE ' + pue + '); ' + fmt(out.chosen.itKw) + ' kW reaches the IT' };
   out.space = { pods: units, words: (units > 1 ? units + ' pods, each with its own chiller' : 'One pod and its chiller') + ' on the site: the pad (the pod, the chiller and the service clearances) is the maker’s figure and is not on file. Confirm it fits before the site is approved' };
   out.economics = computeEconomics(m, units, cfg, site);
   return out;

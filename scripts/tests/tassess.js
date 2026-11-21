@@ -724,6 +724,51 @@ test('S05 through the door: the lot alone is read again for a site already scree
   await rejects(w.post({ action: 'assess-space', site: 's1' }, { canEdit: false }), 403);
 });
 
+/* ── THE PARTNER'S FIGURES AS WRITTEN, and THE SPACE SCORE (2026-11-21, Tommy: "add that as something we can look at and
+   score in the portfolio … use these numbers to update the logic and engine for IRR calculation on compute").
+   The figures below are STAND-INS: the partner's own are the workspace's settings and are never in the repository. ── */
+function written(extra, ref) {
+  return A.configOf({ portfolioAssessment: { compute: Object.assign({ basis: 'partner', termMonths: 72, pue: 1.1, reference: Object.assign({ chipset: 'gb300', unit: { label: 'Stand-in container', capexUsd: 30000000, gpus: 300, itKw: 700, sitePowerKw: 1000, racks: 5 },
+    pricePerGpuHour: 6, priceChangePctYear: -10, insurancePctOfCapitalYear: 1, fixedUsdYear: 30000, uptimePct: 100, residualPct: 0, leanOperating: true, electricityEscalationPct: 0, electricityPerKwh: 0.1, statedIrrPct: 30, statedPaybackYears: 2.5, source: 'a stand-in brief' }, ref || {}) }, extra || {}) } });
+}
+test('W01 the partner’s figures as written run the partner basis: the unit as sold on the site power it asks for, the price falling each year, its fee off gross, only the lines its model counts, and no value at the end', function () {
+  var cfg = written(), site = { address: { state: 'OK', zip: '74834' } }, c = A.computeOf({ availableKw: 1000, basis: 'measured' }, cfg, site), e = c.economics;
+  /* the shelf's top unit is the partner's: 700 kW of IT on the 1,000 kW it asks for; the Nano sizes under it stay */
+  assert.deepStrictEqual(c.shelf.map(function (u) { return [u.key, u.itKw, u.meterKw]; }), [['m75', 75, 83], ['m150', 150, 165], ['m350', 350, 385], ['m500', 500, 550], ['m1000', 700, 1000]]);
+  assert.equal(c.chosen.key, 'm1000'); assert.equal(c.chosen.klass, 'micro'); assert.ok(/700 kW of IT \(1,000 kW of site power, as the partner’s unit asks\)/.test(c.words));
+  assert.ok(e.ok); assert.equal(e.written, true); assert.equal(e.gpus, 300); assert.equal(e.capexUsd, 30000000); assert.equal(e.pricePerGpuHour, 6); assert.equal(e.priceChangePctYear, -10);
+  var pf = e.proforma; near(pf.revenuePerYear, 300 * 6 * 8760, 1); near(pf.revenueLastYear, 300 * 6 * 8760 * Math.pow(0.9, 5), 1); near(pf.partnerFeePerYear, 300 * 6 * 8760 * 0.1, 1);
+  near(pf.otherOperatingPerYear, 0.01 * 30000000 + 30000, 12); assert.equal(pf.utilityBasis, 'site'); near(pf.asStated.utilityPerYear, 700 * 1.1 * 8760 * 0.1, 1);
+  /* both conventions, the same cash: monthly reads higher than year-end, and the year-end figure is the yearly sums’ own IRR */
+  assert.ok(e.irrPct > e.irrYearEndPct && e.irrYearEndPct > 0, e.irrPct + ' / ' + e.irrYearEndPct);
+  var cash = [], y1 = 300 * 6 * 8760; for (var y = 0; y < 6; y++) cash.push(y1 * Math.pow(0.9, y) * 0.9 - 700 * 1.1 * 8760 * 0.1 - 330000);
+  var npv = -30000000; cash.forEach(function (v, i) { npv += v / Math.pow(1 + pf.stated.engineYearEndPct / 100, i + 1); }); assert.ok(Math.abs(npv) < 30000, 'year-end IRR on the stated power price: npv ' + npv);
+  assert.ok(e.notes.some(function (n) { return /as written in its own brief \(a stand-in brief\), modeled and unverified/.test(n); })); assert.ok(e.notes.some(function (n) { return /falling 10% each year after/.test(n); }));
+  assert.ok(e.notes.some(function (n) { return /timing alone: the cash is identical/.test(n); })); assert.ok(e.notes.some(function (n) { return /own brief states 30% and a 2\.5-year payback/.test(n); }));
+  /* a Nano pod is the unit by its IT load, said; an incomplete record is no record: the megawatt reference stands */
+  var n = A.computeOf({ availableKw: 400, basis: 'measured' }, cfg, site); assert.equal(n.chosen.key, 'm350'); assert.equal(n.economics.gpus, 150); assert.equal(n.economics.capexUsd, 15000000); assert.ok(n.economics.notes.some(function (x) { return /scaled by its IT load \(× 0\.5\)/.test(x); }));
+  var half = written(null, { pricePerGpuHour: null }); assert.equal(A.computeOf({ availableKw: 1500, basis: 'measured' }, half, site).economics.written, undefined); assert.equal(A.computeOf({ availableKw: 1500, basis: 'measured' }, half, site).chosen.itKw, 1000);
+  /* a workspace not on the partner basis never reads it, and no figure of the partner's brief is in core */
+  assert.equal(A.computeOf({ availableKw: 1500, basis: 'measured' }, A.configOf({ portfolioAssessment: { compute: { reference: written().compute.reference } } }), site).economics.basis, 'spot');
+  assert.equal(CCt.PARTNER.brief.capital, undefined); assert.equal(written().compute.reference.unit.capexUsd, 30000000);
+});
+test('W02 the contract engine carries a price that falls each contract year, to 30% a year', function () {
+  function rev(esc) { var o = CCt.contractCase({ chipset: 'gb300', units: 1, unit: { label: 'u', kw: 800, itKw: 700, gpus: 300, costUsd: 30000000 }, contract: { termMonths: 36, pricePerGpuHour: 6, escalatorPct: esc, partner: false }, site: { route: 'own' }, operating: { uptime: 1 } }, {}); return o.lines.map(function (y) { return y.revenue; }); }
+  var f = rev(-15); near(f[1] / f[0], 0.85, 0.0001); near(f[2] / f[0], 0.7225, 0.0001); var g = rev(-30); near(g[1] / g[0], 0.7, 0.0001); var out = rev(-40); near(out[1] / out[0], 1, 0.0001);
+});
+test('W03 the space score: 60 and up fits, rising with the clear ground to 100; under 40 does not fit, by how near the largest rectangle comes; an upper bound is held at 70; not judged is no score', function () {
+  var site = { address: { state: 'OK', zip: '74834' }, serviceCapacityKw: 1500 };
+  function scoreFor(ring, built) { return A.assess(site, { parcel: { ok: true, acres: 1, at: NOW, space: SP.measure(ring, built) }, now: NOW }).space.score; }
+  var big = scoreFor(LOT, { ok: true, list: [{ ring: STORE }], source: 'F' }); assert.equal(big.points, 100); assert.equal(big.grade, 'Ample'); assert.equal(big.upperBound, false);
+  var mid = scoreFor(rectRing(0, 0, 120, 100), { ok: true, list: [], source: 'F' }); assert.ok(mid.points >= 66 && mid.points <= 69, mid.points); assert.equal(mid.grade, 'Fits'); assert.ok(/pads’ worth of clear ground/.test(mid.words));
+  var no = scoreFor(rectRing(0, 0, 70, 60), { ok: true, list: [], source: 'F' }); assert.ok(no.points >= 20 && no.points < 40, no.points); assert.equal(no.grade, 'No room'); assert.ok(/the largest covers \d+% of it/.test(no.words));
+  var ub = scoreFor(LOT, { ok: false, reason: 'down' }); assert.equal(ub.points, 70); assert.equal(ub.upperBound, true); assert.ok(/held at 70 because the judgement is an upper bound/.test(ub.words));
+  assert.equal(A.assess(site, { parcel: { ok: true, acres: 1, at: NOW }, now: NOW }).space.score, undefined); assert.equal(SP.scoreOf(null, { sqFt: 3000 }, null, false), null);
+  /* the register's row keeps the score, so the list sorts on it */
+  var p = { ok: true, acres: 1, at: NOW, space: SP.measure(LOT, { ok: true, list: [{ ring: STORE }], source: 'F' }) }, row = A.listView({ result: A.assess(site, { parcel: p, now: NOW }), parcel: p }, site, {});
+  assert.equal(row.space.score.points, 100); assert.equal(row.space.uses.compute.fits, true);
+});
+
 (async function () {
   for (var i = 0; i < queue.length; i++) {
     try { await queue[i][1](); passed++; console.log('PASS ' + queue[i][0]); }

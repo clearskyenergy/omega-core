@@ -251,23 +251,64 @@ slope and the zoning setback are not read. On a charging site most of the
 clear ground is parking: a fit says a clear rectangle that size exists, not
 that the pad goes there.
 
+**The space score** (Tommy: "add that as something we can look at and score
+in the portfolio and IRR tool"). One number a site, 0 to 100, for the
+compute unit's pad on the clear ground (`scoreOf`): 60 and up FITS (60 where
+the clear ground is just the pad, 100 at ten pads' worth), 85 and up reads
+Ample, under 40 does NOT fit (by how much of the pad the largest clear
+rectangle covers), and an upper bound is held at 70. Not judged is no
+score, never a zero. The register carries it as its own *Space* column,
+sortable like the returns; the card and the diligence report print the
+score with its rule in words.
+
 `assess-space { site | ids[] (10) }` reads the lot alone for sites screened
 before this existed (the parcel again and the buildings, never the grid
 screen; one metered parcel lookup a site where the county has no public
 layer). A lookup that fails never replaces a parcel on file. Held by
 `tassess.js` S01 to S05.
 
-### The offtake partner's written brief (2026-11-21)
+### The offtake partner's figures as written (2026-11-21)
 
-The offtake partner's Q4 2026 brief is the first time their figures are on
-paper. It is their confidential document, so the code keeps only what the
-space analysis reads (`compute-contract.js PARTNER.brief`: the unit's
-50 × 60 ft footprint and what the site provides). Its commercial figures
-are not recorded in the repository. They differ from the per-megawatt
-reference the partner basis prices on (`PARTNER.reference`, the figures as
-told); **the partner basis has not been moved onto the brief**: that changes
-every return a workspace on that basis reads, so it is that workspace's call
-(see the honest list).
+Tommy, of the offtake partner's Q4 2026 brief: "use these numbers to update
+the logic and engine for IRR calculation on compute." The brief is the first
+time their figures are on paper, and they are not the megawatt of flat
+revenue the partner basis ran on. It is their confidential document, so its
+figures are the WORKSPACE'S SETTINGS (`compute.reference`), never the
+repository's: the code keeps only the unit's footprint
+(`compute-contract.js PARTNER.brief`).
+
+Where a workspace on the partner basis has the unit and the price on file
+(`reference.unit { capexUsd, gpus, itKw, sitePowerKw, racks, label }` and
+`reference.pricePerGpuHour`; incomplete is no record and the megawatt
+reference stands), `writtenCase` runs them through the one contract engine:
+
+- **The unit as sold.** The shelf's top unit is the partner's, on the site
+  power it asks for; a Nano pod is that unit by its IT load, said.
+- **A price that moves each contract year** (`priceChangePctYear`; the
+  engine's escalator now reaches −30% a year: a GPU vintage's price falls).
+- **The partner's fee off gross**, and **the operating lines its own model
+  counts**: insurance as a share of capital, a fixed sum a year
+  (`insurancePctOfCapitalYear`, `fixedUsdYear`), and with `leanOperating`
+  nothing else. `uptimePct`, `residualPct` (0: no value at the end) and
+  `electricityEscalationPct` are theirs to state too.
+- **Electricity is the site's own**, with the partner's own price
+  (`electricityPerKwh`) run beside it.
+- **Two conventions, one cash.** The engine's return is on monthly cash; a
+  brief usually states one sum at each year's end, which reads lower on
+  identical cash. Both are answered (`irrPct`, `irrYearEndPct`), and where
+  the brief's own return is on file (`statedIrrPct`) the answer says what
+  this engine gives on the brief's inputs and convention.
+
+Checked against the brief itself, off the repository: on the brief's own
+inputs the engine reproduces its year-one revenue, its fee, its other
+operating costs and its payback, and its return to within half a point on
+the brief's year-end convention. The difference left is electricity: the
+engine draws the unit's IT load times its PUE, the brief its IT load alone.
+On monthly cash the same case reads about seven points higher.
+
+`scripts/set-portfolio-assessment.js --compute-basis partner --term-months …
+--pue … --reference-json '{…}'` stages it. Held by `tassess.js` W01 to W03
+on stand-in figures.
 
 ### Battery: the grid value stack
 
@@ -626,9 +667,10 @@ in how the three are read side by side, and it is on the honest list below.
 ## What is not built (honest list)
 
 **The numbers**
-- **The partner basis still prices on the figures as told, not the written
-  brief.** Moving it changes live returns and needs the brief's figures
-  entered as that workspace's own settings: not done without the word.
+- **The partner's written figures are modeled, not contracted.** Every hour
+  billed from year one with no ramp, a price the partner modeled, no tax, no
+  debt, no value at the end. A workspace whose settings do not carry them
+  still prices on the megawatt reference as told.
 - **Space is the public record's clear ground, and only compute is judged.**
   Parking, paving, easements and the zoning setback are not read; no
   footprint is on file for a battery of a given size or for the dispensers'
