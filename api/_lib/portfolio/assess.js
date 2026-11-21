@@ -49,7 +49,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var B = require('./assess-bess'), T = require('./assess-supercharger');
-var CM = require('../omega-compute-model'), CC = require('../compute-contract'), D = require('./diligence'), UR = require('../utility-rates'), PS = require('../pod-spec');
+var CM = require('../omega-compute-model'), CC = require('../compute-contract'), D = require('./diligence'), UR = require('../utility-rates'), PS = require('../pod-spec'), SP = require('./assess-space');
 var ISO = require('../../../omega-iso-market.js');   /* the ONE market resolver (state + utility → ISO/RTO) */
 
 var VERSION = 1, CONFIG_KEY = 'portfolioAssessment', CONTINUOUS = 0.8;
@@ -116,7 +116,7 @@ function configOf(billing) {
   var gates = { minKva: within(ga.minKva, 1, 1000000), minLeaseYears: within(ga.minLeaseYears, 0.1, 99), irrHurdlePct: within(ga.irrHurdlePct, 0, 500) };
   /* what must be true before a site is the workspace's own: bought, the host agreement assigned, a lease of the length it needs */
   var cl = obj(raw.closing), closeYears = within(cl.minLeaseYears, 1, 99);
-  return { bess: obj(raw.bess), supercharger: { assumptions: obj(obj(raw.supercharger).assumptions), sizing: obj(obj(raw.supercharger).sizing) },
+  var cfgOut = { bess: obj(raw.bess), supercharger: { assumptions: obj(obj(raw.supercharger).assumptions), sizing: obj(obj(raw.supercharger).sizing) },
     compute: { chipset: typeof c.chipset === 'string' ? c.chipset : null, pue: num(c.pue) > 1 && num(c.pue) < 2.5 ? num(c.pue) : null,
       partnerName: typeof c.partnerName === 'string' ? c.partnerName.slice(0, 80) : null, partnerFeePct: num(c.partnerFeePct) >= 0 && num(c.partnerFeePct) <= 50 ? num(c.partnerFeePct) : null,
       termMonths: num(c.termMonths) >= 12 && num(c.termMonths) <= 240 ? Math.floor(num(c.termMonths)) : null,
@@ -131,6 +131,9 @@ function configOf(billing) {
     gates: gates.minKva != null || gates.minLeaseYears != null || gates.irrHurdlePct != null ? gates : null,
     review: reviewers.length ? { name: clean(rv.name, 60) || 'Executive Review', members: reviewers } : null,
     closing: closeYears != null ? { minLeaseYears: closeYears, agreement: clean(cl.agreement, 60) || 'site host agreement' } : null };
+  /* the space analysis's own assumptions (the setback and the clearance off a building): a key only where the workspace set one, so every other workspace's settings, and its answers' hash, are as they were */
+  var space = SP.configOf(raw.space); if (space) cfgOut.space = space;
+  return cfgOut;
 }
 function podFigures(raw, lo, hi) { var out = {}; raw = obj(raw); PS.PLATFORMS.forEach(function (p) { var n = num(raw[p.key]); if (n != null && n >= lo && n <= hi) out[p.key] = n; }); return out; }
 function clean(v, n) { return typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n) || null : null; }
@@ -470,6 +473,9 @@ function evidenceFor(key, c) {
   if (key === 'power-interconnection' && p.hosting) return scr('The utility publishes ' + fmt(p.hosting.loadKw) + ' kW of load hosting' + (p.hosting.circuit ? ' on circuit ' + p.hosting.circuit : '') + '; no application is on file', p.hosting.source || 'Utility hosting capacity');
   if (key === 'power-net' && p.transformerKva) return scr(fmt(p.transformerKva) + ' kVA × ' + CONTINUOUS + ' continuous = ' + fmt(p.transformerKva * CONTINUOUS) + ' kW, before the site’s own load', 'Site record');
   if (key === 'power-evidence' && p.substation && p.substation.name) return scr('Nearest substation: ' + p.substation.name + (p.substation.kv ? ', ' + p.substation.kv + ' kV' : '') + (p.substation.distanceMi != null ? ', ' + p.substation.distanceMi + ' mi' : '') + (p.utility ? ' · ' + p.utility : '') + '; a will-serve letter is the evidence', 'Grid Atlas');
+  var su = c.space && c.space.uses && c.space.uses.compute;
+  if (key === 'physical-area' && c.space && c.space.measured && su && su.fits != null) return su.fits ? scr(c.space.words + '. ' + su.words + ' A level pad there is not confirmed', 'Parcel record and building footprints') : hint(c.space.words + '. ' + su.words);
+  if (key === 'physical-expansion' && c.space && c.space.measured && c.space.clearRect) return hint('Clear ground on the record: ' + fmt(c.space.clearSqFt) + ' sq ft, the largest rectangle about ' + c.space.clearRect.wFt + ' × ' + c.space.clearRect.dFt + ' ft');
   if (key === 'physical-area' && num(pa.acres) == null && c.compute.fits && c.compute.space) return hint(c.compute.space.words);
   if (key === 'physical-area' && num(pa.acres) != null) return scr('Parcel of ' + r2(num(pa.acres)) + ' acres on the parcel record; a level pad is not confirmed', 'Parcel record');
   if (f) {
@@ -532,6 +538,9 @@ function verificationsOf(c, readiness) {
     if (c.compute.thermal && c.compute.thermal.derates) out.push({ key: 'pod-ambient', label: 'Get the site’s design ambient (its hottest-hour dry bulb) and the maker’s derate for it: ' + c.compute.thermal.words.split('. ')[0].replace(/^Full power/, 'the chosen racks hold full power') });
     if (open('conn-diversity')) out.push({ key: 'pod-routes', label: 'Confirm ' + PS.POD.connectivity + ' to the site: the pod’s maker asks for it' });
   }
+  var sus = c.space && c.space.uses && c.space.uses.compute;
+  if (sus && sus.fits === false) out.unshift({ key: 'space', label: 'Check the pad on the site plan: no clear ' + sus.needFt.wFt + ' × ' + sus.needFt.dFt + ' ft rectangle is on the public record for the compute unit' });
+  else if (c.space && c.space.ok && !c.space.measured && c.compute.fits) out.push({ key: 'space-read', label: 'Read the lot (its outline and buildings) so the pad can be judged against the clear ground' });
   if (!sc) out.push({ key: 'screen', label: 'Run the Grid Atlas and parcel screens: the substation, the utility, fiber and zoning are not read yet' });
   return out.slice(0, 8);
 }
@@ -947,12 +956,13 @@ function assess(site, ctx) {
   var sup = power.availableKw != null ? T.superchargerCase({ state: st, availableKw: power.availableKw, startYear: year, assumptions: cfg.supercharger.assumptions, sizing: cfg.supercharger.sizing }) : { ok: false, reason: 'No power figure to size posts on' };
   var upgrade = upgradeView(ctx.upgrade, power, cfg, site), upgradeAdvice = upgradeAdviceOf(power, compute, cfg, site, upgrade);
   var pairing = pairingOf(compute, site, st, power, cfg);
-  var c = { site: site, power: power, compute: compute, screen: screen, parcel: parcel, upgrade: upgrade };
+  var space = SP.spaceOf(parcel, { compute: compute, bess: bess, supercharger: sup });
+  var c = { site: site, power: power, compute: compute, screen: screen, parcel: parcel, upgrade: upgrade, space: space };
   var readiness = readinessOf(c, ctx.marks), verify = verificationsOf(c, readiness);
   var grade = { A: 'Sized on a limit and a peak on file', B: 'Sized on a figure entered by hand', C: 'Sized on a ceiling: the site’s peak is not on file', D: 'Not sized: no power figure on file' }[power.grade];
   return { v: VERSION, at: ctx.now || null, inputHash: inputHashOf(site, screen, parcel, cfg, ctx.upgrade),
     market: market.iso ? { iso: market.iso, label: market.label, basis: market.basis, split: market.split, words: market.words } : null,
-    power: power, compute: compute, pairing: pairing, upgrade: upgrade, upgradeAdvice: upgradeAdvice, bess: bess, supercharger: sup, recommend: recommendOf(compute, bess, sup), readiness: readiness, verify: verify,
+    power: power, compute: compute, space: space, pairing: pairing, upgrade: upgrade, upgradeAdvice: upgradeAdvice, bess: bess, supercharger: sup, recommend: recommendOf(compute, bess, sup), readiness: readiness, verify: verify,
     confidence: { grade: power.grade, words: grade, screened: !!(screen && screen.complete), parcel: !!(parcel && parcel.ok) },
     note: 'Compute, the battery and fast charging are each sized on the whole free capacity by itself: they are alternatives, not a stack.' };
 }
@@ -967,6 +977,7 @@ function listView(a, site, ctx) {
   if (r.supercharger) { delete r.supercharger.projections; delete r.supercharger.notes; }
   if (r.compute) { r.compute.shelf = (r.compute.shelf || []).map(function (u) { var row = { key: u.key, label: u.label, klassLabel: u.klassLabel, meterKw: u.meterKw, fits: u.fits }; if (u.chip) { row.chip = u.chip; row.gpus = u.gpus; row.units = u.units; row.irrPct = u.irrPct == null ? null : u.irrPct; } return row; }); delete r.compute.requirements; if (r.compute.economics) delete r.compute.economics.notes; if (r.compute.space) delete r.compute.space; }
   if (r.upgrade && r.upgrade.compute) delete r.upgrade.compute.words;
+  if (r.space) { delete r.space.notes; var cu = r.space.uses && r.space.uses.compute; r.space.uses = cu ? { compute: { fits: cu.fits, needFt: cu.needFt || null, upperBound: cu.upperBound === true, words: cu.words } } : {}; }
   if (r.power) { delete r.power.limits; delete r.power.verify; }
   if (r.readiness) r.readiness.sections = r.readiness.sections.map(function (s) { return { key: s.key, label: s.label, done: s.done, of: s.of }; });
   r.stale = r.inputHash !== inputHashOf(site, a.screen || null, a.parcel || null, cfg, a.upgrade || null);

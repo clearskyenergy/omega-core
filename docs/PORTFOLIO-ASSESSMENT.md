@@ -199,6 +199,76 @@ not an offer: it is off for every workspace that does not ask, and its
 figures reach a browser only as that workspace's answer. Held by
 `tassess.js` C01 to C06.
 
+### Space on the lot (2026-11-21)
+
+Tommy: "We need to have a space analysis on the sites as well based on the
+parcel." The assessment sized everything on a site's free power and said of
+the ground only "the pad is not on file". Two makers have now put a
+footprint in writing, and the screen already reads the parcel under the
+point, so the answer carries a second question: is there room.
+
+**Measured once, while the parcel's outline is in hand**
+(`api/_lib/portfolio/assess-space.js measure`). The screen's parcel step,
+and `assess-space` for a site already screened, read the lot's outline from
+`api/parcel.js` and the building footprints on it from FEMA's USA
+Structures (`structures.js`, the service Omega Maximus reads in the
+browser), and measure on a raster (`site-fit.js`, for its reasons), square
+to the lot's own longest edge:
+
+- the lot's area and the buildings' area on it (their count, their share);
+- what is CLEAR: inside the lot line by a setback (10 ft) and off every
+  building by a clearance (10 ft), both stated assumptions the workspace may
+  set (`portfolioAssessment.space { setbackFt, buildingClearFt }`);
+- the largest clear rectangle, and for a ladder of widths (8 to 300 ft) the
+  longest clear run that wide.
+
+Only that summary is kept, on `assessment.parcel.space`. The outline itself
+is never stored (the assessment's rule, unchanged).
+
+**Judged at every assessment** (`spaceOf`, pure): each use's pad against the
+summary. A pad fits when a clear run at least as wide as its short side
+(rounded UP to the ladder) is at least as long as its long side.
+
+| unit | pad | whose figure |
+|---|---|---|
+| the maker's pod, by chip | 21 × 9 ft a pod, 6.5 ft between pods | the pod maker's sheet (`pod-spec.js`) |
+| a 1 MW container (the Micro pod) | 50 × 60 ft, the container and its coolers | the offtake partner's written brief (`PARTNER.brief`) |
+| the 75 kW skid | 28 × 7.25 ft | the skid as recorded |
+| a 150 to 750 kW unit | none on file: judged against the container's 50 × 60 ft as an upper bound, said | |
+| a battery, the dispensers | none on file: NOT judged, said | |
+
+The row carries a mark beside the compute size (room · room? · no room; the
+question mark is an upper bound: buildings not read, or no footprint for
+that unit), the card and the diligence report a *Space on the lot* box, the
+checklist's *Adequate level area* reads Screened where the pad fits (never
+Done: a person confirms a level pad on the site plan) and stays Open with
+the reason where it does not, and a pad with no clear rectangle is the first
+verification.
+
+**What "clear" does not mean.** It is open ground on the public record.
+Paving, parking stalls, drive aisles, canopies, fuel tanks, easements,
+slope and the zoning setback are not read. On a charging site most of the
+clear ground is parking: a fit says a clear rectangle that size exists, not
+that the pad goes there.
+
+`assess-space { site | ids[] (10) }` reads the lot alone for sites screened
+before this existed (the parcel again and the buildings, never the grid
+screen; one metered parcel lookup a site where the county has no public
+layer). A lookup that fails never replaces a parcel on file. Held by
+`tassess.js` S01 to S05.
+
+### The offtake partner's written brief (2026-11-21)
+
+The offtake partner's Q4 2026 brief is the first time their figures are on
+paper. It is their confidential document, so the code keeps only what the
+space analysis reads (`compute-contract.js PARTNER.brief`: the unit's
+50 × 60 ft footprint and what the site provides). Its commercial figures
+are not recorded in the repository. They differ from the per-megawatt
+reference the partner basis prices on (`PARTNER.reference`, the figures as
+told); **the partner basis has not been moved onto the brief**: that changes
+every return a workspace on that basis reads, so it is that workspace's call
+(see the honest list).
+
 ### Battery: the grid value stack
 
 A battery of the free kW at four hours. Capital (hardware, soft costs,
@@ -516,6 +586,7 @@ is switched on for the workspace, the same screen also lands on
 | `compute.chipset`, `.pue`, `.termMonths`, `.partnerName`, `.partnerFeePct` | the compute case's chip, PUE, term and offtake fee |
 | `compute.basis: 'partner'`, `compute.reference` | compute on the offtake partner's stated per-megawatt figures; `reference` replaces any of them (`capexUsdPerMw`, `revenueUsdPerMwYear`, `utilityUsdPerMwYear`, `gpusPerMw`) |
 | `compute.basis: 'chips'`, `compute.chipset`, `compute.pod { prices, costUsd }` | compute as the maker's 1 MW pod, by chip (`pod-spec.js`); the workspace's own chip, a price a GPU-hour and the pod's cost, each by the pod's configuration key (`rtx6000`, `gb300`, `vr-maxq`, `vr-maxp`) |
+| `space { setbackFt, buildingClearFt }` | the space analysis's two assumptions: clear of the lot line, clear of a building (10 ft each unless set) |
 | `funding { mode: 'committee', name, members[] }` | the funding list in place of the finance marketplace |
 | `gates { minKva, minLeaseYears, irrHurdlePct }` | the workspace's screening gates |
 | `review { name, members[] }` | its review board: every member votes own or flip |
@@ -555,6 +626,15 @@ in how the three are read side by side, and it is on the honest list below.
 ## What is not built (honest list)
 
 **The numbers**
+- **The partner basis still prices on the figures as told, not the written
+  brief.** Moving it changes live returns and needs the brief's figures
+  entered as that workspace's own settings: not done without the word.
+- **Space is the public record's clear ground, and only compute is judged.**
+  Parking, paving, easements and the zoning setback are not read; no
+  footprint is on file for a battery of a given size or for the dispensers'
+  equipment pad, so neither is judged; a 150 to 750 kW unit is judged
+  against the 1 MW container's pad. Truck and crane access is not counted.
+  Buildings under about 450 sq ft are not in the structures service.
 - **By chip, the pod's own price and the offtake are not on file.** The
   maker's sheet has no price: capital is the engine's chipset-scaled
   estimate (its enclosure and cooling allowance, not the pod's), and the

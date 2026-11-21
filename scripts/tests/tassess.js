@@ -377,6 +377,10 @@ test('A15 closing a site: purchased from the partner, the host agreement assigne
 });
 
 /* ── D: the door ────────────────────────────────────────────────────────── */
+/* a 500 × 300 ft lot (about 3.44 acres) turned 20° off north at the Chandler point, and a 120 × 80 ft store on it */
+function lotPoint(x, y) { var a = 20 * Math.PI / 180, X = x * Math.cos(a) - y * Math.sin(a), Y = x * Math.sin(a) + y * Math.cos(a); return [35.7 + Y / 364000, -96.88 + X / (364000 * Math.cos(35.7 * Math.PI / 180))]; }
+function rectRing(x, y, w, h) { return [lotPoint(x, y), lotPoint(x + w, y), lotPoint(x + w, y + h), lotPoint(x, y + h)]; }
+var LOT = rectRing(0, 0, 500, 300), STORE = rectRing(40, 40, 120, 80);
 function world(opts) {
   opts = opts || {};
   var db = new FD.DB(), calls = { atlas: 0, network: 0, hosting: 0, parcel: 0 };
@@ -390,7 +394,8 @@ function world(opts) {
       return { atlas: function () { calls.atlas++; return Promise.resolve(opts.atlasDown ? { status: 502, body: { error: 'down' } } : { status: 200, body: { lat: 35.7, lng: -96.88, geocode: { precision: 'exact' }, substations: [{ name: 'Chandler', distanceKm: 3.2, voltageKv: 69 }], sources: { substations: 'HIFLD' } } }); },
         network: function () { calls.network++; return Promise.resolve({ status: 200, body: { fcc: { status: 'ok', providers: [{ name: 'Cox', down: 1000, up: 1000 }] }, facilities: { nearestMajor: { name: 'OKC IX', mi: 44 } }, fiber: { lateral: { mi: 1.2, to: 'OKC IX' } } } }); },
         hosting: function () { calls.hosting++; return Promise.resolve({ status: 200, body: { utility: { key: 'oge', display: 'OG&E' }, coverage: 'none' } }); },
-        parcel: function (body) { calls.parcel++; calls.parcelBody = body; return Promise.resolve(opts.parcelMiss ? { status: 200, body: { ok: false, reason: 'no parcel record here' } } : { status: 200, body: { ok: true, ring: [[1, 2], [3, 4], [5, 6]], apn: '0001-22', owner: 'Williams Family LP', acres: 3.456, zoning: 'C-3', county: 'Lincoln', source: 'regrid' } }); } };
+        parcel: function (body) { calls.parcel++; calls.parcelBody = body; return Promise.resolve(opts.parcelMiss ? { status: 200, body: { ok: false, reason: 'no parcel record here' } } : { status: 200, body: { ok: true, ring: opts.ring || LOT, apn: '0001-22', owner: 'Williams Family LP', acres: 3.456, zoning: 'C-3', county: 'Lincoln', source: 'regrid' } }); },
+        structures: function (ring) { calls.structures = (calls.structures || 0) + 1; calls.structuresRing = ring; return Promise.resolve(opts.structuresDown ? { ok: false, reason: 'FEMA USA Structures did not answer (timeout)' } : { ok: true, list: opts.buildings || [{ ring: STORE }], source: 'FEMA USA Structures' }); } };
     } };
   var door = DOOR.make(deps), root = db.collection('omega_orgs').doc(ORG);
   function ctx(b, extra) { return Object.assign({ db: db, org: ORG, root: root, caller: PAT, by: PAT.email, b: b, site: b.site || null, canEdit: true, req: { headers: { authorization: 'Bearer t' } } }, extra || {}); }
@@ -420,7 +425,11 @@ test('D02 the screens: a job, the Grid Atlas a phase, then the network and the p
   assert.deepStrictEqual(w.calls.parcelBody, { lat: 35.7, lng: -96.88 });
   var s = w.site('s1').assessment;
   assert.equal(s.screen.complete, true); assert.equal(s.screen.power.substation, 'Chandler'); assert.equal(s.screen.utility.name, 'OG&E'); assert.deepStrictEqual(s.screen.fiber.carriers, ['Cox']);
-  assert.deepStrictEqual(s.parcel, { ok: true, apn: '0001-22', owner: 'Williams Family LP', acres: 3.46, zoning: 'C-3', county: 'Lincoln', source: 'regrid', at: NOW });
+  var kept = Object.assign({}, s.parcel); delete kept.space;
+  assert.deepStrictEqual(kept, { ok: true, apn: '0001-22', owner: 'Williams Family LP', acres: 3.46, zoning: 'C-3', county: 'Lincoln', source: 'regrid', at: NOW });
+  /* the lot is measured while its outline is in hand, and the outline itself is never kept */
+  assert.equal(s.parcel.space.ok, true); assert.equal(s.parcel.space.lotSqFt, 150000); assert.equal(s.parcel.space.buildings.count, 1); assert.equal(s.parcel.ring, undefined); assert.ok(!/"ring"/.test(JSON.stringify(s)));
+  assert.equal(w.calls.structures, 1); assert.equal(s.result.space.measured, true); assert.equal(s.result.space.uses.compute.fits, true);
   assert.equal(s.result.power.utility, 'OG&E'); assert.equal(s.result.confidence.screened, true); assert.ok(s.result.readiness.screened >= 8);
   assert.ok(!s.result.verify.some(function (v) { return v.key === 'screen'; }));
   assert.equal(w.audits('sitecrm-assess-screen').length, 1); assert.equal(w.site('s1').diligence, undefined);
@@ -638,6 +647,81 @@ test('C06 through the door: a workspace on the chip basis is run and stored by c
   var up = await w.post({ action: 'assess-upgrade', site: 's2', unit: 'gb300' }); assert.equal(w.site('s2').assessment.upgrade.targetKw, 782);   /* 120 kW limit, 80 free: 742 short by 662 */
   assert.equal(w.site('s2').assessment.result.upgrade.compute.label, '600 kW GB300 NVL72'); assert.ok(up);
   await rejects(w.post({ action: 'assess-upgrade', site: 's2', unit: 'm350' }), 400, /not a unit on the compute shelf/);
+});
+
+/* ── SPACE ON THE LOT (2026-11-21, Tommy: "We need to have a space analysis on the sites as well based on the parcel") ── */
+var SP = require('../../api/_lib/portfolio/assess-space'), ST = require('../../api/_lib/portfolio/structures'), CCt = require('../../api/_lib/compute-contract');
+test('S01 the lot is measured: its area, the buildings on it, and what is clear of the lot line and of them, in the lot’s own orientation; only a summary is kept', function () {
+  var m = SP.measure(LOT, { ok: true, list: [{ ring: STORE }], source: 'FEMA USA Structures' });
+  assert.equal(m.ok, true); assert.equal(m.lotSqFt, 150000); assert.deepStrictEqual(m.buildings, { read: true, count: 1, sqFt: 9600, source: 'FEMA USA Structures' }); assert.equal(m.openSqFt, 140400);
+  assert.equal(m.setbackFt, 10); assert.equal(m.buildingClearFt, 10); assert.ok(m.clear.sqFt > 110000 && m.clear.sqFt < 140400, m.clear.sqFt);
+  /* a lot turned 20° is measured square to itself: east of the store's clearance the whole depth is clear */
+  assert.ok(m.clear.rect.wFt >= 300 && m.clear.rect.dFt >= 270, JSON.stringify(m.clear.rect)); assert.equal(m.ring, undefined); assert.ok(JSON.stringify(m).length < 900);
+  assert.equal(SP.fitsIn(m, 50, 60), true); assert.equal(SP.fitsIn(m, 60, 50), true); assert.equal(SP.fitsIn(m, 600, 50), false); assert.equal(SP.fitsIn(null, 50, 60), null);
+  /* a building takes its ground: the same lot covered by one building has nothing clear */
+  var full = SP.measure(LOT, { ok: true, list: [{ ring: rectRing(5, 5, 490, 290) }], source: 'x' }); assert.equal(full.clear.rect, null); assert.equal(SP.fitsIn(full, 21, 9), false);
+  /* buildings not read is said, never read as none */
+  var nb = SP.measure(LOT, { ok: false, reason: 'FEMA USA Structures did not answer (timeout)' }); assert.equal(nb.buildings.read, false); assert.ok(/did not answer/.test(nb.buildings.reason)); assert.equal(nb.openSqFt, 150000);
+  /* the workspace's own assumptions move it; a lot with no outline is an answer, not a throw */
+  assert.ok(SP.measure(LOT, null, { setbackFt: 50 }).clear.sqFt < SP.measure(LOT, null, { setbackFt: 10 }).clear.sqFt);
+  assert.equal(SP.measure([[1, 2]], null).ok, false); assert.equal(SP.measure([[1, 2], [3, 4], [5, 6]], null).ok, false);
+});
+test('S02 the pad each unit needs is its maker’s own figure: the pod’s 21 × 9 ft, the container and its coolers on 50 × 60 ft, the skid; a unit with none is judged against the container’s as an upper bound', function () {
+  assert.deepStrictEqual(CCt.PARTNER.brief.site.footprintFt, { w: 50, d: 60 }); assert.equal(CCt.PARTNER.brief.capital, undefined); assert.equal(CCt.PARTNER.brief.revenue, undefined);
+  var plain = A.configOf(null), chip = chips();
+  function need(kw, cfg) { return SP.computeNeed(A.computeOf({ availableKw: kw, basis: 'measured' }, cfg, {})); }
+  assert.deepStrictEqual(need(1500, plain).pad, { wFt: 50, dFt: 60 }); assert.equal(need(1500, plain).basis, 'maker'); assert.deepStrictEqual(need(3700, plain).pad, { wFt: 150, dFt: 60 });
+  assert.deepStrictEqual(need(90, plain).pad, { wFt: 28, dFt: 7.25 }); assert.equal(need(500, plain).basis, 'upper-bound'); assert.ok(/No footprint is on file for a 350 kW unit/.test(need(500, plain).words));
+  assert.deepStrictEqual(need(500, chip).pad, { wFt: 9, dFt: 21 }); assert.deepStrictEqual(need(1000, chip).pad, { wFt: 24.5, dFt: 21 }); assert.equal(need(50, plain), null);
+  assert.equal(plain.space, undefined); assert.deepStrictEqual(A.configOf({ portfolioAssessment: { space: { setbackFt: 25, buildingClearFt: 999 } } }).space, { setbackFt: 25 });
+});
+test('S03 the answer carries the space: the lot, the buildings, the clear ground and whether the compute unit’s pad fits; the battery and the dispensers are said not to be judged; the checklist and the verifications follow', function () {
+  var site = { address: { state: 'OK', zip: '74834' }, serviceCapacityKw: 1500 };
+  var parcel = { ok: true, acres: 3.44, zoning: 'C-3', at: NOW, space: SP.measure(LOT, { ok: true, list: [{ ring: STORE }], source: 'FEMA USA Structures' }) };
+  var r = A.assess(site, { parcel: parcel, now: NOW }), sp = r.space;
+  assert.equal(sp.measured, true); assert.equal(sp.lotSqFt, 150000); assert.equal(sp.buildings.coveragePct, 6); assert.equal(sp.uses.compute.fits, true); assert.equal(sp.uses.compute.lotPct, 2);
+  assert.ok(/A lot of 150,000 sq ft \(3\.44 acres\), 1 building on 9,600 sq ft \(6% of it\)\. Clear of the lot line by 10 ft and of the buildings by 10 ft/.test(sp.words));
+  assert.equal(sp.uses.bess.fits, null); assert.ok(/not on file, so it is not judged/.test(sp.uses.bess.words)); assert.equal(sp.uses.supercharger.stalls, 8); assert.equal(sp.uses.supercharger.fits, null);
+  assert.ok(sp.notes.some(function (n) { return /Paving, parking stalls, drive aisles/.test(n); })); assert.ok(sp.notes.some(function (n) { return /assumptions, not the jurisdiction’s rule/.test(n); }));
+  function item(res, k) { var hit = null; res.readiness.sections.forEach(function (s) { s.items.forEach(function (i) { if (i.key === k) hit = i; }); }); return hit; }
+  assert.equal(item(r, 'physical-area').state, 'screened'); assert.equal(item(r, 'physical-area').source, 'Parcel record and building footprints'); assert.ok(/largest rectangle about/.test(item(r, 'physical-expansion').words));
+  /* a lot the container does not fit on: said, the checklist item stays open, and the verification leads */
+  var tight = { ok: true, acres: 0.1, at: NOW, space: SP.measure(rectRing(0, 0, 70, 60), { ok: true, list: [], source: 'FEMA USA Structures' }) }, t = A.assess(site, { parcel: tight, now: NOW });
+  assert.equal(t.space.uses.compute.fits, false); assert.ok(/No clear rectangle that size is on the record \(the largest is about 48 × 36 ft\)/.test(t.space.uses.compute.words)); assert.equal(item(t, 'physical-area').state, 'open'); assert.equal(t.verify[0].key, 'space');
+  /* buildings not read: judged on the lot line alone, and said to be an upper bound */
+  var nb = A.assess(site, { parcel: { ok: true, acres: 3.44, at: NOW, space: SP.measure(LOT, { ok: false, reason: 'FEMA USA Structures did not answer (timeout)' }) }, now: NOW });
+  assert.equal(nb.space.uses.compute.fits, true); assert.equal(nb.space.uses.compute.upperBound, true); assert.ok(/judged without the buildings/.test(nb.space.uses.compute.words)); assert.ok(nb.space.notes.some(function (n) { return /upper bound/.test(n); }));
+  /* a parcel read before the lot was measured: its area and no judgement; no parcel: said */
+  var old = A.assess(site, { parcel: { ok: true, acres: 3.44, at: NOW }, now: NOW }); assert.equal(old.space.measured, false); assert.equal(old.space.uses.compute.fits, null); assert.ok(old.verify.some(function (v) { return v.key === 'space-read'; }));
+  assert.equal(A.assess(site, { now: NOW }).space.ok, false);
+  /* the register's row keeps the verdict and drops the notes; an answer made before this change is not stale for it */
+  var row = A.listView({ result: r, parcel: parcel }, site, {}); assert.equal(row.space.notes, undefined); assert.deepStrictEqual(Object.keys(row.space.uses), ['compute']); assert.equal(row.space.uses.compute.fits, true); assert.equal(row.stale, false);
+});
+test('S04 the buildings are read from the public structures service for the lot’s own box, the ones whose middle is on the lot kept; a service that does not answer is said', async function () {
+  var seen = null, far = rectRing(900, 900, 50, 50);
+  function esri(ring) { return { attributes: { SQFEET: 9600 }, geometry: { rings: [ring.concat([ring[0]]).map(function (p) { return [p[1], p[0]]; })] } }; }
+  var ok = await ST.find(LOT, function (u) { seen = u; return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ features: [esri(STORE), esri(far)] }); } }); });
+  assert.equal(ok.ok, true); assert.equal(ok.list.length, 1); assert.equal(ok.list[0].sqFt, 9600); assert.equal(ok.source, 'FEMA USA Structures');
+  assert.ok(/USA_Structures_View/.test(seen)); assert.ok(!/resultRecordCount/.test(seen)); assert.ok(/geometryType=esriGeometryEnvelope/.test(seen));
+  var down = await ST.find(LOT, function () { return Promise.resolve({ ok: false, status: 503 }); }); assert.equal(down.ok, false); assert.ok(/did not answer \(status 503\)/.test(down.reason));
+  var refused = await ST.find(LOT, function () { return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ error: { code: 400 } }); } }); }); assert.equal(refused.ok, false);
+  assert.equal((await ST.find([[1, 2]], function () { throw new Error('never asked'); })).ok, false);
+});
+test('S05 through the door: the lot alone is read again for a site already screened, without the grid screen; a lookup that fails never replaces a parcel on file; a viewer is refused', async function () {
+  var w = world();
+  var none = await w.post({ action: 'assess-space', ids: ['s1', 'gone'] }); assert.deepStrictEqual(none.skipped, ['s1']); assert.deepStrictEqual(none.missing, ['gone']); assert.equal(none.read, 0); assert.ok(/not located yet/.test(none.note));
+  /* a site screened before the lot was measured */
+  var d = w.site('s1'); d.assessment = { screen: { complete: true, at: NOW, located: { usable: true, lat: 35.7, lng: -96.88 } }, parcel: { ok: true, acres: 3.46, zoning: 'C-3', at: NOW } };
+  var r = await w.post({ action: 'assess-space', site: 's1' });
+  assert.equal(r.measured, 1); assert.equal(w.calls.atlas, 0); assert.equal(w.calls.parcel, 1); assert.deepStrictEqual(w.calls.parcelBody, { lat: 35.7, lng: -96.88 }); assert.equal(w.calls.structures, 1);
+  var a = w.site('s1').assessment; assert.equal(a.parcel.space.lotSqFt, 150000); assert.equal(a.result.space.uses.compute.fits, true); assert.equal(w.audits('sitecrm-assess-space').length, 1); assert.equal(w.site('s1').revision, 2);
+  /* the structures service down: measured on the lot line, said */
+  var w2 = world({ structuresDown: true }); w2.site('s1').assessment = { screen: { complete: true, at: NOW, located: { usable: true, lat: 35.7, lng: -96.88 } } };
+  await w2.post({ action: 'assess-space', site: 's1' }); assert.equal(w2.site('s1').assessment.parcel.space.buildings.read, false); assert.equal(w2.site('s1').assessment.result.space.uses.compute.upperBound, true);
+  /* the parcel lookup misses: the parcel on file stays */
+  var w3 = world({ parcelMiss: true }); w3.site('s1').assessment = { screen: { complete: true, at: NOW, located: { usable: true, lat: 35.7, lng: -96.88 } }, parcel: { ok: true, acres: 3.46, at: NOW } };
+  var m = await w3.post({ action: 'assess-space', site: 's1' }); assert.equal(m.measured, 0); assert.equal(w3.site('s1').assessment.parcel.acres, 3.46);
+  await rejects(w.post({ action: 'assess-space', site: 's1' }, { canEdit: false }), 403);
 });
 
 (async function () {

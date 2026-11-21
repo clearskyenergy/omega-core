@@ -1573,6 +1573,27 @@ the same day, each in Tommy's words in the doc:
   covers (the physical figures) and what it does not (the pod's price, the
   GPU-hour price, the offtake), and is the first note under every answer
   sized on it. `tassess.js` C01 to C06.
+- **Space on the lot** (2026-11-21, Tommy: "We need to have a space analysis
+  on the sites as well based on the parcel"): `assess-space.js` is the ONE
+  rule. `measure` runs while the parcel's outline is in hand (the screen's
+  parcel step, and `assess-space` for a site already screened: the parcel
+  and FEMA's USA Structures through `structures.js`, never the grid screen)
+  and keeps only a summary on `assessment.parcel.space` (the lot, the
+  buildings, what is clear of the lot line and of them by a stated 10 ft
+  each, the largest clear rectangle, the clear runs by width); the outline
+  is never stored. `spaceOf` (pure) judges each use's pad at every
+  assessment: the pod maker's 21 × 9 ft, the partner brief's 50 × 60 ft for
+  a container and its coolers, the skid; a unit with no footprint is judged
+  against the container's as an upper bound, a battery and the dispensers
+  are NOT judged and say so. Clear ground is the public record's: parking,
+  paving, easements and the zoning setback are not read, so a fit is never
+  "the pad goes there" and the checklist item is Screened, never Done.
+  `tassess.js` S01 to S05.
+- **The offtake partner's written brief** (Q4 2026) is their confidential
+  document: `compute-contract.js PARTNER.brief` keeps only the unit's
+  footprint and site needs, never its commercial figures, and the partner
+  basis still prices on `PARTNER.reference` (the figures as told) until the
+  workspace says otherwise.
 - **A utility-side upgrade request is a mark** (`assess-upgrade`): it sizes
   nothing today; what it would carry rides beside the answer. Every sized
   site under 1 MW carries the upgrade TO ASK FOR (`upgradeAdvice`, derived:
