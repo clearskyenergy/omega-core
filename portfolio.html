@@ -956,6 +956,7 @@
           closing: function (id, body) { post('assess-closing', Object.assign({ site: id }, body)).then(function (j) { S.toast(j.note || 'Done.'); return load(true); }).then(function () { openDrawer(id); }).catch(function (e) { S.toast(e.message); msg(e.message); }); },
           vote: function (id, vote, note) { post('assess-review-vote', { site: id, vote: vote, note: note }).then(function (j) { S.toast(j.note || 'Done.'); return load(true); }).then(function () { openDrawer(id); }).catch(function (e) { S.toast(e.message); msg(e.message); }); },
           report: function () { printReports([s]); },
+          solution: function (id, key, chip) { post('assess-solution', { site: id, solution: key, chip: chip || undefined }).then(function (j) { S.toast(j.note || 'Done.'); return load(true); }).then(function () { openDrawer(id); }).catch(function (e) { S.toast(e.message); msg(e.message); }); },
           space: function (id) { post('assess-space', { site: id }).then(function (j) { S.toast(j.note || 'Done.'); return load(true); }).then(function () { openDrawer(id); }).catch(function (e) { S.toast(e.message); msg(e.message); }); },
           full: function (id) { return api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(id) + '&assessment=1'); },
           check: function (id, item, state, note) { return post('assess-check', { site: id, item: item, state: state, note: note }).then(function (j) {

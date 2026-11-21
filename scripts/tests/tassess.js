@@ -787,6 +787,53 @@ test('W03 the space score: 60 and up fits, rising with the clear ground to 100; 
   assert.equal(row.space.score.points, 100); assert.equal(row.space.uses.compute.fits, true);
 });
 
+/* ── THE SOLUTIONS (2026-11-21, Tommy: "we should show a runware system set up and a lightsmith energy and an armada …
+   we should be able to select that based on the site") ── */
+test('V01 every solution is sized on the site by its own rule and shown side by side: the pod by chip, the partner’s container, the one published Armada unit, and the units by size', function () {
+  assert.deepStrictEqual(A.SOLUTIONS.map(function (s) { return s.key; }), ['runware', 'lightsmith', 'armada', 'omega']); assert.equal(A.ARMADA.itKw, 1770); assert.deepStrictEqual(A.ARMADA.footprintFt, { w: 119, d: 45 });
+  function at(kw, ctx) { return A.assess({ address: { state: 'OK', zip: '74834' }, serviceCapacityKw: kw, existingPeakKw: 0 }, Object.assign({ now: NOW }, ctx || {})); }
+  var small = at(400).solutions, by = {}; small.list.forEach(function (x) { by[x.key] = x; });
+  assert.equal(by.runware.fits, false); assert.equal(by.runware.needKw, 1000); assert.equal(by.armada.fits, false); assert.equal(by.armada.needKw, 2124); assert.equal(by.lightsmith.fits, true); assert.equal(by.omega.fits, true); assert.equal(by.omega.size, '150 kW');
+  assert.equal(small.picked, 'omega'); assert.equal(small.isDefault, true); assert.ok(/2 of the 4 solutions fit this site’s power/.test(small.words) && /not like for like/.test(small.words));
+  var big = at(2500), bb = {}; big.solutions.list.forEach(function (x) { bb[x.key] = x; });
+  assert.ok(big.solutions.list.every(function (x) { return x.fits; })); assert.equal(bb.runware.size, '2 × 430 kW RTX PRO 6000'); assert.equal(bb.runware.gpus, 864); assert.equal(bb.armada.size, '1.77 MW'); assert.equal(bb.lightsmith.priceBasis, 'partner ref'); assert.equal(bb.omega.picked, true);
+  assert.deepStrictEqual(bb.runware.chips.map(function (c) { return c.key; }).sort(), ['gb300', 'rtx6000', 'vr-maxp', 'vr-maxq']); assert.ok(bb.armada.irrPct != null && bb.armada.capexBasis === 'estimate');
+  /* the row in use is the site's own compute answer, not a second run of it */
+  assert.equal(bb.omega.irrPct, big.compute.economics.irrPct); assert.equal(bb.omega.size, '2 × 1 MW');
+  /* the workspace's own basis is the default */
+  assert.equal(at(2500, { config: chips() }).solutions.picked, 'runware'); assert.equal(at(2500, { config: A.configOf({ portfolioAssessment: { compute: { basis: 'partner' } } }) }).solutions.picked, 'lightsmith');
+});
+test('V02 a site’s pick makes that solution its compute answer: the unit, the return, the space and the upgrade follow it; a chip is picked for the pod alone; the hash moves so a stored answer reads stale', function () {
+  var site = { address: { state: 'OK', zip: '74834' }, serviceCapacityKw: 2500, existingPeakKw: 0 }, parcel = { ok: true, acres: 3.44, at: NOW, space: SP.measure(LOT, { ok: true, list: [{ ring: STORE }], source: 'F' }) };
+  var a = A.assess(site, { now: NOW, parcel: parcel, solution: A.solutionChange({ solution: 'armada' }, { by: 'pat', now: NOW }) });
+  assert.equal(a.compute.chosen.key, 'a1770'); assert.equal(a.compute.chosen.meterKw, 2124); assert.equal(a.solutions.picked, 'armada'); assert.equal(a.solutions.isDefault, false); assert.deepStrictEqual(a.solutions.pickedBy, { by: 'pat', at: NOW });
+  assert.ok(/Armada Leviathan as published \(armada\.ai\/product\/leviathan\)/.test(a.compute.economics.notes[0]) && /Its chips and its price are not on file/.test(a.compute.economics.notes[0]));
+  assert.deepStrictEqual(a.space.uses.compute.needFt, { wFt: 119, dFt: 45 }); assert.equal(a.space.uses.compute.fits, true); assert.ok(/Armada’s published figure/.test(a.space.uses.compute.words));
+  var r = A.assess(site, { now: NOW, solution: A.solutionChange({ solution: 'runware', chip: 'gb300' }, {}) });
+  assert.equal(r.compute.byChip, true); assert.equal(r.compute.chosen.key, 'gb300'); assert.equal(r.compute.chosen.why, 'the chip picked for this site'); assert.equal(r.compute.chosen.units, 2); assert.equal(r.compute.asks.of, 12);
+  var l = A.assess(site, { now: NOW, solution: { key: 'lightsmith' } }); assert.equal(l.compute.economics.basis, 'partner'); assert.equal(l.solutions.picked, 'lightsmith');
+  /* the pick is validated, and default withdraws it */
+  assert.equal(A.solutionChange({ solution: 'default' }, {}), null); assert.equal(A.solutionChange({ solution: '' }, {}), null);
+  assert.throws(function () { A.solutionChange({ solution: 'acme' }, {}); }, /A solution is one of runware, lightsmith, armada, omega/); assert.throws(function () { A.solutionChange({ solution: 'armada', chip: 'gb300' }, {}); }, /Only the pod is picked by chip/);
+  assert.throws(function () { A.solutionChange({ solution: 'runware', chip: 'h100' }, {}); }, /A chip is one of/);
+  assert.equal(A.assess(site, { now: NOW, solution: { key: 'acme' } }).solutions.picked, 'omega');
+  var plain = A.assess(site, { now: NOW }); assert.notEqual(a.inputHash, plain.inputHash); assert.notEqual(r.inputHash, a.inputHash);
+  assert.equal(A.listView({ result: plain }, site, {}).stale, false); assert.equal(A.listView({ result: plain, solution: { key: 'armada' } }, site, {}).stale, true);
+  var row = A.listView({ result: a, parcel: parcel, solution: { key: 'armada' } }, site, {}); assert.equal(row.stale, false); assert.equal(row.solutions.picked, 'armada'); assert.equal(row.solutions.list.length, 4); assert.equal(row.solutions.list[0].about, undefined);
+});
+test('V03 through the door: a solution is picked for one site or many, stored with who and when, audited, and withdrawn by `default`; a viewer is refused', async function () {
+  var w = world(); await w.post({ action: 'assess-run', ids: ['s1', 's2'] });
+  var r = await w.post({ action: 'assess-solution', site: 's1', solution: 'runware', chip: 'gb300' });
+  assert.equal(r.sites, 1); assert.ok(/1 site set to Runware Sonic Pod \(gb300\)/.test(r.note)); var a = w.site('s1').assessment;
+  assert.deepStrictEqual(a.solution, { key: 'runware', chip: 'gb300', name: 'Runware Sonic Pod', by: PAT.email, at: NOW }); assert.equal(a.result.compute.chosen.key, 'gb300'); assert.equal(a.result.solutions.picked, 'runware'); assert.equal(w.site('s1').revision, 2);
+  /* a later run keeps the pick */
+  await w.post({ action: 'assess-run', ids: ['s1'] }); assert.equal(w.site('s1').assessment.result.compute.chosen.key, 'gb300');
+  var many = await w.post({ action: 'assess-solution', ids: ['s1', 's2', 'gone'], solution: 'omega' }); assert.equal(many.sites, 2); assert.deepStrictEqual(many.missing, ['gone']); assert.equal(w.site('s2').assessment.solution.key, 'omega');
+  var back = await w.post({ action: 'assess-solution', site: 's1', solution: 'default' }); assert.ok(/back on the workspace’s own solution/.test(back.note)); assert.equal(w.site('s1').assessment.solution, undefined); assert.equal(w.site('s1').assessment.result.compute.chosen.key, 'm1000');
+  var au = w.audits('sitecrm-assess-solution'); assert.equal(au.length, 4); assert.equal(au[0].to, 'runware:gb300'); assert.equal(au[3].from, 'omega'); assert.equal(au[3].to, null);
+  await rejects(w.post({ action: 'assess-solution', site: 's1', solution: 'acme' }), 400, /A solution is one of/); await rejects(w.post({ action: 'assess-solution', site: 's1', solution: 'armada' }, { canEdit: false }), 403);
+});
+
 (async function () {
   for (var i = 0; i < queue.length; i++) {
     try { await queue[i][1](); passed++; console.log('PASS ' + queue[i][0]); }

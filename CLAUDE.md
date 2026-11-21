@@ -1581,6 +1581,19 @@ the same day, each in Tommy's words in the doc:
   covers (the physical figures) and what it does not (the pod's price, the
   GPU-hour price, the offtake), and is the first note under every answer
   sized on it. `tassess.js` C01 to C06.
+- **The solutions, and the one picked for a site** (2026-11-21, Tommy: "show
+  a runware system set up and a lightsmith energy and an armada … select
+  that based on the site"): `assess.js SOLUTIONS` (runware: the pod by chip;
+  lightsmith: the partner's container on the partner's figures; armada: the
+  ONE published unit on file, the 1.77 MW Leviathan on 119 × 45 ft, its
+  chips and price NOT on file so it is priced as generic compute of that
+  size; omega: the skid and pods by size). Every answer carries
+  `solutions` (each sized by its own rule, with its return and space score,
+  said not to be like for like), and `assess-solution { site | ids[],
+  solution, chip? }` stores `assessment.solution`, which makes that system
+  the site's compute answer (`solutionCfg`: the workspace's settings with
+  that basis; `default` withdraws). The workspace's basis stays the default.
+  `tassess.js` V01 to V03.
 - **Space on the lot** (2026-11-21, Tommy: "We need to have a space analysis
   on the sites as well based on the parcel"): `assess-space.js` is the ONE
   rule. `measure` runs while the parcel's outline is in hand (the screen's

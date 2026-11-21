@@ -229,6 +229,36 @@ not an offer: it is off for every workspace that does not ask, and its
 figures reach a browser only as that workspace's answer. Held by
 `tassess.js` C01 to C06.
 
+### The solutions, side by side, and the one picked for a site (2026-11-21)
+
+Tommy: "we should show a runware system set up and a lightsmith energy and
+an armada … there are various sizes of pods and various chip configurations
+these are for our solutions we have available so we should be able to
+select that based on the site."
+
+Every assessment now carries `solutions`: each compute system on offer,
+sized on the site's free power by ITS OWN rule, with its return and its
+space score, in one table.
+
+| solution | how it is sized | how it is priced |
+|---|---|---|
+| Runware Sonic Pod | 1 MW pods by chip, 1,000 kW of connection a pod, one to four a site | each chip's public reference, else the workspace's price; capital the engine's estimate until quoted |
+| the offtake partner's container | the partner's unit (as written where the settings carry it, else its megawatt reference by IT load) | the partner's own figures |
+| Armada Leviathan | the one Armada unit with a published specification on file: 1.77 MW of IT at the workspace's PUE, on 119 × 45 ft, closed loop, no site water, 480 V | its chips and price are NOT on file: whole nodes of the workspace's chip in that IT load, the engine's estimate |
+| Omega-Core skid and pods by size | the 75 kW skid, the Nano pods, the 1 MW Micro pod | the chip's public reference |
+
+The workspace's own basis (its settings) is the default for every site.
+**A person picks a solution for a site** (and a chip, for the pod) from the
+table: `assess-solution { site | ids[], solution, chip? }` stores
+`assessment.solution { key, chip, by, at }`, audited, and that solution is
+the site's compute answer from then on: the unit, the return, the space on
+the lot, the checklist, the upgrade to ask for and the recommendation all
+follow it. `default` follows the workspace's own again. The returns sit on
+different bases (a partner's figures, a public spot price, an estimate), and
+the table says so: it compares fit, not deals.
+
+Held by `tassess.js` V01 to V03.
+
 ### Space on the lot (2026-11-21)
 
 Tommy: "We need to have a space analysis on the sites as well based on the
@@ -697,6 +727,11 @@ in how the three are read side by side, and it is on the honest list below.
 ## What is not built (honest list)
 
 **The numbers**
+- **Armada is one unit, on its published size alone.** Only the Leviathan
+  is on file (its IT load, footprint, cooling and voltage, from Armada's
+  product page). Its chips, its price, its PUE and its smaller models are
+  not: it is priced as generic compute of that size. Send its sheet and it
+  becomes a record like the pod's.
 - **The partner's written figures are modeled, not contracted.** Every hour
   billed from year one with no ramp, a price the partner modeled, no tax, no
   debt, no value at the end. A workspace whose settings do not carry them

@@ -143,6 +143,7 @@ function computeNeed(compute) {
     var P = PS.POD.pad, pad = row(n, P.widthFt, P.lengthFt, P.betweenPodsFt);
     return { pad: pad, sqFt: Math.round(pad.wFt * pad.dFt), basis: 'maker', words: (n > 1 ? n + ' pods side by side, each on a ' : 'One ') + P.lengthFt + ' × ' + P.widthFt + ' ft pad' + (n > 1 ? ' with ' + P.betweenPodsFt + ' ft between' : '') + ' (the pod maker’s figure; its cooling sits on top of the pod). Truck and crane access is beside it and is not counted' };
   }
+  if (ch.footprintFt) { var fp = row(n, ch.footprintFt.w, ch.footprintFt.d, 0); return { pad: fp, sqFt: Math.round(fp.wFt * fp.dFt), basis: 'maker', words: (n > 1 ? n + ' units, each on ' : 'One unit on ') + ch.footprintFt.w + ' × ' + ch.footprintFt.d + ' ft (' + ch.footprintFt.whose + ')' }; }
   if (ch.key === 'm75') { var S = OC.PRODUCT.skid; return { pad: { wFt: S.lengthFt, dFt: S.depthFt }, sqFt: Math.round(S.lengthFt * S.depthFt), basis: 'maker', words: 'The 75 kW skid is ' + S.lengthFt + ' × ' + S.depthFt + ' ft; its service clearances are not counted' }; }
   var F = CC.PARTNER.brief.site.footprintFt, one = { wFt: F.w, dFt: F.d }, big = row(n, F.w, F.d, 0);
   if (ch.klass === 'micro') return { pad: big, sqFt: Math.round(big.wFt * big.dFt), basis: 'maker', words: (n > 1 ? n + ' containers, each ' : 'A 1 MW container ') + 'with its coolers on ' + F.w + ' × ' + F.d + ' ft (' + CC.PARTNER.name + '’s figure for a 40 ft container and its dry coolers)' };

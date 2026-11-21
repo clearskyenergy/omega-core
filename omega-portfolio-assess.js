@@ -54,6 +54,23 @@
     if (o && o.canEdit && sp.ok && !sp.measured) h += '<div class="a" style="margin-top:6px"><button type="button" class="pa-btn" data-pa="space">Read the lot</button></div>';
     return h + '</div>';
   }
+  /* THE SOLUTIONS on this site, side by side, and the one in use: the server's rows, drawn. A pick is the door's. */
+  function solutionsHtml(sol, o, cls) {
+    if (!sol || !sol.list) return '';
+    var edit = !!(o && o.canEdit && o.pick !== false);
+    var h = '<div class="pa-box" id="pa-solutions"><b>Compute solutions</b><div>' + esc(sol.words || '') + '</div><div style="overflow:auto"><table' + (cls ? ' class="' + cls + '"' : '') + ' style="margin-top:6px"><tr><th style="text-align:left">Solution</th><th style="text-align:left">On this site</th><th>Return</th><th>Space</th>' + (edit ? '<th></th>' : '') + '</tr>' +
+      sol.list.map(function (s) {
+        var chips = s.key === 'runware' && s.chips ? s.chips.filter(function (c) { return c.fits; }) : [];
+        return '<tr' + (s.picked ? ' style="font-weight:600"' : '') + '><td style="text-align:left" title="' + esc(s.about || '') + '">' + esc(s.name) + (s.picked ? ' <span class="pa-k">in use</span>' : '') + '</td>' +
+          '<td style="text-align:left" title="' + esc(s.words || '') + '">' + (s.fits ? esc(s.size || '') + (s.gpus ? ' · ' + esc(n0(s.gpus)) + ' GPUs' : '') : '<span class="pa-no">Needs ' + (s.needKw ? esc(n0(s.needKw)) + ' kW' : 'more power') + '</span>') + '</td>' +
+          '<td>' + (s.irrPct != null ? esc(pct(s.irrPct)) + '<div class="pa-sub">' + esc(s.priceBasis === 'partner ref' ? 'partner’s figures' : s.priceBasis || '') + '</div>' : s.fits ? '<span class="pa-no">No price</span>' : '') + '</td>' +
+          '<td>' + (s.space && s.space.score != null ? esc(s.space.score) : s.space && s.space.fits === false ? '<span class="pa-no">no room</span>' : '') + '</td>' +
+          (edit ? '<td style="white-space:nowrap">' + (chips.length > 1 ? '<select data-pa-sol-chip aria-label="Chip for the pod" style="max-width:120px">' + chips.map(function (c) { return '<option value="' + esc(c.key) + '"' + (c.picked ? ' selected' : '') + '>' + esc(c.chip) + '</option>'; }).join('') + '</select> ' : '') +
+            (s.fits ? '<button type="button" class="pa-btn" data-pa-sol="' + esc(s.key) + '">' + (s.picked ? (chips.length > 1 ? 'Set chip' : 'In use') : 'Use') + '</button>' : '') + '</td>' : '') + '</tr>';
+      }).join('') + '</table></div>';
+    if (edit && !sol.isDefault) h += '<div class="a" style="margin-top:6px"><button type="button" class="pa-btn" data-pa-sol="default">Back to the workspace’s own</button></div>';
+    return h + '</div>';
+  }
   /* what the pod's maker asks a site to confirm, against the record: the server's list, drawn */
   function asksHtml(k, cls) {
     if (!k || !k.list) return '';
@@ -197,6 +214,7 @@
         '<div class="n">' + esc(sr.irrBasis || '') + ' (' + esc(pct(sr.preTaxIrrPct)) + ' before tax) · NPV ' + esc(money(sr.npv)) + ' at ' + esc(sr.discountRatePct) + '%' + (sr.paybackYears != null ? ' · payback ' + esc(sr.paybackYears) + ' yr' : '') + '</div><div class="n">Capital ' + esc(money(su.capex.total)) + ' · year 1 revenue ' + esc(money(su.year1.revenue)) + ' · $' + esc(su.inputs.pricePerKwh) + '/kWh sold, $' + esc(su.inputs.electricityPerKwh) + ' paid</div>' }
         : { off: true, html: '<div class="irr na">' + (p.availableKw == null ? 'Not sized' : 'Does not fit') + '</div><div class="n">' + esc(su.reason || '') + '</div>' }) + '</div>';
     h += '<div class="ows-note" style="margin:0">' + esc(a.note || '') + (a.recommend && a.recommend.words ? ' ' + esc(a.recommend.words) + '.' : '') + ' Screening figures, not a return promise.</div>';
+    h += solutionsHtml(a.solutions, o, 'pa-tbl');
     h += spaceHtml(a.space, o);
     if (a.pairing) h += '<div class="pa-box" id="pa-pairing"><b>Beside the pod</b><div>' + esc(a.pairing.words) + '</div><div style="color:var(--ows-ink2);margin-top:4px">Battery capital ' + esc(money(a.pairing.bess.capexUsd)) + ' (' + esc(money(a.pairing.bess.netCapexUsd)) + ' after the credit) · NPV ' + esc(money(a.pairing.bess.npv)) + '</div></div>';
     h += upgradeHtml(a, o);
@@ -322,6 +340,11 @@
     });
     on('[data-pa="withdraw"]', function () { if (hooks.approve) hooks.approve(site.id, []); });
     on('[data-pa="report"]', function () { if (hooks.report) hooks.report(site.id); });
+    on('[data-pa-sol]', function (b) {
+      if (!hooks.solution) return;
+      var key = b.getAttribute('data-pa-sol'), sel = key === 'runware' ? el.querySelector('[data-pa-sol-chip]') : null;
+      b.disabled = true; hooks.solution(site.id, key, sel ? sel.value : null);
+    });
     on('[data-pa="space"]', function (b) { if (hooks.space) { b.disabled = true; b.textContent = 'Reading the lot…'; hooks.space(site.id); } });
     on('[data-pa-close]', function (b) {
       if (!hooks.closing) return;
@@ -439,6 +462,7 @@
       else h += '<h3>The shelf on this power</h3>' + shelfTable(c) + notes(ce.notes);
     } else h += '<div class="sub">' + esc(c.words || 'Not sized') + '</div>';
     /* battery */
+    if (res.solutions && res.solutions.list) h += '<h2>Compute solutions</h2>' + solutionsHtml(res.solutions, { pick: false }).replace(' class="pa-box" id="pa-solutions"', '');
     var spc = res.space;
     if (spc && spc.words) {
       var su = spc.uses || {};

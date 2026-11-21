@@ -21,6 +21,9 @@
      POST assess-space { site | ids[] (10) }   the lot alone for a site already
           screened: the parcel under its point again and the buildings on
           it, measured (assess-space.js); the grid screen is not run
+     POST assess-solution { site | ids[], solution: runware|lightsmith|armada|omega|default, chip? }
+          the compute system picked for a site (a chip for the pod); default
+          follows the workspace's own again
      POST assess-check { site, item, state: open|done|na, note? }
           a person's mark on one readiness item; the score follows
      POST assess-approve { ids[] | site, uses: [compute|bess|supercharger], note? }
@@ -86,7 +89,7 @@
 var crypto = require('crypto');
 var AS = require('./assess'), G = require('./grid-screen'), D = require('./diligence'), BR = require('./site-bridge'), SP = require('./assess-space');
 
-var ACTIONS = ['assess-run', 'assess-space', 'assess-screen-start', 'assess-screen-step', 'assess-check', 'assess-approve', 'assess-upgrade', 'assess-fund-submit', 'assess-fund-withdraw', 'assess-fund-decide', 'assess-fund-link', 'assess-fund-attest', 'assess-review-vote', 'assess-closing'];
+var ACTIONS = ['assess-run', 'assess-space', 'assess-solution', 'assess-screen-start', 'assess-screen-step', 'assess-check', 'assess-approve', 'assess-upgrade', 'assess-fund-submit', 'assess-fund-withdraw', 'assess-fund-decide', 'assess-fund-link', 'assess-fund-attest', 'assess-review-vote', 'assess-closing'];
 var RUN_CAP = 50, SCREEN_IDS_CAP = 200, APPROVE_CAP = 200, MARK_CAP = 200, SCREEN_FRESH_DAYS = 7, PARCEL_TIMEOUT = 12000, SPACE_CAP = 10;
 
 function owns(action) { return ACTIONS.indexOf(String(action || '')) >= 0; }
@@ -117,7 +120,7 @@ function make(deps) {
   function screenOf(data) { var a = data && data.assessment, d = data && data.diligence; return (a && a.screen) || (d && d.screen && d.screen.complete ? d.screen : null) || null; }
   function compute(id, data, cfg) {
     var a = (data && data.assessment) || {};
-    return AS.assess(flat(id, data), { screen: screenOf(data), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, config: cfg, now: deps.now() });
+    return AS.assess(flat(id, data), { screen: screenOf(data), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, solution: a.solution || null, config: cfg, now: deps.now() });
   }
   function mustEdit(c) { if (c.canEdit === false) throw fail(403, 'Your role in this workspace can read the assessment but not run it'); }
 
@@ -170,7 +173,7 @@ function make(deps) {
         var d2 = cur.data() || {}, a = Object.assign({}, d2.assessment || {});
         /* a lookup that failed this time never replaces a parcel already on file */
         if (parcel.ok || !(a.parcel && a.parcel.ok)) a.parcel = parcel;
-        a.result = AS.assess(flat(id, Object.assign({}, d2, { assessment: a })), { screen: a.screen || screenOf(d2), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, config: cfg, now: deps.now() });
+        a.result = AS.assess(flat(id, Object.assign({}, d2, { assessment: a })), { screen: a.screen || screenOf(d2), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, solution: a.solution || null, config: cfg, now: deps.now() });
         a.at = deps.now(); a.by = c.by;
         tx.update(sref, { assessment: plain(a) });
         tx.create(c.db.collection('omega_audit').doc(), { action: 'sitecrm-assess-space', orgId: c.org, siteId: id, by: c.by, at: deps.now(), parcel: parcel.ok === true, measured: !!(parcel.space && parcel.space.ok), buildings: !!(parcel.space && parcel.space.buildings && parcel.space.buildings.read) });
@@ -180,6 +183,29 @@ function make(deps) {
     var m = out.filter(function (x) { return x.measured; }).length;
     return { ok: true, read: out.length, measured: m, missing: missing, skipped: skipped, sites: out,
       note: m + ' lot' + (m === 1 ? '' : 's') + ' measured' + (out.length - m ? '; ' + (out.length - m) + ' with no parcel outline here' : '') + (skipped.length ? '; ' + skipped.length + ' not located yet (run the screen first)' : '') + '.' };
+  }
+
+  /* ── THE SOLUTION PICKED FOR A SITE: one of the compute systems on offer (and, for the pod, a chip), or `default` to
+     follow the workspace's own again. The site's compute answer, its space, its checklist and its upgrade follow it. ── */
+  async function pickSolution(c) {
+    mustEdit(c);
+    var ids = c.site ? [c.site] : idList(c.b.ids, APPROVE_CAP, fail), billing = await billingOf(c.root), cfg = AS.configOf(billing), pick = AS.solutionChange(c.b, { by: c.by, now: deps.now() }), done = [], missing = [];
+    for (var i = 0; i < ids.length; i++) {
+      var id = ids[i], sref = c.root.collection('sites').doc(id);
+      var ok = await c.db.runTransaction(async function (tx) {
+        var cur = await tx.get(sref); if (!cur.exists) return false;
+        var d2 = cur.data() || {}, a = Object.assign({}, d2.assessment || {}), was = a.solution ? a.solution.key + (a.solution.chip ? ':' + a.solution.chip : '') : null;
+        if (pick) a.solution = pick; else delete a.solution;
+        a.result = AS.assess(flat(id, Object.assign({}, d2, { assessment: a })), { screen: a.screen || screenOf(d2), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, solution: a.solution || null, config: cfg, now: deps.now() });
+        a.at = deps.now(); a.by = c.by;
+        tx.update(sref, { assessment: plain(a) });
+        tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-solution', orgId: c.org, siteId: id, by: c.by, at: deps.now(), from: was, to: pick ? pick.key + (pick.chip ? ':' + pick.chip : '') : null }));
+        return true;
+      });
+      if (ok) done.push(id); else missing.push(id);
+    }
+    return { ok: true, sites: done.length, missing: missing, solution: pick ? pick.key : null, chip: pick ? pick.chip : null,
+      note: done.length + ' site' + (done.length === 1 ? '' : 's') + (pick ? ' set to ' + pick.name + (pick.chip ? ' (' + pick.chip + ')' : '') : ' back on the workspace’s own solution') + '.' };
   }
 
   /* ── the screens, a job a phase at a time ────────────────────────────── */
@@ -241,7 +267,7 @@ function make(deps) {
         var st = BR.normalize(id, d2), ch = D.change(st.diligence, 'screen', { screen: r.screen }, { site: st, config: D.configOf(billing), role: 'member', canEdit: true, by: c.by, now: deps.now() });
         patch.diligence = plain(ch.diligence); moved = ch.event.moved || []; d2 = Object.assign({}, d2, { diligence: ch.diligence });
       }
-      a.result = AS.assess(flat(id, Object.assign({}, d2, { assessment: a })), { screen: a.screen, parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, config: cfg, now: deps.now() });
+      a.result = AS.assess(flat(id, Object.assign({}, d2, { assessment: a })), { screen: a.screen, parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, solution: a.solution || null, config: cfg, now: deps.now() });
       a.at = deps.now(); a.by = c.by; patch.assessment = plain(a);
       tx.update(sref, patch);
       tx.create(c.db.collection('omega_audit').doc(), { action: 'sitecrm-assess-screen', orgId: c.org, siteId: id, by: c.by, at: deps.now(), jobId: job.id, located: !!(loc && loc.usable), parcel: !!(parcel && parcel.ok), errors: (r.screen.errors || []).length, moved: moved });
@@ -272,7 +298,7 @@ function make(deps) {
       var data = cur.data() || {}, a = Object.assign({}, data.assessment || {}), marks = Object.assign({}, a.checklist || {}), was = marks[item] ? marks[item].state : 'open';
       if (state === 'open' && !note) delete marks[item]; else marks[item] = { state: state, note: note || null, by: c.by, at: deps.now() };
       a.checklist = marks;
-      a.result = AS.assess(flat(c.site, data), { screen: screenOf(data), parcel: a.parcel || null, marks: marks, upgrade: a.upgrade || null, config: cfg, now: deps.now() });
+      a.result = AS.assess(flat(c.site, data), { screen: screenOf(data), parcel: a.parcel || null, marks: marks, upgrade: a.upgrade || null, solution: a.solution || null, config: cfg, now: deps.now() });
       a.at = deps.now(); a.by = a.by || c.by;
       tx.update(sref, { assessment: plain(a) });
       tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-check', orgId: c.org, siteId: c.site, by: c.by, at: deps.now(), item: item, from: was, to: state, note: note || null }));
@@ -350,7 +376,7 @@ function make(deps) {
       names[sref.id] = data.name || sref.id;
       var a = Object.assign({}, data.assessment || {}), site = flat(sref.id, data), pw = AS.powerOf(site, screenOf(data)), was = a.upgrade ? a.upgrade.status : null;
       a.upgrade = AS.upgradeOf(a.upgrade || null, c.b, { by: c.by, now: deps.now(), limitKw: pw.limitKw, availableKw: pw.availableKw, partner: site.portfolioPartner || data.portfolioPartner || null, pue: cfg.compute.pue, config: cfg });
-      a.result = AS.assess(site, { screen: screenOf(data), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade, config: cfg, now: deps.now() });
+      a.result = AS.assess(site, { screen: screenOf(data), parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade, solution: a.solution || null, config: cfg, now: deps.now() });
       a.at = deps.now(); a.by = a.by || c.by;
       tx.update(sref, { assessment: plain(a) });
       tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-assess-upgrade', orgId: c.org, siteId: sref.id, by: c.by, at: deps.now(), status: a.upgrade.status, was: was, targetKw: a.upgrade.targetKw, askedBy: a.upgrade.askedBy, note: a.upgrade.note }));
@@ -392,7 +418,7 @@ function make(deps) {
       names[sref.id] = data.name || sref.id;
       var a = Object.assign({}, data.assessment || {}), sc = screenOf(data), was = a.funding ? a.funding.status : null;
       /* what is submitted is what is on file NOW: assessed again, so a stale figure never reaches the committee */
-      var fresh = a.result ? AS.assess(flat(sref.id, data), { screen: sc, parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, config: cfg, now: deps.now() }) : null;
+      var fresh = a.result ? AS.assess(flat(sref.id, data), { screen: sc, parcel: a.parcel || null, marks: a.checklist || null, upgrade: a.upgrade || null, solution: a.solution || null, config: cfg, now: deps.now() }) : null;
       a.funding = AS.fundingChange(a.funding || null, action, c.b, { by: c.by, now: deps.now(), config: cfg, result: fresh, screened: !!(sc && sc.complete), canEdit: c.canEdit });
       if (action === 'submit') { a.result = fresh; a.at = deps.now(); }
       tx.update(sref, { assessment: plain(a) });
@@ -464,6 +490,7 @@ function make(deps) {
     if (action === 'assess-fund-attest') return fund(c, 'attest');
     if (action === 'assess-run') return run(c);
     if (action === 'assess-space') return space(c);
+    if (action === 'assess-solution') return pickSolution(c);
     if (action === 'assess-screen-start') return screenStart(c);
     if (action === 'assess-screen-step') return screenStep(c);
     if (action === 'assess-check') return check(c);
