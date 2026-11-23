@@ -30,6 +30,10 @@ tenants/*/*.md
 tenants/*/billing.json
 tenants/*/products.csv
 tenants/*/portfolio-diligence.json
+# white-label.json: the block scripts/set-white-label.js stages on a
+#                  workspace (2026-11-09). Its only reader is that script; the
+#                  site reads the block off the record, never off this file.
+tenants/*/white-label.json
 
 # ── NOT WEB CONTENT, AND ONE OF THEM IS THE CUSTOMER BOOK ────────────────
 # Vercel serves the repo root, so anything sitting here is a URL. These were:

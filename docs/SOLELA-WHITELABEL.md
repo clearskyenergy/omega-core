@@ -37,6 +37,11 @@ home that deep-links into the platform — is its own repository,
    `whiteLabel.markUrl = /tenants/solelacapital/logos/solela-monogram-white.svg`
    and, if unset, `logoUrl` to the same path — the enable script
    deliberately stages only platformName/shortName/attribution.
+   Or from the repo: `node scripts/set-white-label.js --org solelacapital.com`
+   (a dry run; `--apply --confirm-org` writes) stages the mark, the accent,
+   the ink and the support address from `tenants/solelacapital/white-label.json`
+   and re-mirrors `tenant_public`; it never touches `attribution` or
+   `logoUrl` (`docs/WHITE-LABEL.md`, the name-only runbook).
 4. **Attach the domain** (the hostname decided with Solela, e.g.
    `portal.solelacapital.com`):
    - Vercel: add the domain to the one platform project.
