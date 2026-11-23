@@ -4,7 +4,7 @@
 
    Body:   { lat, lng }                       finite numbers, WGS84
    200:    { ok:true, ring:[[lat,lng],...], apn, owner, acres, zoning, county,
-             source:'regrid'|'cook'|'dupage'|'lake' }
+             source:'regrid'|'regrid-tiles'|'cook'|'dupage'|'lake', partial? }
            { ok:false, reason:'no parcel record here', tried:[...], note?,
              licensed:'asked'|'not-on-plan'|'not-configured' }
    401:    bad or missing Firebase ID token
@@ -53,6 +53,7 @@
    ═══════════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var A = require('./_lib/admin');
+var MVT = require('./_lib/mvt');
 
 var TIMEOUT_MS = 8000;
 
@@ -254,6 +255,85 @@ function fromRegrid(j) {
   };
 }
 
+/* ── THE LOT OFF THE PARCEL TILES (2026-11-23) ───────────────────────────
+   Tommy: "in our editor tool we have it pulling all the parcel data … so
+   this should do the same". The editor's Parcel Lines are the licensed
+   source's MAP TILES (api/parcel-tiles.js), a different subscription from
+   the point lookup above: a key can carry the tiles and not the lookup, and
+   then every county with no public layer (all of Oklahoma) answered "no
+   parcel" while the editor drew its lot lines. The same tiles are served as
+   vector tiles, which carry each outline, so when the point lookup gives
+   nothing the lot is read out of the tile the point is in (api/_lib/mvt.js).
+
+   A lot cut by the tile's edge is not the whole lot: a wider tile is asked
+   (TILE_ZOOMS, about 0.4, 0.8 then 1.6 miles across), and one still cut at
+   the widest is kept and SAID (`partial: true`), never passed off as whole.
+   A tile carries few fields: the acres are measured off the outline, and
+   zoning and county are left null rather than guessed. source:'regrid-tiles'.
+   Exercised on tiles built in scripts/tests/tparcel.js; when it first runs
+   against the live service, compare one lot with the editor's lines. */
+var TILE_ROOT = 'https://tiles.regrid.com/api/v1/parcels/';
+var TILE_ZOOMS = [16, 15, 14];
+var TILE_TIMEOUT_MS = 5000;
+function tileUrl(t, token) { return TILE_ROOT + t.z + '/' + t.x + '/' + t.y + '.mvt?token=' + encodeURIComponent(token); }
+function getBytes(url, ms) {
+  var ctl = new AbortController();
+  var timer = setTimeout(function () { ctl.abort(); }, ms);
+  return fetch(url, { method: 'GET', signal: ctl.signal,
+    headers: { 'Accept': 'application/vnd.mapbox-vector-tile, application/x-protobuf, */*',
+               'User-Agent': 'ClearSky-OMEGA parcel (https://clearskyomega.com)' }
+  }).then(function (r) {
+    if (r.status === 204 || r.status === 404) return null;          /* an empty tile: nothing mapped here */
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.arrayBuffer();
+  }).then(function (ab) {
+    clearTimeout(timer);
+    if (!ab) return null;
+    var buf = Buffer.from(ab);
+    /* a tile stored gzipped and served without the header */
+    if (buf.length > 2 && buf[0] === 0x1f && buf[1] === 0x8b) buf = require('zlib').gunzipSync(buf);
+    return buf;
+  }, function (err) { clearTimeout(timer); throw err; });
+}
+function prop(props, names) {
+  for (var i = 0; i < names.length; i++) { var v = props[names[i]]; if (v != null && v !== '') return v; }
+  return null;
+}
+function fromTile(buf, t, lat, lng) {
+  if (!buf || !buf.length) return null;
+  var hit = MVT.polygonAt(buf, t, lat, lng);
+  if (!hit) return null;
+  var ring = cleanRing(hit.ring);
+  if (!ring) return null;
+  var out = {
+    ok: true,
+    ring: ring,
+    apn: str(prop(hit.props, ['parcelnumb', 'parcelnumb_no_formatting', 'apn'])),
+    owner: str(prop(hit.props, ['owner'])),
+    acres: ringAcres(ring),
+    zoning: str(prop(hit.props, ['zoning'])),
+    county: str(prop(hit.props, ['county'])),
+    source: 'regrid-tiles'
+  };
+  if (hit.clipped) out.partial = true;
+  return out;
+}
+/* the tile the point is in, wider while the lot is cut by its edge */
+function fromTiles(lat, lng, token, fetchBytes) {
+  var kept = null, i = 0;
+  function next() {
+    if (i >= TILE_ZOOMS.length) return Promise.resolve(kept);
+    var t = MVT.tileOf(lat, lng, TILE_ZOOMS[i++]);
+    return (fetchBytes || getBytes)(tileUrl(t, token), TILE_TIMEOUT_MS).then(function (buf) {
+      var hit = fromTile(buf, t, lat, lng);
+      if (hit && !hit.partial) return hit;
+      if (hit) kept = hit; else if (!kept) return null;      /* nothing under the point at this zoom: a wider tile holds no more */
+      return next();
+    });
+  }
+  return next();
+}
+
 function countyUrl(key, lat, lng) {
   /* lat/lng are validated numbers by the time they get here, so string
      concatenation cannot carry anything but digits. */
@@ -406,7 +486,9 @@ function lookup(caller, ent, lat, lng) {
     return fn().catch(function (err) {
       /* The name of the source and whether it timed out — never its body,
          never the URL (the Regrid one has the token in it). */
-      var why = err && err.name === 'AbortError' ? 'timed out' : 'did not answer';
+      /* a refused key is said as that (the status only): "did not answer" read as an outage for a month */
+      var m = /^HTTP (\d{3})$/.exec(String(err && err.message || ''));
+      var why = err && err.name === 'AbortError' ? 'timed out' : m && (m[1] === '401' || m[1] === '403') ? 'refused the key (HTTP ' + m[1] + ')' : m ? 'did not answer (HTTP ' + m[1] + ')' : 'did not answer';
       notes.push(name + ' ' + why);
       return null;
     });
@@ -429,6 +511,14 @@ function lookup(caller, ent, lat, lng) {
       });
     });
   });
+
+  if (token && ent.regrid) {
+    /* the same key's parcel TILES, the editor's own lines, when the point lookup gave nothing */
+    chain = chain.then(function (hit) {
+      if (hit) return hit;
+      return attempt('regrid-tiles', function () { return fromTiles(lat, lng, token); });
+    });
+  }
 
   return chain.then(function (hit) {
     console.log('[parcel]', caller.orgId, hit ? hit.source : 'none',
@@ -469,7 +559,7 @@ module.exports._helpers = {
   ringFromEsri: ringFromEsri, ringFromGeoJson: ringFromGeoJson, ringAcres: ringAcres,
   fieldMatching: fieldMatching, acresFromAttrs: acresFromAttrs, zoningFromAttrs: zoningFromAttrs,
   fromEsri: fromEsri, fromRegrid: fromRegrid, countyUrl: countyUrl,
-  regridEntitled: regridEntitled, cacheKey: cacheKey, packHit: packHit, unpackHit: unpackHit,
+  regridEntitled: regridEntitled, cacheKey: cacheKey, fromTile: fromTile, fromTiles: fromTiles, tileUrl: tileUrl, TILE_ZOOMS: TILE_ZOOMS, packHit: packHit, unpackHit: unpackHit,
   PARCELS: PARCELS, COUNTY_ORDER: COUNTY_ORDER, TIMEOUT_MS: TIMEOUT_MS,
   REGRID_TIERS: REGRID_TIERS, REGRID_ADDON: REGRID_ADDON, CACHE: CACHE, CACHE_TTL_MS: CACHE_TTL_MS
 };

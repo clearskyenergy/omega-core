@@ -90,7 +90,7 @@ var crypto = require('crypto');
 var AS = require('./assess'), G = require('./grid-screen'), D = require('./diligence'), BR = require('./site-bridge'), SP = require('./assess-space');
 
 var ACTIONS = ['assess-run', 'assess-space', 'assess-solution', 'assess-screen-start', 'assess-screen-step', 'assess-check', 'assess-approve', 'assess-upgrade', 'assess-fund-submit', 'assess-fund-withdraw', 'assess-fund-decide', 'assess-fund-link', 'assess-fund-attest', 'assess-review-vote', 'assess-closing'];
-var RUN_CAP = 50, SCREEN_IDS_CAP = 200, APPROVE_CAP = 200, MARK_CAP = 200, SCREEN_FRESH_DAYS = 7, PARCEL_TIMEOUT = 12000, SPACE_CAP = 10;
+var RUN_CAP = 50, SCREEN_IDS_CAP = 200, APPROVE_CAP = 200, MARK_CAP = 200, SCREEN_FRESH_DAYS = 7, PARCEL_TIMEOUT = 25000, SPACE_CAP = 10;
 
 function owns(action) { return ACTIONS.indexOf(String(action || '')) >= 0; }
 function day(now) { return String(now).slice(0, 10); }
@@ -106,7 +106,7 @@ function idList(v, cap, fail) {
    and which sources were asked. A state with no public parcel layer (Oklahoma, most of Arizona) has a lot outline only
    from the licensed source, so "it was not asked" and "it has no record here" are two different answers, each said. */
 function missWords(b) {
-  var tried = Array.isArray(b.tried) ? b.tried.map(String) : [], pub = tried.filter(function (t) { return t !== 'regrid'; });
+  var tried = Array.isArray(b.tried) ? b.tried.map(String) : [], pub = tried.filter(function (t) { return !/^regrid/.test(t); });
   var r0 = String(b.reason || 'no parcel record here'), w = (r0 === 'no parcel record here' ? '' : r0 + ': ') + (pub.length ? 'the public parcel layer here (' + pub.join(', ') + ') has none under the point' : 'no public parcel layer covers this point');
   w += b.licensed === 'not-configured' ? ', and the licensed parcel source is not switched on for this deployment' : b.licensed === 'not-on-plan' ? ', and the licensed parcel source is not on this workspace’s plan'
     : b.licensed === 'asked' || tried.indexOf('regrid') >= 0 ? ', and the licensed parcel source has none either' : '';
@@ -119,7 +119,7 @@ function parcelOf(r, now, space) {
   if (!(r && r.status === 200)) return { ok: false, reason: b.error ? String(b.error).slice(0, 200) : 'the parcel lookup did not answer (' + (r ? r.status : 'no reply') + ')', at: now };
   if (b.ok !== true) return { ok: false, reason: missWords(b), at: now };
   function s(v, n) { return v == null || v === '' ? null : String(v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n) || null; }
-  return Object.assign({ ok: true, apn: s(b.apn, 60), owner: s(b.owner, 160), acres: b.acres != null && isFinite(Number(b.acres)) ? Math.round(Number(b.acres) * 100) / 100 : null, zoning: s(b.zoning, 80), county: s(b.county, 80), source: s(b.source, 30), at: now }, space ? { space: space } : {});
+  return Object.assign({ ok: true, apn: s(b.apn, 60), owner: s(b.owner, 160), acres: b.acres != null && isFinite(Number(b.acres)) ? Math.round(Number(b.acres) * 100) / 100 : null, zoning: s(b.zoning, 80), county: s(b.county, 80), source: s(b.source, 30), at: now }, b.partial === true ? { partial: true } : {}, space ? { space: space } : {});
 }
 
 function make(deps) {

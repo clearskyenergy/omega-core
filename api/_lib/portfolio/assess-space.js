@@ -191,6 +191,7 @@ function spaceOf(parcel, res) {
     out.notes.push('Clear ground is the public record’s: inside the lot line and off the building footprints. Paving, parking stalls, drive aisles, canopies, tanks, easements, slope and the zoning setback are not read. A fit means a clear rectangle that size exists, not that the pad goes there.');
     out.notes.push('The ' + sp.setbackFt + ' ft from the lot line and ' + sp.buildingClearFt + ' ft from a building are this assessment’s assumptions, not the jurisdiction’s rule.');
     if (!b.read) out.notes.push('The building footprints were not read (' + (b.reason || 'no answer') + '): the fit below is judged on the lot line alone and is an upper bound.');
+    if (parcel.partial) out.notes.push('The lot reaches past the map tile its outline was read from, so the outline is cut short: the lot and the clear ground are a lower bound.');
     if (sp.clear.coarsened) out.notes.push('The lot is large, so it was measured on a ' + sp.clear.gridFt + ' ft grid: the clear figures are conservative.');
   } else {
     out.words = lotSqFt != null ? 'A lot of ' + fmt(lotSqFt) + ' sq ft (' + out.acres + ' acres) on the parcel record. Its outline and buildings are not measured' + (sp && sp.reason ? ' (' + sp.reason + ')' : '') + ': read the lot to judge the fit' : 'The parcel record carries no area';
