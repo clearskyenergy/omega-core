@@ -1639,7 +1639,9 @@ the same day, each in Tommy's words in the doc:
   portfolio"): `assess-space.js scoreOf`, 0 to 100 for the compute pad on
   the clear ground (60 and up fits, 85 ample, under 40 no room, an upper
   bound held at 70, not judged is no score), its own sortable *Space*
-  column on the register, printed with its rule on the card and report.
+  column on the register, printed with its rule on the card and report. The register cell LEADS WITH THE
+  ACRES (2026-11-23, Tommy: "should it just say how much space like acres"), then the share that is building,
+  then the fit and its score; the column sorts by acres.
 - **The offtake partner's figures AS WRITTEN** (2026-11-21, Tommy: "use
   these numbers to update the logic and engine for IRR calculation on
   compute"): the brief is the partner's confidential document, so its

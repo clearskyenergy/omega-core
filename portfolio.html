@@ -64,7 +64,7 @@
 .pf-table{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);overflow:hidden;box-shadow:var(--ows-shadow)}
 .pf-tr{display:grid;grid-template-columns:34px minmax(180px,2fr) minmax(100px,1fr) 104px 86px 50px 82px 92px 128px 150px;gap:8px;padding:11px 14px;border-bottom:1px solid var(--ows-line);align-items:center;min-height:52px}
 .pf-table.am{overflow-x:auto}
-.pf-table.am .pf-tr{grid-template-columns:34px minmax(190px,2fr) 118px 150px 108px 100px 84px 70px 120px 92px;min-width:1130px}
+.pf-table.am .pf-tr{grid-template-columns:34px minmax(190px,2fr) 118px 150px 108px 100px 84px 88px 120px 92px;min-width:1148px}
 .pf-run{display:none;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:var(--ows-shadow);font-size:13px}
 .pf-run.on{display:block}.pf-run .rw{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.pf-run .bar{flex:1;min-width:160px;height:8px;border-radius:5px;background:var(--ows-sunk);overflow:hidden}.pf-run .bar i{display:block;height:100%;width:0;background:var(--ows-brand);border-radius:5px;transition:width .3s}
 .pf-run .n{font-size:12px;color:var(--ows-ink2);margin-top:6px}
@@ -398,7 +398,7 @@
       if (k === 'compute') return a && a.compute && a.compute.economics ? a.compute.economics.irrPct : null;
       if (k === 'bess') return a && a.bess && a.bess.ok ? (a.bess.returns.noNetInvestment ? 1e6 : a.bess.returns.irrPct) : null;
       if (k === 'charge') return a && a.supercharger && a.supercharger.ok ? a.supercharger.returns.irrPct : null;
-      if (k === 'space') return a && a.space && a.space.score ? a.space.score.points : null;
+      if (k === 'space') return a && a.space && a.space.ok && a.space.acres != null ? Number(a.space.acres) : null;      /* by the acres the cell leads with */
       if (k === 'ready') return a && a.readiness ? a.readiness.pct * 1000 + a.readiness.screenedPct : null;
       if (k === 'location') return [s.state, s.city].filter(Boolean).join(' ').toLowerCase();
       if (k === 'status') return (s.status || '').toLowerCase();
