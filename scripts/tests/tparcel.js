@@ -224,6 +224,7 @@ const REGRID_HIT = { parcels: { type: 'FeatureCollection', features: [{
   ok(out && out.ok === false && out.reason === 'no parcel record here', 'Clinton, Iowa: ok:false, reason "no parcel record here"');
   ok(CALLS.length === 0 && same(out.tried, []), 'and nobody upstream was asked (REGRID_TOKEN is not set in this process)');
   ok(!('note' in out), 'no note when nothing was even tried');
+  ok(out.licensed === 'not-configured', 'and the miss says the licensed source was not asked because it is not configured (a word, never the key)');
 
   /* ── 11 · a Cook point through the stubbed layer ───────────────────── */
   console.log('a Cook point');
@@ -306,6 +307,13 @@ const REGRID_HIT = { parcels: { type: 'FeatureCollection', features: [{
     out = await post(COOK);
     ok(out && out.ok === true && out.source === 'cook' && CALLS.length === 2 && JSON.stringify(out).indexOf('SECRET') < 0,
        'the add-on asks Regrid; a Regrid 401 falls through to the county, body not echoed');
+    /* a point no public layer covers: the miss says whether the licensed source was asked */
+    reset(); SCRIPT = [];
+    out = await post({ lat: 41.8445, lng: -90.1887 });
+    ok(out && out.ok === false && out.licensed === 'not-on-plan' && CALLS.length === 0, 'outside every public layer on a plan without it: the miss says the licensed source is not on the plan');
+    reset({ 'omega_orgs/concordenergyusa.com/billing/current': { tier: 'internal' } }); SCRIPT = [{ json: { parcels: { type: 'FeatureCollection', features: [] } } }];
+    out = await post({ lat: 41.8445, lng: -90.1887 });
+    ok(out && out.ok === false && out.licensed === 'asked' && same(out.tried, ['regrid']) && JSON.stringify(out).indexOf('SECRET') < 0, 'and on a plan with it: asked, nothing there, the token never in the answer');
     reset({ 'omega_orgs/concordenergyusa.com': undefined }); SCRIPT = [{ json: REGRID_HIT }];
     AUTH = () => Promise.resolve({ uid: 's1', email: 'ops@clearsky-usa.com', orgId: 'clearsky-usa.com', staff: true });
     out = await post(COOK);
@@ -324,6 +332,11 @@ const REGRID_HIT = { parcels: { type: 'FeatureCollection', features: [{
   ok(out && out.ok === true && CALLS.length === 1 && same(WRITES, ['parcel_cache/41.87810_-87.62980']), 'a hit is written to parcel_cache/{key}');
   const row = DOCS['parcel_cache/41.87810_-87.62980'];
   ok(row && row.hit && row.hit.source === 'cook' && row.expiresAt > Date.now() && row.expiresAt <= Date.now() + H.CACHE_TTL_MS, 'with the hit and an expiry');
+  /* Firestore refuses an array inside an array: the ring is kept flat, and comes back as it was */
+  ok(row.hit.ring === undefined && Array.isArray(row.hit.ringFlat) && row.hit.ringFlat.length === out.ring.length * 2 && row.hit.ringFlat.every(function (v) { return typeof v === 'number'; }),
+     'the ring is stored flat (no array inside an array, which Firestore refuses)');
+  const back = H.unpackHit(H.packHit(out));
+  ok(same(back.ring, out.ring) && back.apn === out.apn && same(Object.keys(back).sort(), Object.keys(out).sort()), 'and packs and unpacks to the same answer');
   SCRIPT = [];
   const again = await post({ lat: 41.878104, lng: -87.629796 });
   ok(again && again.ok === true && again.apn === out.apn && same(again.ring, out.ring) && CALLS.length === 0,

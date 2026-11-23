@@ -825,3 +825,34 @@ in how the three are read side by side, and it is on the honest list below.
   assessed table is not drawn there; the side panel carries the card.
 - **No module sells it yet.** Any workspace with the register may run it;
   the screens keep their own plan gates.
+
+## The lot, when the Space column is empty (2026-11-23)
+
+Tommy, of a register whose Space column read "–" on every site: "make sure the space is pulling details on
+the parcel on how much is on the lot and how much is building"; "on the site map editor we have that parcel
+feature and api so this should be an api integration … this needs to be accurate so that we can match up".
+
+- **It is the editor's own API.** The lot comes from `api/parcel.js`, the one door Site Map and Omega Maximus
+  ask for the parcel under a point (the licensed every-county source first where the plan carries it, then the
+  public county and state layers in `omega-parcel-sources.js`); the buildings come from FEMA USA Structures, the
+  service Omega Maximus's *Find buildings* reads. No second parcel reader exists. The APN on the card is the
+  record's, so a lot can be matched to the one the editor draws.
+- **Oklahoma, and Arizona outside Maricopa and Pima, publish no parcel layer.** There a lot outline comes
+  only from the licensed source (`REGRID_TOKEN` on the deployment, and a plan that carries it: Deluxe,
+  Enterprise, Partner, Internal, the `parcels` add-on or `toolOverrides.parcel`). Without it the answer is a
+  miss, and a miss now says why: `api/parcel.js` adds `licensed` (`asked` | `not-on-plan` | `not-configured`,
+  never the key) and `assess-door.js missWords` writes the sentence kept as `assessment.parcel.reason`.
+- **The cell never reads a bare dash.** A score with the lot under it ("1.2 ac · 18% built"), the lot alone
+  where no pad is judged, **No parcel** (hover for why) or **Not read**. The card's button is *Read the lot*,
+  or *Look for the parcel again* after a miss.
+- **A run reads the lots it skipped.** A site whose screen was kept as fresh, or was screened before the lot
+  was measured, has a parcel on file and no measurement: after the screens the page posts `assess-space` for
+  those alone, five a call. A site with no parcel record is not asked again by a run. The run's last line
+  counts the lots: measured, no parcel record, not read.
+- **The parcel cache had never held anything.** Firestore refuses an array inside an array and a ring is one,
+  so every write of a hit was refused (logged, not returned) and the metered source was asked again for the
+  same point. The ring is now stored flat (`ringFlat`) and rebuilt on the way out; the answer is unchanged.
+- **What it rests on.** The point is the screen's located point (the geocoded address). A geocode that lands
+  on the road or the neighbouring lot reads that lot: the APN, the acres and the owner on the card are how a
+  person checks it against the editor's parcel. Not built: moving the point by hand from the register.
+

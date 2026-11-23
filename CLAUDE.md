@@ -1610,6 +1610,16 @@ the same day, each in Tommy's words in the doc:
   paving, easements and the zoning setback are not read, so a fit is never
   "the pad goes there" and the checklist item is Screened, never Done.
   `tassess.js` S01 to S05.
+- **The lot is the editor's parcel API, and a miss says why** (2026-11-23, Tommy, of a Space column reading
+  "–" on every site: "on the site map editor we have that parcel feature and api … this needs to be
+  accurate"): the lot is `api/parcel.js`, Site Map's and Maximus's own door, the buildings FEMA's, never a
+  second reader. Oklahoma and most of Arizona publish no parcel layer, so a lot there needs the licensed
+  source (`REGRID_TOKEN` and a plan that carries it); a miss carries `licensed` (asked | not-on-plan |
+  not-configured, never the key) and `assess-door.js missWords` keeps the sentence. The Space cell is never a
+  bare dash (score and "1.2 ac · 18% built", **No parcel**, **Not read**); a run reads the lots of sites it
+  kept as fresh (`assess-space`, five a call), never a site with no parcel record. The parcel cache stores
+  the ring FLAT (`ringFlat`): Firestore refuses nested arrays, so it had never held a hit. `tassess.js` S06,
+  `tparcel.js`.
 - **The space score** (Tommy: "something we can look at and score in the
   portfolio"): `assess-space.js scoreOf`, 0 to 100 for the compute pad on
   the clear ground (60 and up fits, 85 ample, under 40 no room, an upper

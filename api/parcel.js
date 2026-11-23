@@ -5,7 +5,8 @@
    Body:   { lat, lng }                       finite numbers, WGS84
    200:    { ok:true, ring:[[lat,lng],...], apn, owner, acres, zoning, county,
              source:'regrid'|'cook'|'dupage'|'lake' }
-           { ok:false, reason:'no parcel record here', tried:[...], note? }
+           { ok:false, reason:'no parcel record here', tried:[...], note?,
+             licensed:'asked'|'not-on-plan'|'not-configured' }
    401:    bad or missing Firebase ID token
    403:    the caller's tenant is not active (no omega_orgs record, pending,
            suspended, cancelled) — staff excepted
@@ -333,19 +334,36 @@ function cacheKey(lat, lng) { return lat.toFixed(5) + '_' + lng.toFixed(5); }
 /* A live hit or null. Anything wrong with the read — no Firestore in a
    test, a malformed row — is a miss, never an error: the cache is a saving,
    not a source. */
+/* THE RING IN THE CACHE (2026-11-23). Firestore refuses an array inside an
+   array, and a ring is one ([[lat,lng],…]), so every write of a hit was
+   refused and logged, the cache held nothing and the metered source was
+   asked for the same point again and again. The ring is kept FLAT
+   (ringFlat: [lat,lng,lat,lng,…]) and rebuilt on the way out; the answer's
+   shape is unchanged. A row in the old shape (a test, an emulator) still reads. */
+function packHit(hit) {
+  var o = {}; Object.keys(hit).forEach(function (k) { if (k !== 'ring') o[k] = hit[k]; });
+  if (Array.isArray(hit.ring)) { o.ringFlat = []; hit.ring.forEach(function (p) { o.ringFlat.push(p[0], p[1]); }); }
+  return o;
+}
+function unpackHit(d) {
+  if (!d || !Array.isArray(d.ringFlat)) return d;
+  var o = {}, ring = []; Object.keys(d).forEach(function (k) { if (k !== 'ringFlat') o[k] = d[k]; });
+  for (var i = 0; i + 1 < d.ringFlat.length; i += 2) ring.push([d.ringFlat[i], d.ringFlat[i + 1]]);
+  o.ring = ring; return o;
+}
 function cached(key) {
   return Promise.resolve().then(function () {
     return A.db().collection(CACHE).doc(key).get();
   }).then(function (s) {
     var d = s && s.exists ? s.data() : null;
     if (!d || !d.hit || !(d.expiresAt > Date.now())) return null;
-    return d.hit;
+    return unpackHit(d.hit);
   }, function () { return null; });
 }
 function remember(key, hit) {
   return Promise.resolve().then(function () {
     return A.db().collection(CACHE).doc(key).set({
-      hit: hit, cachedAt: new Date().toISOString(), expiresAt: Date.now() + CACHE_TTL_MS
+      hit: packHit(hit), cachedAt: new Date().toISOString(), expiresAt: Date.now() + CACHE_TTL_MS
     });
   }).catch(function (e) { console.warn('[parcel] cache write failed —', e && e.message); });
 }
@@ -420,6 +438,10 @@ function lookup(caller, ent, lat, lng) {
     if (hit) return hit;
     var out = { ok: false, reason: 'no parcel record here', tried: tried };
     if (notes.length) out.note = notes.join('; ');
+    /* whether the licensed source was asked, in a word: a point no public
+       layer covers reads the same as a rural one otherwise, and nobody could
+       tell a missing key or plan from a missing parcel. Never the key. */
+    out.licensed = !token ? 'not-configured' : !ent.regrid ? 'not-on-plan' : 'asked';
     return out;
   });
 }
@@ -447,7 +469,7 @@ module.exports._helpers = {
   ringFromEsri: ringFromEsri, ringFromGeoJson: ringFromGeoJson, ringAcres: ringAcres,
   fieldMatching: fieldMatching, acresFromAttrs: acresFromAttrs, zoningFromAttrs: zoningFromAttrs,
   fromEsri: fromEsri, fromRegrid: fromRegrid, countyUrl: countyUrl,
-  regridEntitled: regridEntitled, cacheKey: cacheKey,
+  regridEntitled: regridEntitled, cacheKey: cacheKey, packHit: packHit, unpackHit: unpackHit,
   PARCELS: PARCELS, COUNTY_ORDER: COUNTY_ORDER, TIMEOUT_MS: TIMEOUT_MS,
   REGRID_TIERS: REGRID_TIERS, REGRID_ADDON: REGRID_ADDON, CACHE: CACHE, CACHE_TTL_MS: CACHE_TTL_MS
 };
