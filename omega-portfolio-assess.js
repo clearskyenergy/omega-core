@@ -43,6 +43,12 @@
   }
   /* SPACE ON THE LOT: the server's words and verdict, drawn; nothing is measured here */
   function spaceMark(sp) { var u = sp && sp.uses && sp.uses.compute; return !u || u.fits == null ? '' : u.fits ? '<span class="pa-k" title="' + esc(u.words || '') + '" style="color:#1f7a4d;border-color:#b9dcc9">' + (u.upperBound ? 'room?' : 'room') + '</span>' : '<span class="pa-k" title="' + esc(u.words || '') + '" style="color:#b3261e;border-color:#f0c4c0">no room</span>'; }
+  /* the lot in a few words for a table cell: its acres and, where the buildings were read, their share of it */
+  function spaceLot(sp) {
+    if (!sp || !sp.ok || sp.acres == null) return '';
+    var b = sp.buildings;
+    return sp.acres + ' ac' + (sp.measured && b && b.read ? ' · ' + (b.count ? (b.coveragePct != null ? b.coveragePct + '% built' : b.count + ' bldg') : 'no bldg') : '');
+  }
   function spaceHtml(sp, o) {
     if (!sp) return '';
     var u = sp.uses || {}, c = u.compute, h = '<div class="pa-box' + (c && c.fits === false ? ' on' : '') + '" id="pa-space"><b>Space on the lot</b><div>' + esc(sp.words || '') + '.</div>';
@@ -51,7 +57,7 @@
     if (u.bess && u.bess.words) h += '<div style="color:var(--ows-ink2);margin-top:2px">Battery: ' + esc(u.bess.words) + '</div>';
     if (u.supercharger && u.supercharger.words) h += '<div style="color:var(--ows-ink2);margin-top:2px">Fast charging: ' + esc(u.supercharger.words) + '</div>';
     if (sp.notes && sp.notes.length) h += '<ul class="pa-list" style="margin-top:6px">' + sp.notes.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>';
-    if (o && o.canEdit && sp.ok && !sp.measured) h += '<div class="a" style="margin-top:6px"><button type="button" class="pa-btn" data-pa="space">Read the lot</button></div>';
+    if (o && o.canEdit && !sp.measured) h += '<div class="a" style="margin-top:6px"><button type="button" class="pa-btn" data-pa="space">' + (sp.ok ? 'Read the lot' : 'Look for the parcel again') + '</button></div>';
     return h + '</div>';
   }
   /* THE SOLUTIONS on this site, side by side, and the one in use: the server's rows, drawn. A pick is the door's. */
@@ -144,8 +150,12 @@
     var r = a.readiness || {}, ready = '<span title="' + esc((r.done || 0) + ' of ' + (r.applicable || 0) + ' items with evidence on file; ' + (r.screened || 0) + ' screened from public data') + '"><b>' + esc(r.pct || 0) + '%</b>' +
       '<div class="pa-bar"><i class="s" style="width:' + (r.screenedPct || 0) + '%"></i><i class="d" style="width:' + (r.pct || 0) + '%"></i></div></span>' +
       (a.decision ? '<div class="pa-sub"><span class="pa-ok" title="Approved for pre-development' + (a.decision.by ? ' by ' + esc(a.decision.by) : '') + '">✓ ' + esc(a.decision.label) + '</span></div>' : '<div class="pa-sub">' + esc(r.label || '') + '</div>');
-    var sc = a.space && a.space.score, space = sc ? '<b title="' + esc(sc.words || '') + '"' + (sc.points < 40 ? ' style="color:#b3261e"' : '') + '>' + esc(sc.points) + '</b><div class="pa-sub" title="' + esc(sc.words || '') + '">' + esc(sc.grade + (sc.upperBound && sc.points >= 60 ? '?' : '')) + '</div>'
-      : '<span class="pa-no" title="' + esc(a.space && a.space.words ? a.space.words : 'The lot is not read yet') + '">' + (a.space && a.space.ok && !a.space.measured ? 'Not read' : '–') + '</span>';
+    /* SPACE: the score when a pad is judged, and under it what the lot IS (acres, how much of it is building).
+       No figure is never a bare dash: it says whether the lot has no parcel record, or is only not read yet. */
+    var sp = a.space || null, sc = sp && sp.score, lot = spaceLot(sp), why = esc(sp && sp.words ? sp.words : 'The lot is not read yet: run the screen'), space = sc
+      ? '<b title="' + esc(sc.words || '') + '"' + (sc.points < 40 ? ' style="color:#b3261e"' : '') + '>' + esc(sc.points) + '</b><div class="pa-sub" title="' + why + '">' + esc(sc.grade + (sc.upperBound && sc.points >= 60 ? '?' : '')) + (lot ? ' · ' + esc(lot) : '') + '</div>'
+      : sp && sp.measured ? '<span title="' + why + '">' + esc(lot || 'Measured') + '</span><div class="pa-sub">no pad judged</div>'
+      : '<span class="pa-no" title="' + why + '">' + (sp && sp.ok ? 'Not read' : sp && /^No parcel record/.test(sp.words || '') ? 'No parcel' : 'Not read') + '</span>' + (sp && sp.ok && lot ? '<div class="pa-sub">' + esc(lot) + '</div>' : '');
     return { power: power, compute: compute, bess: bess, charge: charge, space: space, ready: ready, fund: f ? fundCell(a, f) : null };
   }
 

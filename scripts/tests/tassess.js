@@ -446,7 +446,7 @@ test('D03 a screen that cannot answer is an answer: the atlas down fails the sit
   var retry = await w.post({ action: 'assess-screen-start', ids: ['s1'] }); assert.deepStrictEqual(retry.skippedFresh, []); assert.equal(retry.job.total, 1);
   var m = world({ parcelMiss: true }), s2 = await m.post({ action: 'assess-screen-start', ids: ['s1', 's3'] });
   await m.post({ action: 'assess-screen-step', jobId: s2.job.id }); await m.post({ action: 'assess-screen-step', jobId: s2.job.id });
-  assert.equal(m.site('s1').assessment.parcel.ok, false); assert.ok(/no parcel record/.test(m.site('s1').assessment.parcel.reason));
+  assert.equal(m.site('s1').assessment.parcel.ok, false); assert.ok(/no public parcel layer covers this point/.test(m.site('s1').assessment.parcel.reason));
   var last = await m.post({ action: 'assess-screen-step', jobId: s2.job.id });
   assert.equal(last.job.status, 'complete'); assert.equal(m.site('s3').assessment.screen.errors[0].source, 'location');
 });
@@ -693,6 +693,19 @@ test('S02 the pad each unit needs is its maker’s own figure: the pod’s 21 ×
   assert.deepStrictEqual(need(1000, chip).pad, { wFt: 9, dFt: 21 }); assert.deepStrictEqual(need(2000, chip).pad, { wFt: 24.6, dFt: 21 }); assert.equal(need(500, chip), null); assert.equal(need(50, plain), null);
   assert.equal(plain.space, undefined); assert.deepStrictEqual(A.configOf({ portfolioAssessment: { space: { setbackFt: 25, buildingClearFt: 999 } } }).space, { setbackFt: 25 });
 });
+test('S06 a lot with no parcel says WHY: no public layer here, and whether the licensed source was asked, is off, or is not on the plan', function () {
+  var DR = require('../../api/_lib/portfolio/assess-door'), now = '2026-11-23T00:00:00.000Z';
+  var off = DR.parcelOf({ status: 200, body: { ok: false, reason: 'no parcel record here', tried: [], licensed: 'not-configured' } }, now);
+  assert.ok(off.ok === false && /no public parcel layer covers this point/.test(off.reason) && /licensed parcel source is not switched on/.test(off.reason), off.reason);
+  var plan = DR.parcelOf({ status: 200, body: { ok: false, reason: 'no parcel record here', tried: [], licensed: 'not-on-plan' } }, now);
+  assert.ok(/not on this workspace’s plan/.test(plan.reason), plan.reason);
+  var asked = DR.parcelOf({ status: 200, body: { ok: false, reason: 'no parcel record here', tried: ['regrid', 'maricopa'], licensed: 'asked', note: 'maricopa timed out' } }, now);
+  assert.ok(/public parcel layer here \(maricopa\) has none/.test(asked.reason) && /licensed parcel source has none either/.test(asked.reason) && /maricopa timed out/.test(asked.reason), asked.reason);
+  /* and the space answer carries it to the register, as "No parcel record: …" */
+  var sp = require('../../api/_lib/portfolio/assess-space').spaceOf(off, {});
+  assert.ok(sp.ok === false && sp.measured === false && /^No parcel record: no public parcel layer/.test(sp.words), sp.words);
+});
+
 test('S03 the answer carries the space: the lot, the buildings, the clear ground and whether the compute unit’s pad fits; the battery and the dispensers are said not to be judged; the checklist and the verifications follow', function () {
   var site = { address: { state: 'OK', zip: '74834' }, serviceCapacityKw: 1500 };
   var parcel = { ok: true, acres: 3.44, zoning: 'C-3', at: NOW, space: SP.measure(LOT, { ok: true, list: [{ ring: STORE }], source: 'FEMA USA Structures' }) };

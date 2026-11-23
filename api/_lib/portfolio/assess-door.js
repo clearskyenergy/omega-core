@@ -102,11 +102,22 @@ function idList(v, cap, fail) {
   if (ids.length > cap) throw fail(400, 'At most ' + cap + ' sites a call');
   return ids;
 }
+/* WHY there is no parcel (2026-11-23, a register whose Space column read "–" on every site): the lookup's own reason,
+   and which sources were asked. A state with no public parcel layer (Oklahoma, most of Arizona) has a lot outline only
+   from the licensed source, so "it was not asked" and "it has no record here" are two different answers, each said. */
+function missWords(b) {
+  var tried = Array.isArray(b.tried) ? b.tried.map(String) : [], pub = tried.filter(function (t) { return t !== 'regrid'; });
+  var r0 = String(b.reason || 'no parcel record here'), w = (r0 === 'no parcel record here' ? '' : r0 + ': ') + (pub.length ? 'the public parcel layer here (' + pub.join(', ') + ') has none under the point' : 'no public parcel layer covers this point');
+  w += b.licensed === 'not-configured' ? ', and the licensed parcel source is not switched on for this deployment' : b.licensed === 'not-on-plan' ? ', and the licensed parcel source is not on this workspace’s plan'
+    : b.licensed === 'asked' || tried.indexOf('regrid') >= 0 ? ', and the licensed parcel source has none either' : '';
+  if (b.note) w += ' (' + String(b.note) + ')';
+  return w.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 300);
+}
 /* the parcel answer as the assessment keeps it: never the ring */
 function parcelOf(r, now, space) {
   var b = r && r.body || {};
   if (!(r && r.status === 200)) return { ok: false, reason: b.error ? String(b.error).slice(0, 200) : 'the parcel lookup did not answer (' + (r ? r.status : 'no reply') + ')', at: now };
-  if (b.ok !== true) return { ok: false, reason: String(b.reason || 'no parcel record here').slice(0, 200), at: now };
+  if (b.ok !== true) return { ok: false, reason: missWords(b), at: now };
   function s(v, n) { return v == null || v === '' ? null : String(v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n) || null; }
   return Object.assign({ ok: true, apn: s(b.apn, 60), owner: s(b.owner, 160), acres: b.acres != null && isFinite(Number(b.acres)) ? Math.round(Number(b.acres) * 100) / 100 : null, zoning: s(b.zoning, 80), county: s(b.county, 80), source: s(b.source, 30), at: now }, space ? { space: space } : {});
 }
@@ -535,6 +546,6 @@ function live() {
 }
 var instance = null;
 function get() { if (!instance) instance = live(); return instance; }
-module.exports = { ACTIONS: ACTIONS, RUN_CAP: RUN_CAP, owns: owns, make: make, parcelOf: parcelOf,
+module.exports = { ACTIONS: ACTIONS, RUN_CAP: RUN_CAP, SPACE_CAP: SPACE_CAP, owns: owns, make: make, parcelOf: parcelOf, missWords: missWords,
   post: function (c) { return get().post(c); }, fullView: function (c, ref, data) { return get().fullView(c, ref, data); }, listJoin: function (c, docs) { return get().listJoin(c, docs); },
   info: function (c) { return get().info(c); }, fundingMode: function (c) { return get().fundingMode(c); }, reviewInfo: function (c) { return get().reviewInfo(c); } };

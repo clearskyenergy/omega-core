@@ -525,10 +525,17 @@
   function chunks(a, n) { var out = []; for (var i = 0; i < a.length; i += n) out.push(a.slice(i, i + n)); return out; }
   function paintRun() {
     var el = byId('run'); el.classList.toggle('on', !!RUN); if (!RUN) return;
+    if (RUN.phase === 'lots') { byId('run-text').textContent = RUN.stop ? 'Stopping…' : 'Reading the lots: ' + RUN.lots + ' of ' + RUN.lotsTotal + ' (the parcel and the buildings on it)…'; byId('run-bar').style.width = Math.min(100, RUN.lotsTotal ? RUN.lots / RUN.lotsTotal * 100 : 100) + '%'; byId('run-note').textContent = 'These sites were screened before their lot was measured.'; return; }
     var numbers = RUN.phase === 'numbers', done = numbers ? RUN.assessed : RUN.screened + RUN.fresh;
     byId('run-text').textContent = RUN.stop ? 'Stopping…' : numbers ? 'Sizing and pricing ' + RUN.assessed + ' of ' + RUN.total + ' sites…' : 'Screening ' + Math.min(done, RUN.total) + ' of ' + RUN.total + ' sites: Grid Atlas, fiber, the utility, the parcel…';
     byId('run-bar').style.width = Math.min(100, RUN.total ? done / RUN.total * 100 : 100) + '%';
     byId('run-note').textContent = numbers ? 'The numbers come first, from the facts on file.' : 'The numbers are in' + (RUN.sized < RUN.assessed ? ' (' + (RUN.assessed - RUN.sized) + ' site(s) have no power figure to size on)' : '') + '. The screens take a few seconds a site; you can keep working, and closing the page pauses them.' + (RUN.failed ? ' ' + RUN.failed + ' could not be located or read so far.' : '');
+  }
+  /* what the run left on the lots, counted off the rows (the server's own answers): measured, no parcel record, not read */
+  function lotWords(ids) {
+    var pick = {}, m = 0, none = 0, unread = 0; ids.forEach(function (id) { pick[id] = 1; });
+    SITES.forEach(function (s) { if (!pick[s.id] || !s.assessment || s.assessment.notRun) return; var sp = s.assessment.space; if (sp && sp.measured) m++; else if (sp && !sp.ok && /^No parcel record/.test(sp.words || '')) none++; else unread++; });
+    return ' Lots: ' + m + ' measured' + (none ? ', ' + none + ' with no parcel record (hover the Space cell for why)' : '') + (unread ? ', ' + unread + ' not read' : '') + '.';
   }
   function runAssessment(ids) {
     if (!PA) return Promise.resolve();
@@ -558,10 +565,29 @@
       }
       return Promise.all([worker(), worker(), worker(), worker()]);
     }).catch(function (e) { RUN.errors.push(e.message); }).then(function () {
+      /* THE LOTS (2026-11-23): a site whose screen was kept as fresh, or was read before the lot was measured, has a
+         parcel on file and no measurement. Those alone are read now, five a call (the parcel and its buildings, never
+         the grid screen again); a site with no parcel record is not asked again by a run, only by its own button. */
+      if (!RUN || RUN.stop) return null;
+      return load(true).then(function () {
+        var pick = {}; ids.forEach(function (id) { pick[id] = 1; });
+        var want = SITES.filter(function (s) { var sp = s.assessment && s.assessment.space; return pick[s.id] && sp && sp.ok && !sp.measured; }).map(function (s) { return s.id; });
+        if (!want.length || !CANEDIT) return null;
+        RUN.phase = 'lots'; RUN.lotsTotal = want.length; RUN.lots = 0; RUN.lotsMeasured = 0; paintRun();
+        var q = chunks(want, 5);
+        function lotWorker() {
+          if (RUN.stop || !q.length) return Promise.resolve();
+          return post('assess-space', { ids: q.shift() }).then(function (j) { (j.sites || []).forEach(function (x) { RUN.lots++; if (x.measured) RUN.lotsMeasured++; }); paintRun(); })
+            .catch(function (e) { RUN.errors.push(e.message); }).then(lotWorker);
+        }
+        return Promise.all([lotWorker(), lotWorker()]);
+      }).catch(function (e) { RUN.errors.push(e.message); });
+    }).then(function () {
       var r = RUN; RUN = null; paintRun();
       return load(true).then(function () {
         var words = r.assessed + ' site(s) assessed' + (r.sized < r.assessed ? ' (' + (r.assessed - r.sized) + ' with no power figure on file)' : '') + '.' +
-          (r.phase === 'screens' ? ' Screens: ' + (r.screened - r.failed) + ' read' + (r.fresh ? ', ' + r.fresh + ' already fresh' : '') + (r.failed ? ', ' + r.failed + ' could not be located or read' : '') + '.' : '') +
+          (r.phase !== 'numbers' ? ' Screens: ' + (r.screened - r.failed) + ' read' + (r.fresh ? ', ' + r.fresh + ' already fresh' : '') + (r.failed ? ', ' + r.failed + ' could not be located or read' : '') + '.' : '') +
+          (r.phase !== 'numbers' ? lotWords(ids) : '') +
           (r.stop ? ' Stopped: Run again picks up where it left off.' : '') + (r.errors.length ? ' ' + r.errors[0] : '');
         msg(words, !r.errors.length); S.toast(r.stop ? 'Run stopped.' : 'Run finished.');
       });
