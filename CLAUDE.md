@@ -1626,6 +1626,15 @@ the same day, each in Tommy's words in the doc:
   the vector tile the point is in (`api/_lib/mvt.js`; zoom 16, 15, 14 while the lot is cut by the tile's
   edge; `source: 'regrid-tiles'`, `partial` when still cut), a refused key is said as refused, a run re-asks
   a miss recorded before the sources were named, and **Read lots** re-reads every unmeasured lot shown.
+  **The lot comes from public data wherever a state publishes it** (same evening, Tommy: "we have it in the
+  site map editor … this needs to work perfectly all over the country"): the 24 state and county layers that
+  drew LINES in the editor and were never asked for a point now carry a `lookup` (each verified live), and
+  Oklahoma, which publishes no ArcGIS layer, is read through OKMaps' own WMS GetFeatureInfo
+  (`WMS_LOOKUPS`, one lot a call, never cached: the service is view-only). `skip` / `requireId` drop a
+  layer's road and water polygons. `near: true` (the portfolio screen only, never the editor) takes the
+  nearest lot within 100 ft when the point is on a road and says so (`nearest`, `nearestFt`). Texas,
+  California statewide and Oregon publish pictures only: there the licensed key is the only outline.
+  `node scripts/check-parcel-lookups.js` is the live check.
 - **The space score** (Tommy: "something we can look at and score in the
   portfolio"): `assess-space.js scoreOf`, 0 to 100 for the compute pad on
   the clear ground (60 and up fits, 85 ample, under 40 no room, an upper

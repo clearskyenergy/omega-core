@@ -107,7 +107,8 @@ const REGRID_HIT = { parcels: { type: 'FeatureCollection', features: [{
   ok(same(H.countiesAt(42.3636, -87.8448), ['lake']), 'Waukegan is Lake only');
   ok(same(H.countiesAt(42.0334, -88.0834), ['cook']), 'Schaumburg — above DuPage\'s box, below Lake\'s — is Cook');
   ok(same(H.countiesAt(41.8445, -90.1887), []), 'Clinton, Iowa: no layer covers it');
-  ok(same(H.countiesAt(43.0389, -87.9065), []), 'Milwaukee: no layer covers it');
+  ok(same(H.countiesAt(37.6872, -97.3301), []), 'Wichita: no layer covers it');
+  ok(same(H.countiesAt(43.0389, -87.9065), ['wi']), 'Milwaukee: Wisconsin\'s statewide layer, which drew lines and now answers a point');
   ok(H.COUNTY_ORDER[H.COUNTY_ORDER.length - 1] === 'cook', 'Cook is always asked last');
   ok(Object.keys(H.PARCELS).every(k => { const b = H.PARCELS[k].bbox; return b[0] < b[2] && b[1] < b[3]; }),
      'every bbox is [south, west, north, east] with south < north and west < east');
@@ -332,8 +333,8 @@ const REGRID_HIT = { parcels: { type: 'FeatureCollection', features: [{
         layer = layer.concat(vint(5 * 8), vint(4096));
         return Buffer.from(fld(3, layer));
       };
-      /* Chandler, Oklahoma (no public parcel layer), at the middle of its z16 tile so the test lots sit inside it */
-      const mid = MVT.toLatLng(MVT.tileOf(35.7017, -96.8809, 16), 2048, 2048, 4096), OK = { lat: mid[0], lng: mid[1] };
+      /* Rice County, Kansas (no public parcel source of any kind), at the middle of its z16 tile so the test lots sit inside it */
+      const mid = MVT.toLatLng(MVT.tileOf(38.35, -98.20, 16), 2048, 2048, 4096), OK = { lat: mid[0], lng: mid[1] };
       const at = (z) => { const t = MVT.tileOf(OK.lat, OK.lng, z); return { t, px: Math.round(t.fx * 4096), py: Math.round(t.fy * 4096) }; };
       const z16 = at(16), sq = (c, h) => [[c.px - h, c.py - h], [c.px + h, c.py - h], [c.px + h, c.py + h], [c.px - h, c.py + h]];
       /* pure: the lot under the point, and not its neighbour */
@@ -380,6 +381,42 @@ const REGRID_HIT = { parcels: { type: 'FeatureCollection', features: [{
         ok(refused.ok === false && /regrid refused the key \(HTTP 403\)/.test(refused.note || '') && refused.licensed === 'asked' && JSON.stringify(refused).indexOf('SECRET') < 0,
            'a key the service refuses is said as that (the status, never the key): ' + refused.note);
       } finally { global.fetch = realFetch; }
+    }
+    /* ── the statewide layers and a state's own WMS (2026-11-23) ── */
+    {
+      const PSL = require('../../omega-parcel-sources.js'), sq = (la, lo, h) => [[lo - h, la - h], [lo + h, la - h], [lo + h, la + h], [lo - h, la + h], [lo - h, la - h]];
+      /* Maryland: the right-of-way polygon under a road is not a lot, and an id-less polygon never is */
+      const MD = { lat: 39.29, lng: -76.61 };
+      const mdAns = { features: [{ attributes: { ACCTID: 'ROW', POLYACRES: 660 }, geometry: { rings: [sq(MD.lat, MD.lng, 0.01)] } }, { attributes: { ACCTID: '0206000001372', ZONING: 'C-2' }, geometry: { rings: [sq(MD.lat, MD.lng, 0.0002)] } }] };
+      const md = H.fromEsri(mdAns, 'md', MD.lat, MD.lng);
+      ok(md && md.apn === '0206000001372' && md.county === 'Maryland' && md.acres < 1, 'Maryland: the ROW polygon is skipped and the lot under the point is the answer');
+      ok(H.fromEsri({ features: [{ attributes: { ACCTID: null }, geometry: { rings: [sq(MD.lat, MD.lng, 0.01)] } }] }, 'md', MD.lat, MD.lng) === null, 'a statewide layer\'s id-less polygon (a road corridor) is never a lot');
+      const nc = H.fromEsri({ features: [{ attributes: { parno: '1703786949', ownname: 'WAKE COUNTY', cntyname: 'Wake', gisacres: 2.036 }, geometry: { rings: [sq(35.78, -78.64, 0.0003)] } }] }, 'nc', 35.78, -78.64);
+      ok(nc && nc.county === 'Wake' && nc.owner === 'WAKE COUNTY' && nc.acres === 2.036 && nc.source === 'nc', 'a statewide layer names the county off the record, not the state');
+      /* Oklahoma through OKMaps: the lot the point is ON, never its neighbour, and never cached */
+      const W = PSL.WMS_LOOKUPS[0], T = { lat: 36.154, lng: -95.9928 };
+      const okAns = { type: 'FeatureCollection', features: [
+        { geometry: { type: 'MultiPolygon', coordinates: [[sq(T.lat, T.lng + 0.001, 0.0002)]] }, properties: { parcelid: 'NEXT', owner: 'x', county: 'Tulsa', acres: 1 } },
+        { geometry: { type: 'MultiPolygon', coordinates: [[sq(T.lat, T.lng, 0.0003)]] }, properties: { parcelid: 'R005', owner: 'TULSA AUTHORITY', county: 'Tulsa', acres: 0 } }] };
+      const okHit = H.fromWms(okAns, W, T.lat, T.lng);
+      ok(okHit && okHit.apn === 'R005' && okHit.county === 'Tulsa' && okHit.source === 'okmaps' && okHit.acres > 0.5 && okHit.ring.length === 4, 'Oklahoma: the feature under the point, its acres measured when the record says 0');
+      ok(/GetFeatureInfo/.test(H.wmsUrl(W, T.lat, T.lng)) && /ogi_wms%3AStatewide_Parcels/.test(H.wmsUrl(W, T.lat, T.lng)) && H.NO_CACHE.okmaps === true, 'asked through the state\'s own WMS, one feature at a point, and never kept');
+      reset(); SCRIPT = [{ json: okAns }];
+      delete process.env.REGRID_TOKEN;
+      out = await post(T);
+      ok(out && out.ok === true && out.source === 'okmaps' && CALLS.length === 1 && /okmaps\.org/.test(CALLS[0]) && WRITES.length === 0, 'through the door with no key at all: Oklahoma answers, and the outline is not cached');
+      /* the nearest lot, only for a caller that asks */
+      const road = { type: 'FeatureCollection', features: [] }, nearAns = { type: 'FeatureCollection', features: [{ geometry: { type: 'MultiPolygon', coordinates: [[sq(T.lat + 0.0004, T.lng, 0.0003)]] }, properties: { parcelid: 'NEAR', owner: 'x', county: 'Tulsa', acres: 1 } }] };
+      reset(); SCRIPT = [{ json: road }];
+      out = await post(T);
+      ok(out && out.ok === false && CALLS.length === 1, 'a point on a road is a miss for a caller that did not ask for the nearest lot (the editor)');
+      reset(); SCRIPT = [{ json: road }, { json: nearAns }];
+      out = await post({ lat: T.lat, lng: T.lng, near: true });
+      ok(out && out.ok === true && out.apn === 'NEAR' && out.nearest === true && out.nearestFt > 20 && out.nearestFt < 60 && CALLS.length === 2, 'asked for, the nearest lot within 100 ft is the answer and is SAID to be the nearest (' + (out && out.nearestFt) + ' ft)');
+      reset(); SCRIPT = [{ json: road }, { json: { type: 'FeatureCollection', features: [{ geometry: { type: 'MultiPolygon', coordinates: [[sq(T.lat + 0.002, T.lng, 0.0003)]] }, properties: { parcelid: 'FAR', county: 'Tulsa' } }] } }];
+      out = await post({ lat: T.lat, lng: T.lng, near: true });
+      ok(out && out.ok === false, 'a lot more than 100 ft away is never taken for the site\'s');
+      process.env.REGRID_TOKEN = 'SECRET-REGRID-TOKEN';
     }
     reset({ 'omega_orgs/concordenergyusa.com': undefined }); SCRIPT = [{ json: REGRID_HIT }];
     AUTH = () => Promise.resolve({ uid: 's1', email: 'ops@clearsky-usa.com', orgId: 'clearsky-usa.com', staff: true });

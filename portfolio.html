@@ -546,7 +546,9 @@
       var a = s.assessment, sp = a && !a.notRun ? a.space : null; if (!pick[s.id] || !sp || sp.measured) return false;
       if (sp.ok) return true;
       var miss = /^No parcel record/.test(sp.words || '');
-      return miss && (all || !/parcel (layer|source)/.test(sp.words || ''));
+      /* a miss from before the lookup named its sources, or one that says no public layer covered the point (the
+         public coverage widens; where it still covers nothing the lookup asks nobody, so the retry is free) */
+      return miss && (all || !/parcel (layer|source)/.test(sp.words || '') || /no public parcel layer covers/.test(sp.words || ''));
     }).map(function (s) { return s.id; });
   }
   /* READ LOTS: the parcel and its buildings again on every site shown whose lot is not measured, the misses included */

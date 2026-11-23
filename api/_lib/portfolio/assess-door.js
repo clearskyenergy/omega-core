@@ -106,7 +106,7 @@ function idList(v, cap, fail) {
    and which sources were asked. A state with no public parcel layer (Oklahoma, most of Arizona) has a lot outline only
    from the licensed source, so "it was not asked" and "it has no record here" are two different answers, each said. */
 function missWords(b) {
-  var tried = Array.isArray(b.tried) ? b.tried.map(String) : [], pub = tried.filter(function (t) { return !/^regrid/.test(t); });
+  var tried = Array.isArray(b.tried) ? b.tried.map(String) : [], pub = tried.map(function (t) { return t.replace(/ \(nearest\)$/, ''); }).filter(function (t, i, all) { return !/^regrid/.test(t) && all.indexOf(t) === i; });
   var r0 = String(b.reason || 'no parcel record here'), w = (r0 === 'no parcel record here' ? '' : r0 + ': ') + (pub.length ? 'the public parcel layer here (' + pub.join(', ') + ') has none under the point' : 'no public parcel layer covers this point');
   w += b.licensed === 'not-configured' ? ', and the licensed parcel source is not switched on for this deployment' : b.licensed === 'not-on-plan' ? ', and the licensed parcel source is not on this workspace’s plan'
     : b.licensed === 'asked' || tried.indexOf('regrid') >= 0 ? ', and the licensed parcel source has none either' : '';
@@ -119,7 +119,7 @@ function parcelOf(r, now, space) {
   if (!(r && r.status === 200)) return { ok: false, reason: b.error ? String(b.error).slice(0, 200) : 'the parcel lookup did not answer (' + (r ? r.status : 'no reply') + ')', at: now };
   if (b.ok !== true) return { ok: false, reason: missWords(b), at: now };
   function s(v, n) { return v == null || v === '' ? null : String(v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n) || null; }
-  return Object.assign({ ok: true, apn: s(b.apn, 60), owner: s(b.owner, 160), acres: b.acres != null && isFinite(Number(b.acres)) ? Math.round(Number(b.acres) * 100) / 100 : null, zoning: s(b.zoning, 80), county: s(b.county, 80), source: s(b.source, 30), at: now }, b.partial === true ? { partial: true } : {}, space ? { space: space } : {});
+  return Object.assign({ ok: true, apn: s(b.apn, 60), owner: s(b.owner, 160), acres: b.acres != null && isFinite(Number(b.acres)) ? Math.round(Number(b.acres) * 100) / 100 : null, zoning: s(b.zoning, 80), county: s(b.county, 80), source: s(b.source, 30), at: now }, b.partial === true ? { partial: true } : {}, b.nearest === true ? { nearest: true, nearestFt: Number(b.nearestFt) || null } : {}, space ? { space: space } : {});
 }
 
 function make(deps) {
@@ -177,7 +177,7 @@ function make(deps) {
       if (!snap.exists) { missing.push(id); continue; }
       var loc = ((snap.data().assessment || {}).screen || {}).located;
       if (!(loc && loc.usable && typeof hd.parcel === 'function')) { skipped.push(id); continue; }
-      var pr; try { pr = await hd.parcel({ lat: loc.lat, lng: loc.lng }); } catch (e) { pr = { status: e && e.status || 502, body: { error: String(e && e.message || e).slice(0, 200) } }; }
+      var pr; try { pr = await hd.parcel({ lat: loc.lat, lng: loc.lng, near: true }); } catch (e) { pr = { status: e && e.status || 502, body: { error: String(e && e.message || e).slice(0, 200) } }; }
       var parcel = parcelOf(pr, deps.now(), await spaceFor(pr, hd, cfg));
       await c.db.runTransaction(async function (tx) {
         var cur = await tx.get(sref); if (!cur.exists) return;
@@ -265,7 +265,7 @@ function make(deps) {
     /* the parcel under the point, once the point is good */
     var parcel = null, loc = r.screen.located;
     if (loc && loc.usable && typeof hd.parcel === 'function') {
-      var pr; try { pr = await hd.parcel({ lat: loc.lat, lng: loc.lng }); } catch (e) { pr = { status: e && e.status || 502, body: { error: String(e && e.message || e).slice(0, 200) } }; }
+      var pr; try { pr = await hd.parcel({ lat: loc.lat, lng: loc.lng, near: true }); } catch (e) { pr = { status: e && e.status || 502, body: { error: String(e && e.message || e).slice(0, 200) } }; }
       parcel = parcelOf(pr, deps.now(), await spaceFor(pr, hd, cfg));
     }
     var landed = await c.db.runTransaction(async function (tx) {

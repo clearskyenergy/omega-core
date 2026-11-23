@@ -422,7 +422,7 @@ test('D02 the screens: a job, the Grid Atlas a phase, then the network and the p
   assert.equal(a.phase, 'grid'); assert.equal(a.item.status, 'running'); assert.equal(w.calls.atlas, 1); assert.equal(w.calls.network, 0); assert.equal(w.site('s1').assessment, undefined);
   var b = await w.post({ action: 'assess-screen-step', jobId: st.job.id });
   assert.equal(b.job.status, 'complete'); assert.equal(b.item.status, 'done'); assert.equal(b.item.parcel, true); assert.equal(w.calls.network, 1); assert.equal(w.calls.hosting, 1); assert.equal(w.calls.parcel, 1);
-  assert.deepStrictEqual(w.calls.parcelBody, { lat: 35.7, lng: -96.88 });
+  assert.deepStrictEqual(w.calls.parcelBody, { lat: 35.7, lng: -96.88, near: true });
   var s = w.site('s1').assessment;
   assert.equal(s.screen.complete, true); assert.equal(s.screen.power.substation, 'Chandler'); assert.equal(s.screen.utility.name, 'OG&E'); assert.deepStrictEqual(s.screen.fiber.carriers, ['Cox']);
   var kept = Object.assign({}, s.parcel); delete kept.space;
@@ -744,7 +744,7 @@ test('S05 through the door: the lot alone is read again for a site already scree
   /* a site screened before the lot was measured */
   var d = w.site('s1'); d.assessment = { screen: { complete: true, at: NOW, located: { usable: true, lat: 35.7, lng: -96.88 } }, parcel: { ok: true, acres: 3.46, zoning: 'C-3', at: NOW } };
   var r = await w.post({ action: 'assess-space', site: 's1' });
-  assert.equal(r.measured, 1); assert.equal(w.calls.atlas, 0); assert.equal(w.calls.parcel, 1); assert.deepStrictEqual(w.calls.parcelBody, { lat: 35.7, lng: -96.88 }); assert.equal(w.calls.structures, 1);
+  assert.equal(r.measured, 1); assert.equal(w.calls.atlas, 0); assert.equal(w.calls.parcel, 1); assert.deepStrictEqual(w.calls.parcelBody, { lat: 35.7, lng: -96.88, near: true }); assert.equal(w.calls.structures, 1);
   var a = w.site('s1').assessment; assert.equal(a.parcel.space.lotSqFt, 150000); assert.equal(a.result.space.uses.compute.fits, true); assert.equal(w.audits('sitecrm-assess-space').length, 1); assert.equal(w.site('s1').revision, 2);
   /* the structures service down: measured on the lot line, said */
   var w2 = world({ structuresDown: true }); w2.site('s1').assessment = { screen: { complete: true, at: NOW, located: { usable: true, lat: 35.7, lng: -96.88 } } };
