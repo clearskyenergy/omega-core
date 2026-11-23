@@ -2,9 +2,11 @@
    POST /api/parcel   —  the parcel under a point, as a ring the editor can draw
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-   Body:   { lat, lng }                       finite numbers, WGS84
+   Body:   { lat, lng, near? }                finite numbers, WGS84; near:true also
+                                              accepts the nearest lot within 100 ft
+                                              (nearest:true, nearestFt) when the point is on none
    200:    { ok:true, ring:[[lat,lng],...], apn, owner, acres, zoning, county,
-             source:'regrid'|'regrid-tiles'|'cook'|'dupage'|'lake', partial? }
+             source:'regrid'|'regrid-tiles'|'okmaps'|'cook'|'dupage'|'lake'|…, partial? }
            { ok:false, reason:'no parcel record here', tried:[...], note?,
              licensed:'asked'|'not-on-plan'|'not-configured' }
    401:    bad or missing Firebase ID token
@@ -206,14 +208,29 @@ function str(v) {
 /* ArcGIS /query answer → the contract, or null when the layer has no parcel
    under the point. An ArcGIS error travels as 200 {error:{...}}; that is a
    miss here, and the caller's note says the layer did not answer. */
-function fromEsri(j, key) {
+function fromEsri(j, key, lat, lng) {
   var cfg = PARCELS[key];
   if (!cfg || !j || typeof j !== 'object' || j.error) return null;
-  var f = Array.isArray(j.features) ? j.features[0] : null;
-  if (!f) return null;
-  var attrs = f.attributes || {};
-  var ring = ringFromEsri(f.geometry);
-  if (!ring) return null;
+  var feats = Array.isArray(j.features) ? j.features : [], pick = null;
+  for (var i = 0; i < feats.length && !pick; i++) {
+    var a0 = feats[i].attributes || {};
+    /* a layer's own non-lots (Maryland draws its rights-of-way as "ROW" polygons hundreds of acres across) */
+    if (cfg.skip) {
+      var sv = String(a0[cfg.skip.field] == null ? '' : a0[cfg.skip.field]).trim();
+      if (cfg.skip.test != null && sv.toUpperCase() === String(cfg.skip.test).toUpperCase()) continue;
+      /* Mississippi's road and water polygons carry a parcel number of zeros */
+      if (cfg.skip.pattern && new RegExp(cfg.skip.pattern).test(sv)) continue;
+    }
+    /* a statewide layer's id-less polygons are road corridors and water, never a lot */
+    if (cfg.requireId && !str(a0[cfg.idField])) continue;
+    var r0 = ringFromEsri(feats[i].geometry);
+    if (!r0) continue;
+    /* with a point in hand, only the lot the point is on (a statewide layer can answer with a neighbour too) */
+    if (lat != null && lng != null && feats.length > 1 && !PS.inRing(r0, lat, lng)) continue;
+    pick = { f: feats[i], ring: r0 };
+  }
+  if (!pick) return null;
+  var attrs = pick.f.attributes || {}, ring = pick.ring;
   var fieldAcres = acresFromAttrs(attrs);
   return {
     ok: true,
@@ -221,11 +238,108 @@ function fromEsri(j, key) {
     apn: str(attrs[cfg.idField]),
     owner: cfg.owner ? str(attrs[cfg.owner]) : null,
     acres: fieldAcres != null ? fieldAcres : ringAcres(ring),
-    zoning: zoningFromAttrs(attrs),
-    county: cfg.label,
+    zoning: cfg.zoning === false ? null : zoningFromAttrs(attrs),
+    county: (cfg.countyField && str(attrs[cfg.countyField])) || cfg.label,
     source: key
   };
 }
+
+/* ── A STATE'S OWN WMS (omega-parcel-sources.js WMS_LOOKUPS) ─────────────
+   GetFeatureInfo at the point: the features under one pixel of a small map
+   around it, as GeoJSON with their outlines. The lot is the one the point is
+   ON. The service is view-only, so a hit from it is never kept in the cache. */
+function wmsUrl(cfg, lat, lng) {
+  var d = 0.0003;
+  return cfg.url + '?' + [
+    'service=WMS', 'version=1.1.1', 'request=GetFeatureInfo',
+    'layers=' + encodeURIComponent(cfg.layer), 'query_layers=' + encodeURIComponent(cfg.layer), 'styles=',
+    'srs=EPSG:4326', 'bbox=' + [lng - d, lat - d, lng + d, lat + d].join(','),
+    'width=101', 'height=101', 'x=50', 'y=50', 'feature_count=10',
+    'info_format=' + encodeURIComponent('application/json')
+  ].join('&');
+}
+function fromWms(j, cfg, lat, lng) {
+  var feats = j && Array.isArray(j.features) ? j.features : [];
+  for (var i = 0; i < feats.length; i++) {
+    var ring = ringFromGeoJson(feats[i].geometry);
+    if (!ring || !PS.inRing(ring, lat, lng)) continue;
+    var p = feats[i].properties || {}, fa = cfg.acresField ? num(p[cfg.acresField]) : NaN;
+    return {
+      ok: true,
+      ring: ring,
+      apn: str(p[cfg.idField]),
+      owner: cfg.owner ? str(p[cfg.owner]) : null,
+      acres: fa > 0 ? Math.round(fa * 1000) / 1000 : ringAcres(ring),
+      zoning: null,
+      county: (cfg.countyField && str(p[cfg.countyField])) || cfg.label,
+      source: cfg.id
+    };
+  }
+  return null;
+}
+/* ── THE NEAREST LOT, only when asked (body.near) ────────────────────────
+   A geocoded address often lands on the road in front of the building: a
+   point on no lot, and "no parcel" for a site that plainly has one. For a
+   caller that says so (the portfolio screen; never the editor, where a click
+   on a road means the road), a second pass asks the same public sources for
+   the lots within NEAR_FT of the point and takes the nearest, and SAYS it:
+   nearest:true with the distance. Two lots the same distance away (across
+   the street from each other) are not told apart, so the answer is a lot to
+   check by its parcel number, never a confirmation. */
+var NEAR_FT = 100;
+function edgeFt(ring, lat, lng) {
+  var k = Math.cos(lat * Math.PI / 180), fy = 364000, fx = 364000 * k, best = Infinity;
+  for (var i = 0; i < ring.length; i++) {
+    var a = ring[i], b = ring[(i + 1) % ring.length];
+    var ax = (a[1] - lng) * fx, ay = (a[0] - lat) * fy, bx = (b[1] - lng) * fx, by = (b[0] - lat) * fy;
+    var dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy, t = l2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
+    var d = Math.sqrt(Math.pow(ax + t * dx, 2) + Math.pow(ay + t * dy, 2));
+    if (d < best) best = d;
+  }
+  return best;
+}
+function nearUrl(key, lat, lng) {
+  var dLat = NEAR_FT / 364000, dLng = dLat / Math.max(0.2, Math.cos(lat * Math.PI / 180));
+  return PARCELS[key].url + '/query?' + [
+    'geometry=' + [lng - dLng, lat - dLat, lng + dLng, lat + dLat].join(','),
+    'geometryType=esriGeometryEnvelope', 'inSR=4326', 'spatialRel=esriSpatialRelIntersects',
+    'outFields=*', 'returnGeometry=true', 'outSR=4326', 'f=json'
+  ].join('&');
+}
+function nearest(cands, lat, lng) {
+  var best = null;
+  cands.forEach(function (c) { if (!c || !c.ring) return; var d = PS.inRing(c.ring, lat, lng) ? 0 : edgeFt(c.ring, lat, lng); if (d <= NEAR_FT && (!best || d < best.d)) best = { d: d, c: c }; });
+  if (!best) return null;
+  if (best.d > 0) { best.c.nearest = true; best.c.nearestFt = Math.round(best.d); }
+  return best.c;
+}
+function fromEsriNear(j, key, lat, lng) {
+  if (!j || typeof j !== 'object' || j.error) return null;
+  var feats = Array.isArray(j.features) ? j.features : [];
+  return nearest(feats.map(function (f) { return fromEsri({ features: [f] }, key); }), lat, lng);
+}
+function wmsNearUrl(cfg, lat, lng) {
+  /* a wider map, so one pixel is about 14 ft and the service's own `buffer` (pixels) reaches NEAR_FT */
+  var d = 0.002;
+  return cfg.url + '?' + [
+    'service=WMS', 'version=1.1.1', 'request=GetFeatureInfo',
+    'layers=' + encodeURIComponent(cfg.layer), 'query_layers=' + encodeURIComponent(cfg.layer), 'styles=',
+    'srs=EPSG:4326', 'bbox=' + [lng - d, lat - d, lng + d, lat + d].join(','),
+    'width=101', 'height=101', 'x=50', 'y=50', 'feature_count=20', 'buffer=8',
+    'info_format=' + encodeURIComponent('application/json')
+  ].join('&');
+}
+function fromWmsNear(j, cfg, lat, lng) {
+  var feats = j && Array.isArray(j.features) ? j.features : [];
+  return nearest(feats.map(function (f) {
+    var ring = ringFromGeoJson(f.geometry); if (!ring) return null;
+    /* the one mapper: a ring the point is "in" is what fromWms reads, so hand it the ring's own first vertex */
+    return fromWms({ features: [f] }, cfg, (ring[0][0] + ring[1][0] + ring[2][0]) / 3, (ring[0][1] + ring[1][1] + ring[2][1]) / 3) || null;
+  }), lat, lng);
+}
+
+var NO_CACHE = {};
+PS.WMS_LOOKUPS.forEach(function (w) { if (w.cache === false) NO_CACHE[w.id] = true; });
 
 /* Regrid v2 point lookup → the contract. UNVERIFIED AGAINST A LIVE KEY: this
    is written to the documented v2 shape,
@@ -459,17 +573,17 @@ module.exports = A.handler(function (req) {
     if (!(lat >= -90 && lat <= 90) || !(lng >= -180 && lng <= 180))
       throw A.httpError(400, 'lat and lng are required as finite numbers (lat -90..90, lng -180..180)');
 
-    var key = cacheKey(lat, lng);
+    var key = cacheKey(lat, lng) + (b.near === true ? '_n' : '');     /* a nearest-lot answer is never served to a caller that did not ask for one */
     return entitle(caller).then(function (ent) {
       return cached(key).then(function (hit) {
         if (hit) {
           console.log('[parcel]', caller.orgId, hit.source, 'at', lat.toFixed(4), lng.toFixed(4), 'from cache');
           return hit;
         }
-        return lookup(caller, ent, lat, lng).then(function (out) {
+        return lookup(caller, ent, lat, lng, { near: b.near === true }).then(function (out) {
           /* Awaited, because a serverless function may be frozen the moment
              it answers; remember() never rejects, so it cannot fail the answer. */
-          if (!out.ok) return out;
+          if (!out.ok || NO_CACHE[out.source]) return out;       /* a view-only source's outline is never kept */
           return remember(key, out).then(function () { return out; });
         });
       });
@@ -479,7 +593,8 @@ module.exports = A.handler(function (req) {
 
 /* The chain itself: Regrid when the key exists AND the tenant is entitled,
    then whichever county layers cover the point, then the honest miss. */
-function lookup(caller, ent, lat, lng) {
+function lookup(caller, ent, lat, lng, opts) {
+  var near = !!(opts && opts.near);
   var tried = [], notes = [];
   function attempt(name, fn) {
     tried.push(name);
@@ -507,10 +622,36 @@ function lookup(caller, ent, lat, lng) {
     chain = chain.then(function (hit) {
       if (hit) return hit;
       return attempt(key, function () {
-        return getJson(countyUrl(key, lat, lng), TIMEOUT_MS).then(function (j) { return fromEsri(j, key); });
+        return getJson(countyUrl(key, lat, lng), TIMEOUT_MS).then(function (j) { return fromEsri(j, key, lat, lng); });
       });
     });
   });
+
+  /* a state that serves its parcels through its own WMS (Oklahoma) */
+  PS.wmsAt(lat, lng).forEach(function (w) {
+    chain = chain.then(function (hit) {
+      if (hit) return hit;
+      return attempt(w.id, function () {
+        return getJson(wmsUrl(w, lat, lng), TIMEOUT_MS).then(function (j) { return fromWms(j, w, lat, lng); });
+      });
+    });
+  });
+
+  if (near) {
+    /* the point is on no lot in any public source: the nearest lot within NEAR_FT, from the same sources */
+    countiesAt(lat, lng).forEach(function (key) {
+      chain = chain.then(function (hit) {
+        if (hit) return hit;
+        return attempt(key + ' (nearest)', function () { return getJson(nearUrl(key, lat, lng), TIMEOUT_MS).then(function (j) { return fromEsriNear(j, key, lat, lng); }); });
+      });
+    });
+    PS.wmsAt(lat, lng).forEach(function (w) {
+      chain = chain.then(function (hit) {
+        if (hit) return hit;
+        return attempt(w.id + ' (nearest)', function () { return getJson(wmsNearUrl(w, lat, lng), TIMEOUT_MS).then(function (j) { return fromWmsNear(j, w, lat, lng); }); });
+      });
+    });
+  }
 
   if (token && ent.regrid) {
     /* the same key's parcel TILES, the editor's own lines, when the point lookup gave nothing */
@@ -559,7 +700,7 @@ module.exports._helpers = {
   ringFromEsri: ringFromEsri, ringFromGeoJson: ringFromGeoJson, ringAcres: ringAcres,
   fieldMatching: fieldMatching, acresFromAttrs: acresFromAttrs, zoningFromAttrs: zoningFromAttrs,
   fromEsri: fromEsri, fromRegrid: fromRegrid, countyUrl: countyUrl,
-  regridEntitled: regridEntitled, cacheKey: cacheKey, fromTile: fromTile, fromTiles: fromTiles, tileUrl: tileUrl, TILE_ZOOMS: TILE_ZOOMS, packHit: packHit, unpackHit: unpackHit,
+  regridEntitled: regridEntitled, cacheKey: cacheKey, fromWms: fromWms, wmsUrl: wmsUrl, NO_CACHE: NO_CACHE, NEAR_FT: NEAR_FT, edgeFt: edgeFt, nearest: nearest, fromEsriNear: fromEsriNear, fromWmsNear: fromWmsNear, fromTile: fromTile, fromTiles: fromTiles, tileUrl: tileUrl, TILE_ZOOMS: TILE_ZOOMS, packHit: packHit, unpackHit: unpackHit,
   PARCELS: PARCELS, COUNTY_ORDER: COUNTY_ORDER, TIMEOUT_MS: TIMEOUT_MS,
   REGRID_TIERS: REGRID_TIERS, REGRID_ADDON: REGRID_ADDON, CACHE: CACHE, CACHE_TTL_MS: CACHE_TTL_MS
 };

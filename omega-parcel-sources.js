@@ -186,11 +186,13 @@
     { id: 'nc', label: 'North Carolina (statewide)',
       service: 'https://services.nconemap.gov/secure/rest/services/NC1Map_Parcels/MapServer',
       lineLayer: 1, restyle: true, minZoom: 14,
-      bbox: [33.84, -84.33, 36.59, -75.45], test: [35.7796, -78.6382] },
+      bbox: [33.84, -84.33, 36.59, -75.45], test: [35.7796, -78.6382],
+      lookup: { layer: 1, idField: 'parno', owner: 'ownname', county: 'North Carolina', countyField: 'cntyname' , requireId: true } },
     { id: 'nj', label: 'New Jersey (statewide)',
       service: 'https://maps.nj.gov/arcgis/rest/services/Framework/Cadastral/MapServer',
       lineLayer: 0, restyle: true, minZoom: 14,
-      bbox: [38.92, -75.57, 41.36, -73.88], test: [40.7357, -74.1724] },
+      bbox: [38.92, -75.57, 41.36, -73.88], test: [40.7357, -74.1724],
+      lookup: { layer: 0, idField: 'PAMS_PIN', owner: 'OWNER_NAME', county: 'New Jersey', countyField: 'COUNTY' , requireId: true } },
     /* The state publishes only the counties that agreed to share: Erie,
        Onondaga, Albany and Tompkins draw; Monroe and Saratoga do not. */
     { id: 'ny', label: 'New York (participating counties)',
@@ -381,7 +383,8 @@
     { id: 'de', label: 'Delaware (statewide)',
       service: 'https://enterprise.firstmap.delaware.gov/arcgis/rest/services/PlanningCadastre/DE_StateParcels/MapServer',
       lineLayer: 0, restyle: true, minZoom: 15,
-      bbox: [38.45, -75.79, 39.84, -75.04], test: [39.1582, -75.5244] },
+      bbox: [38.45, -75.79, 39.84, -75.04], test: [39.1582, -75.5244],
+      lookup: { layer: 0, idField: 'PIN', owner: null, county: 'Delaware', countyField: 'COUNTY' , requireId: true } },
     /* ── Statewide, found and verified 2026-10-03 (two z17 tiles each, in
        different parts of the state). Idaho's IDWR layer is left out: its
        description says the data "cannot be shared outside IDWR". Hosted
@@ -393,7 +396,8 @@
     { id: 'wv', label: 'West Virginia (statewide)',
       service: 'https://services.wvgis.wvu.edu/arcgis/rest/services/Planning_Cadastre/WV_Parcels/MapServer',
       lineLayer: 0, restyle: true, minZoom: 14,
-      bbox: [37.16, -82.71, 40.64, -77.65], test: [38.3498, -81.6326] },
+      bbox: [37.16, -82.71, 40.64, -77.65], test: [38.3498, -81.6326],
+      lookup: { layer: 0, idField: 'GISPID', owner: 'FullOwnerName', county: 'West Virginia' , requireId: true } },
     { id: 'tx', label: 'Texas (statewide)',
       service: 'https://feature.geographic.texas.gov/arcgis/rest/services/Parcels/stratmap_land_parcels_48_most_recent/MapServer',
       lineLayer: 0, restyle: true, minZoom: 14,
@@ -402,98 +406,118 @@
     { id: 'ar', label: 'Arkansas (statewide)',
       service: 'https://gis.arkansas.gov/arcgis/rest/services/FEATURESERVICES/Planning_Cadastre/MapServer',
       lineLayer: 6, restyle: false, minZoom: 15,
-      bbox: [32.96, -94.62, 36.54, -89.62], test: [34.7556, -92.3157] },
+      bbox: [32.96, -94.62, 36.54, -89.62], test: [34.7556, -92.3157],
+      lookup: { layer: 6, idField: 'parcelid', owner: 'ownername', county: 'Arkansas', countyField: 'county' , requireId: true } },
     { id: 'hi', label: 'Hawaii (statewide)',
       service: 'https://geodata.hawaii.gov/arcgis/rest/services/ParcelsZoning/MapServer',
       lineLayer: 25, restyle: true, minZoom: 15,
-      bbox: [18.89, -160.56, 22.24, -154.73], test: [21.3069, -157.8583] },
+      bbox: [18.89, -160.56, 22.24, -154.73], test: [21.3069, -157.8583],
+      lookup: { layer: 25, idField: 'tmk_txt', owner: null, county: 'Hawaii', countyField: 'county' , requireId: true } },
     /* Its own style (no dynamicLayers). */
     { id: 'va', label: 'Virginia (statewide)',
       service: 'https://vginmaps.vdem.virginia.gov/arcgis/rest/services/VA_Base_Layers/VA_Parcels/MapServer',
       lineLayer: 0, restyle: false, minZoom: 15,
-      bbox: [36.53, -83.68, 39.47, -75.23], test: [37.5407, -77.436] },
+      bbox: [36.53, -83.68, 39.47, -75.23], test: [37.5407, -77.436],
+      lookup: { layer: 0, idField: 'PARCELID', owner: null, county: 'Virginia', countyField: 'LOCALITY' , requireId: true } },
     { id: 'ma', label: 'Massachusetts (statewide)',
       service: 'https://arcgisserver.digital.mass.gov/arcgisserver/rest/services/AGOL/L3_Parcels_FeatureService_102100/MapServer',
       lineLayer: 1, restyle: true, minZoom: 14,
-      bbox: [41.23, -73.54, 42.89, -69.89], test: [42.3601, -71.0589] },
+      bbox: [41.23, -73.54, 42.89, -69.89], test: [42.3601, -71.0589],
+      lookup: { layer: 1, idField: 'MAP_PAR_ID', owner: 'OWNER1', county: 'Massachusetts', countyField: 'CITY' , requireId: true } },
     { id: 'md', label: 'Maryland (statewide)',
       service: 'https://mdgeodata.md.gov/imap/rest/services/PlanningCadastre/MD_ParcelBoundaries/MapServer',
       lineLayer: 0, restyle: true, minZoom: 15,
-      bbox: [37.91, -79.49, 39.73, -75.04], test: [38.9784, -76.4922] },
+      bbox: [37.91, -79.49, 39.73, -75.04], test: [38.9784, -76.4922],
+      lookup: { layer: 0, idField: 'ACCTID', owner: null, county: 'Maryland', skip: { field: 'ACCTID', test: 'ROW' }, requireId: true } },
     { id: 'ri', label: 'Rhode Island (statewide)',
       service: 'https://risegis.ri.gov/hosting/rest/services/RIDEM/Tax_Parcels/MapServer',
       lineLayer: 0, restyle: true, minZoom: 14,
-      bbox: [41.14, -71.90, 42.02, -71.12], test: [41.824, -71.4128] },
+      bbox: [41.14, -71.90, 42.02, -71.12], test: [41.824, -71.4128],
+      lookup: { layer: 0, idField: 'PlatLot', owner: null, county: 'Rhode Island' , requireId: true } },
     /* The ANR inventory service's parcel layer, its own style; VCGI's is a
        hosted FeatureServer only. */
     { id: 'vt', label: 'Vermont (statewide)',
       service: 'https://anrmaps.vermont.gov/arcgis/rest/services/map_services/MAP_ANR_ANRINVENTORYCONSERVATION_WM_NOCACHE/MapServer',
       lineLayer: 5, restyle: false, minZoom: 14,
-      bbox: [42.72, -73.46, 45.02, -71.46], test: [44.2601, -72.5754] },
+      bbox: [42.72, -73.46, 45.02, -71.46], test: [44.2601, -72.5754],
+      lookup: { layer: 5, idField: 'SPAN', owner: 'OWNER1', county: 'Vermont', countyField: 'TNAME' , requireId: true } },
     /* Towns that share; layer 2 (lines where a town has no polygons) is not
        drawn. */
     { id: 'nh', label: 'New Hampshire (statewide mosaic, participating towns)',
       service: 'https://nhgeodata.unh.edu/nhgeodata/rest/services/CAD/ParcelMosaic/MapServer',
       lineLayer: 1, restyle: true, minZoom: 15,
-      bbox: [42.66, -72.60, 45.46, -68.72], test: [43.2081, -71.5376] },
+      bbox: [42.66, -72.60, 45.46, -68.72], test: [43.2081, -71.5376],
+      lookup: { layer: 1, idField: 'NH_GIS_ID', owner: null, county: 'New Hampshire', countyField: 'Town' , requireId: true } },
     /* The state's organized-towns layer as mirrored by Maine Coast Heritage
        Trust; the state's own hosts carry only the Unorganized Territory. */
     { id: 'me', label: 'Maine (organized towns)',
       service: 'https://gis.mcht.org/arcgis/rest/services/Cadastral_Planning/MEGIS_Parcels_Organized/MapServer',
       lineLayer: 0, restyle: true, minZoom: 14,
-      bbox: [42.97, -71.14, 47.37, -66.84], test: [44.3106, -69.7795] },
+      bbox: [42.97, -71.14, 47.37, -66.84], test: [44.3106, -69.7795],
+      lookup: { layer: 0, idField: 'map_bk_lot', owner: null, county: 'Maine', countyField: 'county' , requireId: true } },
     { id: 'oh', label: 'Ohio (statewide)',
       service: 'https://gis.ohiodnr.gov/arcgis/rest/services/OIT_Services/odnr_landbase/MapServer',
       lineLayer: 4, restyle: true, minZoom: 14,
-      bbox: [38.40, -84.83, 41.98, -80.51], test: [39.9612, -82.9988] },
+      bbox: [38.40, -84.83, 41.98, -80.51], test: [39.9612, -82.9988],
+      lookup: { layer: 4, idField: 'STATEWIDE_PIN', owner: 'OWNER1', county: 'Ohio', countyField: 'COUNTY' , requireId: true } },
     /* The county tax parcels' dynamic service, from z18: the cached twin
        draws from z14 but bakes an owner name onto every lot. */
     { id: 'wi', label: 'Wisconsin (statewide)',
       service: 'https://dnrmaps.wi.gov/arcgis/rest/services/DW_Map_Dynamic/EN_County_Tax_Parcels_WTM_Ext_Dynamic_L16/MapServer',
       lineLayer: 0, restyle: true, minZoom: 18,
-      bbox: [42.45, -92.97, 47.09, -86.66], test: [43.07, -89.4] },
+      bbox: [42.45, -92.97, 47.09, -86.66], test: [43.07, -89.4],
+      lookup: { layer: 0, idField: 'PARCELID', owner: 'OWNERNME1', county: 'Wisconsin', countyField: 'CONAME' , requireId: true } },
     { id: 'mn', label: 'Minnesota (opt-in counties)',
       service: 'https://enterprise.gisdata.mn.gov/aghost/rest/services/us_mn_state_mngeo/plan_parcels_open/MapServer',
       lineLayer: 1, restyle: true, minZoom: 15,
-      bbox: [43.43, -97.25, 49.41, -89.39], test: [44.9778, -93.265] },
+      bbox: [43.43, -97.25, 49.41, -89.39], test: [44.9778, -93.265],
+      lookup: { layer: 0, idField: 'state_pin', owner: 'owner_name', county: 'Minnesota', countyField: 'co_name' , requireId: true } },
     { id: 'ne', label: 'Nebraska (statewide)',
       service: 'https://gis.ne.gov/Enterprise/rest/services/StatewideParcelsExternal/MapServer',
       lineLayer: 0, restyle: true, minZoom: 15,
-      bbox: [39.90, -104.19, 43.08, -95.09], test: [40.8136, -96.7026] },
+      bbox: [39.90, -104.19, 43.08, -95.09], test: [40.8136, -96.7026],
+      lookup: { layer: 0, idField: 'Parcel_ID', owner: null, county: 'Nebraska', zoning: false , requireId: true } },
     /* DEP's copy of the statewide cadastral; FDOR's newer one is a hosted
        FeatureServer only. */
     { id: 'fl', label: 'Florida (statewide)',
       service: 'https://ca.dep.state.fl.us/arcgis/rest/services/Map_Direct/Boundaries/MapServer',
       lineLayer: 16, restyle: true, minZoom: 15,
-      bbox: [24.41, -87.64, 31.05, -79.77], test: [30.455, -84.27] },
+      bbox: [24.41, -87.64, 31.05, -79.77], test: [30.455, -84.27],
+      lookup: { layer: 16, idField: 'PARCEL_ID', owner: 'OWN_NAME', county: 'Florida' , requireId: true } },
     { id: 'co', label: 'Colorado (participating counties)',
       service: 'https://gis.colorado.gov/public/rest/services/Address_and_Parcel/Colorado_Public_Parcels/MapServer',
       lineLayer: 0, restyle: true, minZoom: 15,
-      bbox: [36.99, -109.07, 41.01, -102.04], test: [39.7392, -104.9903] },
+      bbox: [36.99, -109.07, 41.01, -102.04], test: [39.7392, -104.9903],
+      lookup: { layer: 0, idField: 'parcel_id', owner: 'owner', county: 'Colorado', countyField: 'countyName' , requireId: true } },
     { id: 'mt', label: 'Montana (statewide)',
       service: 'https://gisservice.mt.gov/arcgis/rest/services/msdi_cadastral_map_v1/MapServer',
       lineLayer: 1, restyle: true, minZoom: 14,
-      bbox: [44.23, -116.18, 49.19, -103.61], test: [46.5891, -112.0391] },
+      bbox: [44.23, -116.18, 49.19, -103.61], test: [46.5891, -112.0391],
+      lookup: { layer: 1, idField: 'PARCELID', owner: 'OwnerName', county: 'Montana', countyField: 'CountyName' , requireId: true } },
     { id: 'wa', label: 'Washington (statewide)',
       service: 'https://gis.dnr.wa.gov/site2/rest/services/Public_Forest_Practices/WADNR_PUBLIC_OCIO_Parcels/MapServer',
       lineLayer: 0, restyle: true, minZoom: 15,
-      bbox: [45.48, -124.93, 49.05, -116.71], test: [47.0379, -122.9007] },
+      bbox: [45.48, -124.93, 49.05, -116.71], test: [47.0379, -122.9007],
+      lookup: { layer: 0, idField: 'PARCEL_ID_NR', owner: null, county: 'Washington' , requireId: true } },
     /* A statewide snapshot as of 2018-12-31. */
     { id: 'nv', label: 'Nevada (statewide, 2018)',
       service: 'https://gis.dot.nv.gov/agsphs/rest/services/Reference/Statewide_Parcels/MapServer',
       lineLayer: 0, restyle: true, minZoom: 14,
-      bbox: [34.98, -120.14, 42.04, -113.79], test: [39.5296, -119.8138] },
+      bbox: [34.98, -120.14, 42.04, -113.79], test: [39.5296, -119.8138],
+      lookup: { layer: 0, idField: 'APN', owner: 'OwnerName', county: 'Nevada', countyField: 'County' , requireId: true } },
     /* One layer per half of the state, each boxed to its own extent (the
        server's, in degrees) so a tile asks one half, not both: the server
        is slow, 15-30 s a tile. */
     { id: 'msw', label: 'Mississippi (statewide, west)',
       service: 'https://gis.mississippi.edu/server/rest/services/Cadastral/MS_Parcels_August_2024/MapServer',
       lineLayer: 1, restyle: true, minZoom: 14,
-      bbox: [30.99, -91.71, 35.00, -89.36], test: [32.2988, -90.1848] },
+      bbox: [30.99, -91.71, 35.00, -89.36], test: [32.2988, -90.1848],
+      lookup: { layer: 1, idField: 'PARNO', owner: 'OWNNAME', county: 'Mississippi', countyField: 'CNTYNAME' , requireId: true, skip: { field: 'PARNO', pattern: '^0{10,}' } } },
     { id: 'mse', label: 'Mississippi (statewide, east)',
       service: 'https://gis.mississippi.edu/server/rest/services/Cadastral/MS_Parcels_August_2024/MapServer',
       lineLayer: 2, restyle: true, minZoom: 14,
-      bbox: [30.17, -90.00, 35.01, -88.09], test: [32.3643, -88.7037] },
+      bbox: [30.17, -90.00, 35.01, -88.09], test: [32.3643, -88.7037],
+      lookup: { layer: 2, idField: 'PARNO', owner: 'OWNNAME', county: 'Mississippi', countyField: 'CNTYNAME' , requireId: true, skip: { field: 'PARNO', pattern: '^0{10,}' } } },
     /* One layer per county (0–35), drawn together in their own style:
        restyling all 36 makes a URL the server refuses. */
     { id: 'or', label: 'Oregon (statewide, county taxlots)',
@@ -649,7 +673,10 @@
   /* The server asks these for the parcel under a point, in this order:
      tightest box first, Cook last (its box holds DuPage's). */
   var LOOKUP_ORDER = ['dupage', 'lake', 'peoria', 'kane', 'sangamon', 'mclean', 'stclair', 'macon', 'tazewell', 'grundy', 'lasalle', 'madison', 'adams', 'coles', 'knox', 'lee', 'boone', 'winnebago',
-    'lacounty', 'orange', 'riverside', 'sacramento', 'harris', 'tarrant', 'travis', 'maricopa', 'pima', 'clark', 'franklin', 'oakland', 'allegheny', 'hennepin', 'jackson', 'stlouisco', 'marion', 'davidson', 'jefferson', 'saltlake', 'multnomah', 'hillsborough', 'miamidade', 'ct', 'pa', 'cook'];
+    'lacounty', 'orange', 'riverside', 'sacramento', 'harris', 'tarrant', 'travis', 'maricopa', 'pima', 'clark', 'franklin', 'oakland', 'allegheny', 'hennepin', 'jackson', 'stlouisco', 'marion', 'davidson', 'jefferson', 'saltlake', 'multnomah', 'hillsborough', 'miamidade', 'ct', 
+    /* statewide and county layers that drew lines but were never asked for a point (2026-11-23), small boxes first */
+    'ri', 'de', 'nh', 'vt', 'ma', 'nj', 'md', 'hi', 'wv', 'me', 'msw', 'mse', 'oh', 'ar', 'nc', 'va', 'wi', 'ne', 'fl', 'mn', 'co', 'wa', 'nv', 'mt', 
+    'pa', 'cook'];
 
   /* One line style for every layer that takes one: a warm yellow that reads
      on satellite and on the light basemap, never an editor colour. */
@@ -754,7 +781,30 @@
       var s = byId(LOOKUP_ORDER[i]);
       out[s.id] = { url: (s.lookup.service || s.service) + '/' + s.lookup.layer, idField: s.lookup.idField,
                     owner: s.lookup.owner, label: s.lookup.county, bbox: s.bbox.slice() };
+      if (s.lookup.countyField) out[s.id].countyField = s.lookup.countyField;
+      if (s.lookup.skip) out[s.id].skip = s.lookup.skip;
+      if (s.lookup.zoning === false) out[s.id].zoning = false;
+      if (s.lookup.requireId) out[s.id].requireId = true;
     }
+    return out;
+  }
+
+  /* PARCELS READ THROUGH A STATE'S OWN WMS (2026-11-23). Oklahoma publishes no
+     ArcGIS parcel layer; its Office of Geographic Information serves the
+     statewide parcels on OKMaps for viewing and "through the OGC WMS web
+     service", not for download. GetFeatureInfo is that service's own call:
+     the one feature under a point, with its outline. So api/parcel.js asks
+     it for ONE lot at a time and never keeps the outline (`cache: false`).
+     Verified 2026-11-23 at Chandler, Tulsa and Oklahoma City: the outline,
+     the parcel id, the owner and the county came back. Not drawn as lines. */
+  var WMS_LOOKUPS = [
+    { id: 'okmaps', label: 'Oklahoma', url: 'https://okmaps.org/geoserver/ogi_wms/wms', layer: 'ogi_wms:Statewide_Parcels',
+      idField: 'parcelid', owner: 'owner', countyField: 'county', acresField: 'acres', cache: false,
+      bbox: [33.61, -103.01, 37.01, -94.43], test: [36.1540, -95.9928] }
+  ];
+  function wmsAt(lat, lng) {
+    var out = [];
+    for (var i = 0; i < WMS_LOOKUPS.length; i++) if (contains(WMS_LOOKUPS[i].bbox, lat, lng)) out.push(WMS_LOOKUPS[i]);
     return out;
   }
 
@@ -772,6 +822,6 @@
   return {
     SOURCES: SOURCES, LOOKUP_ORDER: LOOKUP_ORDER, LINE_RGBA: LINE_RGBA, LINE_WIDTH: LINE_WIDTH,
     byId: byId, at: at, within: within, tileBbox: tileBbox, tileBox: tileBox,
-    tileUrl: tileUrl, lineStyle: lineStyle, lookupLayers: lookupLayers, inRing: inRing
+    tileUrl: tileUrl, lineStyle: lineStyle, lookupLayers: lookupLayers, inRing: inRing, WMS_LOOKUPS: WMS_LOOKUPS, wmsAt: wmsAt
   };
 });

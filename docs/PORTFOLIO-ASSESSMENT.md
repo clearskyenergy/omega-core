@@ -876,3 +876,37 @@ this should do the same".
   build container cannot reach the service and holds no key. The first live run is the check: compare one
   lot's acres with the editor's lines. If the tiles are refused too, the Space cell's reason says so.
 
+### The lot from public data, state by state (2026-11-23, evening)
+
+Tommy, with every Oklahoma site still reading No parcel: "figure out how to make that work … we have it in
+the site map editor so you shouldnt have to recreate the whole thing"; "this needs to work perfectly all over
+the country". The tooltip said why: no licensed key on the deployment. The fix is public data, not a key.
+
+- **The editor's line layers now answer a point.** Thirty-one state and county services in
+  `omega-parcel-sources.js` drew parcel LINES in the editor and carried no `lookup`, so `api/parcel.js` never
+  asked them. Twenty-four now do, each verified live at its own test point (the layer, its id, owner and
+  county fields): NC, NJ, DE, WV, AR, HI, VA, MA, MD, RI, VT, NH, ME, OH, WI, MN, NE, FL, CO, MT, WA, NV and
+  both halves of Mississippi. With the forty-four already there, the point lookup covers every public source
+  the editor draws except the ones below.
+- **Oklahoma, through the state's own map service.** OKMaps serves the statewide parcels for viewing and
+  through its WMS, not for download. `WMS_LOOKUPS` asks that service's own GetFeatureInfo for ONE lot at a
+  point (outline, parcel id, owner, county) and never caches the outline (`cache: false`). Verified at
+  Chandler, Tulsa, Oklahoma City, Wagoner, Woodward and Sand Springs. Counsel should read OKMaps' terms before
+  this is relied on commercially.
+- **Not lots.** A statewide layer draws road corridors and water as polygons: Maryland's are `ROW`, Vermont's
+  and Montana's have no id, Mississippi's a parcel number of zeros. `skip` and `requireId` drop them.
+- **The nearest lot, said.** A geocoded address often lands on the road. For the portfolio screen alone
+  (`near: true`; never the editor, where a click on a road means the road) a second pass takes the nearest lot
+  within 100 ft and says so (`nearest`, `nearestFt`, a note on the Space card). Two lots equally near are not
+  told apart: it is a lot to check by its parcel number.
+- **Still no public outline** (the licensed source, `REGRID_TOKEN`, is the only way): Texas, California's
+  statewide layer (its big counties have their own: Los Angeles, Orange, Riverside, Sacramento) and Oregon
+  publish pictures only; New York's public service was down when checked; Will County IL needs a token; San
+  Diego's query dropped the server runtime's connection in testing and stays lines-only. No public layer was
+  found for Georgia, South Carolina, Alabama, Louisiana, Michigan, Kentucky, Kansas, South Dakota, Wyoming,
+  New Mexico, Arizona outside Maricopa and Pima, and not searched again here: Indiana, Utah, Tennessee, North
+  Dakota, Alaska, Iowa (hosted feature services exist and could be added the same way).
+- **The check.** `node scripts/check-parcel-lookups.js` runs the real lookup at every source's test point
+  against the live services (network, so not in `npm test`). Run on 2026-11-23 for the new sources, Oklahoma
+  and Maricopa: all answered; the forty-four earlier sources were not re-run here.
+

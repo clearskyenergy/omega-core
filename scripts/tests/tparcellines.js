@@ -57,7 +57,7 @@ eq(lookKeys.slice(0, 3), ['dupage', 'lake', 'peoria'], 'the server asks DuPage, 
 ok(lookKeys[lookKeys.length - 1] === 'cook' && lookKeys.length >= 43, 'then the rest of the counties, Cook last (' + lookKeys.length + ')');
 ok(lookKeys.indexOf('pa') === lookKeys.length - 2, 'Pennsylvania\'s statewide layer after every county inside it (Allegheny names its own)');
 lookKeys.forEach(function (k) {
-  ok(/\/(?:MapServer|FeatureServer)\/\d+$/.test(LOOK[k].url) && LOOK[k].idField && (/ County$/.test(LOOK[k].label) || (k === 'pa' && LOOK[k].label === 'Pennsylvania') || (k === 'ct' && LOOK[k].label === 'Connecticut')),
+  ok(/\/(?:MapServer|FeatureServer)\/\d+$/.test(LOOK[k].url) && LOOK[k].idField && (/ County$/.test(LOOK[k].label) || (k === 'pa' && LOOK[k].label === 'Pennsylvania') || (k === 'ct' && LOOK[k].label === 'Connecticut') || (LOOK[k].requireId === true && /^[A-Z][A-Za-z ]+$/.test(LOOK[k].label))),
      k + ': a polygon layer, an id field and a county (or state) name for the lookup');
 });
 lookKeys.filter(function (k) { return ['dupage', 'lake', 'peoria', 'cook'].indexOf(k) < 0; }).forEach(function (k) { delete LOOK[k]; });
