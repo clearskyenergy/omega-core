@@ -910,3 +910,9 @@ the country". The tooltip said why: no licensed key on the deployment. The fix i
   against the live services (network, so not in `npm test`). Run on 2026-11-23 for the new sources, Oklahoma
   and Maricopa: all answered; the forty-four earlier sources were not re-run here.
 
+### The Space cell leads with acres (2026-11-23, late)
+
+Tommy, once the lots read: "its scoring it should it just say how much space like acres". The cell now reads
+the lot's acres first, then the share that is building, then the pad's fit with its score (the score stays on
+the card and the report with its rule). The Space column sorts by acres.
+

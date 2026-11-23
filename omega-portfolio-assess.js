@@ -152,10 +152,15 @@
       (a.decision ? '<div class="pa-sub"><span class="pa-ok" title="Approved for pre-development' + (a.decision.by ? ' by ' + esc(a.decision.by) : '') + '">✓ ' + esc(a.decision.label) + '</span></div>' : '<div class="pa-sub">' + esc(r.label || '') + '</div>');
     /* SPACE: the score when a pad is judged, and under it what the lot IS (acres, how much of it is building).
        No figure is never a bare dash: it says whether the lot has no parcel record, or is only not read yet. */
-    var sp = a.space || null, sc = sp && sp.score, lot = spaceLot(sp), why = esc(sp && sp.words ? sp.words : 'The lot is not read yet: run the screen'), space = sc
-      ? '<b title="' + esc(sc.words || '') + '"' + (sc.points < 40 ? ' style="color:#b3261e"' : '') + '>' + esc(sc.points) + '</b><div class="pa-sub" title="' + why + '">' + esc(sc.grade + (sc.upperBound && sc.points >= 60 ? '?' : '')) + (lot ? ' · ' + esc(lot) : '') + '</div>'
-      : sp && sp.measured ? '<span title="' + why + '">' + esc(lot || 'Measured') + '</span><div class="pa-sub">no pad judged</div>'
-      : '<span class="pa-no" title="' + why + '">' + (sp && sp.ok ? 'Not read' : sp && /^No parcel record/.test(sp.words || '') ? 'No parcel' : 'Not read') + '</span>' + (sp && sp.ok && lot ? '<div class="pa-sub">' + esc(lot) + '</div>' : '');
+    /* SPACE (2026-11-23, Tommy: "should it just say how much space like acres"): the lot's ACRES lead, then how much
+       of it is building, then whether the compute pad fits with its score. No figure is never a bare dash: it says
+       whether the lot has no parcel record or is only not read yet. */
+    var sp = a.space || null, sc = sp && sp.score, why = esc(sp && sp.words ? sp.words : 'The lot is not read yet: run the screen'), bl = sp && sp.measured && sp.buildings && sp.buildings.read ? sp.buildings : null;
+    var built = bl ? (bl.count ? (bl.coveragePct != null ? bl.coveragePct + '% built' : bl.count + ' bldg') : 'no buildings') : '';
+    var fit = sc ? '<div class="pa-sub" title="' + esc(sc.words || '') + '"' + (sc.points < 40 ? ' style="color:#b3261e"' : '') + '>' + esc(sc.grade + (sc.upperBound && sc.points >= 60 ? '?' : '')) + ' · ' + esc(sc.points) + '</div>' : '';
+    var space = sp && sp.ok && sp.acres != null
+      ? '<b title="' + why + '">' + esc(sp.acres) + ' ac</b>' + (built ? '<div class="pa-sub" title="' + why + '">' + esc(built) + '</div>' : '') + (sp.measured ? fit || '<div class="pa-sub">no pad judged</div>' : '<div class="pa-sub pa-no">not measured</div>')
+      : '<span class="pa-no" title="' + why + '">' + (sp && /^No parcel record/.test(sp.words || '') ? 'No parcel' : 'Not read') + '</span>';
     return { power: power, compute: compute, bess: bess, charge: charge, space: space, ready: ready, fund: f ? fundCell(a, f) : null };
   }
 
