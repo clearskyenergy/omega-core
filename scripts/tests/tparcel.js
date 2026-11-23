@@ -311,9 +311,76 @@ const REGRID_HIT = { parcels: { type: 'FeatureCollection', features: [{
     reset(); SCRIPT = [];
     out = await post({ lat: 41.8445, lng: -90.1887 });
     ok(out && out.ok === false && out.licensed === 'not-on-plan' && CALLS.length === 0, 'outside every public layer on a plan without it: the miss says the licensed source is not on the plan');
-    reset({ 'omega_orgs/concordenergyusa.com/billing/current': { tier: 'internal' } }); SCRIPT = [{ json: { parcels: { type: 'FeatureCollection', features: [] } } }];
+    reset({ 'omega_orgs/concordenergyusa.com/billing/current': { tier: 'internal' } }); SCRIPT = [{ json: { parcels: { type: 'FeatureCollection', features: [] } } }, { status: 404 }];
     out = await post({ lat: 41.8445, lng: -90.1887 });
-    ok(out && out.ok === false && out.licensed === 'asked' && same(out.tried, ['regrid']) && JSON.stringify(out).indexOf('SECRET') < 0, 'and on a plan with it: asked, nothing there, the token never in the answer');
+    ok(out && out.ok === false && out.licensed === 'asked' && same(out.tried, ['regrid', 'regrid-tiles']) && !out.note && JSON.stringify(out).indexOf('SECRET') < 0, 'and on a plan with it: asked, nothing there, the token never in the answer');
+    /* ── the lot off the parcel TILES: the key carries the tiles and not the point lookup ── */
+    {
+      const MVT = require('../../api/_lib/mvt');
+      /* a small encoder for the test alone: one layer, polygons in tile units */
+      const vint = (n) => { const o = []; while (n > 127) { o.push((n % 128) | 128); n = Math.floor(n / 128); } o.push(n); return o; };
+      const zz = (n) => (n < 0 ? -2 * n - 1 : 2 * n);
+      const fld = (f, bytes) => vint(f * 8 + 2).concat(vint(bytes.length), bytes);
+      const strb = (t) => Array.from(Buffer.from(t, 'utf8'));
+      const geom = (ring) => { const g = [1 * 8 + 1, zz(ring[0][0]), zz(ring[0][1]), (ring.length - 1) * 8 + 2]; for (let k = 1; k < ring.length; k++) g.push(zz(ring[k][0] - ring[k - 1][0]), zz(ring[k][1] - ring[k - 1][1])); g.push(1 * 8 + 7); return g.reduce((a, n) => a.concat(vint(n)), []); };
+      const tile = (feats) => {
+        let layer = fld(1, strb('parcels')); const keys = ['parcelnumb', 'owner'], vals = [];
+        feats.forEach((f) => { const tags = []; [f.apn, f.owner].forEach((v, k) => { tags.push(k, vals.length); vals.push(v); });
+          layer = layer.concat(fld(2, fld(2, tags.reduce((a, n) => a.concat(vint(n)), [])).concat(vint(3 * 8), vint(3), fld(4, geom(f.ring))))); });
+        keys.forEach((k) => { layer = layer.concat(fld(3, strb(k))); });
+        vals.forEach((v) => { layer = layer.concat(fld(4, fld(1, strb(v)))); });
+        layer = layer.concat(vint(5 * 8), vint(4096));
+        return Buffer.from(fld(3, layer));
+      };
+      /* Chandler, Oklahoma (no public parcel layer), at the middle of its z16 tile so the test lots sit inside it */
+      const mid = MVT.toLatLng(MVT.tileOf(35.7017, -96.8809, 16), 2048, 2048, 4096), OK = { lat: mid[0], lng: mid[1] };
+      const at = (z) => { const t = MVT.tileOf(OK.lat, OK.lng, z); return { t, px: Math.round(t.fx * 4096), py: Math.round(t.fy * 4096) }; };
+      const z16 = at(16), sq = (c, h) => [[c.px - h, c.py - h], [c.px + h, c.py - h], [c.px + h, c.py + h], [c.px - h, c.py + h]];
+      /* pure: the lot under the point, and not its neighbour */
+      const whole = tile([{ apn: 'OK-1', owner: 'Lot Owner LLC', ring: sq(z16, 300) }, { apn: 'OK-2', owner: 'Next Door', ring: sq({ px: z16.px + 900, py: z16.py }, 300) }]);
+      const got = H.fromTile(whole, z16.t, OK.lat, OK.lng);
+      ok(got && got.ok === true && got.apn === 'OK-1' && got.owner === 'Lot Owner LLC' && got.source === 'regrid-tiles' && got.ring.length === 4 && !got.partial,
+         'the tile reader finds the polygon under the point (not its neighbour), with the parcel number and owner the tile carries');
+      /* a z16 tile is about 500 m across here, so a 600-unit square is about 73 m a side: 1.3 acres or so */
+      ok(got.acres > 0.9 && got.acres < 1.8, 'and its acres are measured off the outline (' + got.acres + ')');
+      ok(got.ring.every(function (p) { return Math.abs(p[0] - OK.lat) < 0.002 && Math.abs(p[1] - OK.lng) < 0.002; }), 'in latitude and longitude, around the point');
+      ok(H.fromTile(tile([{ apn: 'OK-2', owner: 'x', ring: sq({ px: z16.px + 900, py: z16.py }, 300) }]), z16.t, OK.lat, OK.lng) === null, 'no polygon under the point is null, never the nearest one');
+      /* through the door: the point lookup is refused, no county covers Oklahoma, the tile answers */
+      reset({ 'omega_orgs/concordenergyusa.com/billing/current': { tier: 'internal' } });
+      const realFetch = global.fetch; const asked = [];
+      global.fetch = function (url) {
+        asked.push(String(url));
+        if (/tiles\.regrid\.com/.test(url)) return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(whole.buffer.slice(whole.byteOffset, whole.byteOffset + whole.length)) });
+        return Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve({}) });
+      };
+      try {
+        out = await post(OK);
+        ok(out && out.ok === true && out.source === 'regrid-tiles' && out.apn === 'OK-1' && asked.length === 2 && /\/16\/\d+\/\d+\.mvt\?token=/.test(asked[1]),
+           'a key that carries the tiles and not the point lookup: the lot is read off the tile the point is in');
+        ok(JSON.stringify(out).indexOf('SECRET') < 0, 'and the token is not in the answer');
+        /* a lot cut by the tile edge: a wider tile is asked; whole there, it is the answer */
+        const cut = tile([{ apn: 'BIG', owner: 'x', ring: [[-64, z16.py - 300], [z16.px + 300, z16.py - 300], [z16.px + 300, z16.py + 300], [-64, z16.py + 300]] }]);
+        const z15 = at(15), wide = tile([{ apn: 'BIG', owner: 'x', ring: sq(z15, 400) }]);
+        const body = (b) => ({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)) });
+        asked.length = 0; reset({ 'omega_orgs/concordenergyusa.com/billing/current': { tier: 'internal' } });
+        global.fetch = function (url) { asked.push(String(url)); return Promise.resolve(/\/16\/\d+\/\d+\.mvt/.test(url) ? body(cut) : /\/15\/\d+\/\d+\.mvt/.test(url) ? body(wide) : { ok: false, status: 403, json: () => Promise.resolve({}) }); };
+        out = await post({ lat: OK.lat + 0.01, lng: OK.lng });            /* another point: the first is cached */
+        ok(out && out.ok === false, 'a point the tile has nothing under is still a miss');
+        asked.length = 0;
+        global.fetch = function (url) { asked.push(String(url)); return Promise.resolve(/\/16\/\d+\/\d+\.mvt/.test(url) ? body(cut) : /\/15\/\d+\/\d+\.mvt/.test(url) ? body(wide) : { ok: false, status: 403, json: () => Promise.resolve({}) }); };
+        const viaLookup = await H.lookup({ orgId: 't' }, { regrid: true }, OK.lat, OK.lng);
+        ok(viaLookup.ok === true && viaLookup.apn === 'BIG' && !viaLookup.partial && asked.filter((u) => /\.mvt/.test(u)).length === 2, 'a lot cut by the tile’s edge is asked again on a wider tile, and the whole one is the answer');
+        /* cut at every zoom: kept, and said */
+        global.fetch = function (url) { return Promise.resolve(/\.mvt/.test(url) ? body(cut) : { ok: false, status: 403, json: () => Promise.resolve({}) }); };
+        const stillCut = await H.fromTiles(OK.lat, OK.lng, 'SECRET-REGRID-TOKEN', function (u) { return Promise.resolve(cut); });
+        ok(stillCut === null || stillCut.partial === true, 'a lot still cut at the widest tile is marked partial, never passed off as whole');
+        /* the refusal is said as a refusal */
+        global.fetch = function () { return Promise.resolve({ ok: false, status: 403, json: () => Promise.resolve({}) }); };
+        const refused = await H.lookup({ orgId: 't' }, { regrid: true }, OK.lat + 0.02, OK.lng);
+        ok(refused.ok === false && /regrid refused the key \(HTTP 403\)/.test(refused.note || '') && refused.licensed === 'asked' && JSON.stringify(refused).indexOf('SECRET') < 0,
+           'a key the service refuses is said as that (the status, never the key): ' + refused.note);
+      } finally { global.fetch = realFetch; }
+    }
     reset({ 'omega_orgs/concordenergyusa.com': undefined }); SCRIPT = [{ json: REGRID_HIT }];
     AUTH = () => Promise.resolve({ uid: 's1', email: 'ops@clearsky-usa.com', orgId: 'clearsky-usa.com', staff: true });
     out = await post(COOK);

@@ -1620,6 +1620,12 @@ the same day, each in Tommy's words in the doc:
   kept as fresh (`assess-space`, five a call), never a site with no parcel record. The parcel cache stores
   the ring FLAT (`ringFlat`): Firestore refuses nested arrays, so it had never held a hit. `tassess.js` S06,
   `tparcel.js`.
+  **The lot is read off the parcel TILES when the point lookup gives nothing** (same day, Tommy: "in our
+  editor tool we have it pulling all the parcel data … so this should do the same"): the editor's lines are
+  the licensed source's map tiles, a different subscription from its point lookup, so `api/parcel.js` reads
+  the vector tile the point is in (`api/_lib/mvt.js`; zoom 16, 15, 14 while the lot is cut by the tile's
+  edge; `source: 'regrid-tiles'`, `partial` when still cut), a refused key is said as refused, a run re-asks
+  a miss recorded before the sources were named, and **Read lots** re-reads every unmeasured lot shown.
 - **The space score** (Tommy: "something we can look at and score in the
   portfolio"): `assess-space.js scoreOf`, 0 to 100 for the compute pad on
   the clear ground (60 and up fits, 85 ample, under 40 no room, an upper

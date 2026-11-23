@@ -856,3 +856,23 @@ feature and api so this should be an api integration … this needs to be accura
   on the road or the neighbouring lot reads that lot: the APN, the acres and the owner on the card are how a
   person checks it against the editor's parcel. Not built: moving the point by hand from the register.
 
+### The lot off the parcel tiles, and reading the misses again (2026-11-23, later)
+
+Tommy, after every site read **No parcel**: "in our editor tool we have it pulling all the parcel data … so
+this should do the same".
+
+- **Why the editor had parcels and the screen had none.** The editor's Parcel Lines are the licensed source's
+  MAP TILES (`api/parcel-tiles.js`); the screen asked that source's POINT LOOKUP. They are two subscriptions on
+  one key, and a key can carry the first without the second. `api/parcel.js` now reads the lot out of the same
+  tiles when the point lookup and the public layers give nothing: the vector tile the point is in
+  (`api/_lib/mvt.js`, a small pure reader), a wider tile while the lot is cut by the tile's edge (zoom 16, 15,
+  14), `source: 'regrid-tiles'`. A lot still cut at the widest is kept and said (`partial`, a lower bound).
+  A tile carries few fields: acres are measured off the outline; zoning and county stay blank.
+- **A refused key is said as refused** ("regrid refused the key (HTTP 403)"), with the status and never the key.
+- **Old misses are asked again.** A run re-reads, once and by itself, a miss recorded before the lookup named
+  its sources; **Read lots** (beside Run all sites) re-reads every site shown whose lot is not measured, the
+  misses included, five a call.
+- **Not verified against the live service.** The tile reader is tested on tiles built in `tparcel.js`; the
+  build container cannot reach the service and holds no key. The first live run is the check: compare one
+  lot's acres with the editor's lines. If the tiles are refused too, the Space cell's reason says so.
+
