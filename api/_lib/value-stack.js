@@ -319,7 +319,7 @@
       id: "ny.nyserda.retail", utility: "NYSERDA", name: "NYSERDA Retail Energy Storage Incentive",
       state: "NY", nonresidential: true,
       perKwh: 175, perKwhNyc: 75, maxKwh: 20000,
-      tier: "published", asOf: "open blocks on NYSERDA's dashboard, read 2026-11-21",
+      tier: "published", asOf: "open blocks on NYSERDA's dashboard, read 2026-11-24",
       ref: "NYSERDA Retail Energy Storage Incentive (MWh-block design under the "
          + "2024–2030 implementation plan): the open blocks pay $175 per kWh upstate "
          + "(Block 5) and $75 per kWh in New York City (Block 10, opened 23 April "
@@ -335,7 +335,7 @@
          + "critical facilities in disadvantaged communities opened 13 April 2026. "
          + "Upstate's next block is already staged on the dashboard at $150 per kWh "
          + "(Block 6, $58.5M, not yet open); New York City's Block 10 was 70.7% "
-         + "subscribed ($8.79M of $30M left) on 2026-11-21 — about $1.5M of "
+         + "subscribed ($8.79M of $30M left) on 2026-11-24 — about $1.5M of "
          + "applications came OFF the block between 17 and 21 November, so the "
          + "subscription figure moves both ways — with no further NYC block staged."
     },
@@ -343,7 +343,7 @@
       id: "md.rces.grant", utility: "Maryland Energy Administration", name: "Maryland RCES storage grant",
       state: "MD", nonresidential: true,
       pctOfCost: 0.30, capUsd: 150000,
-      tier: "planning", asOf: "FY2027 round open (FOA issued 2026-09-24); read 2026-11-22 on the MyMEA portal",
+      tier: "planning", asOf: "FY2027 round open (FOA issued 2026-09-24); read 2026-11-24 on the MyMEA portal",
       ref: "Maryland Energy Administration Residential and Commercial Energy Storage "
          + "(RCES) grant: 30% of total installed cost, up to $150,000 for a commercial "
          + "system (FY27 figures as relayed from the FOA — confirm in the FOA itself "
@@ -351,8 +351,8 @@
          + "since the end of 2024.",
       url: "https://energy.maryland.gov/Pages/Energy-Storage-Grant-Program.aspx",
       conditions: "First-come grants from a small annual budget. The FY27 round is "
-         + "OPEN: up to $4M anticipated, 30.88% of the budget requested and 20.06% "
-         + "reserved on the MyMEA portal's own meter, calculated 2026-11-22 "
+         + "OPEN: up to $4M anticipated, 31.75% of the budget requested and 20.18% "
+         + "reserved on the MyMEA portal's own meter, calculated 2026-11-24 "
          + "6:00 AM ET (the portal updates daily and became the live source when "
          + "MEA froze its website pages for a migration on 2026-11-13; the frozen "
          + "page still shows the 2026-11-09 posting), applications due 31 May 2027 "
