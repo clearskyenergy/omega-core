@@ -629,9 +629,9 @@ function pickEvents(load, count, win) {
    programme and what replaces the figure. */
 var PROGRAMS = [
   { id: 'ca.elrp', name: 'Emergency Load Reduction Program (ELRP)', markets: ['CAISO'], group: 'ca-dr',
-    segments: SEGMENTS, kind: 'event', perKwh: 2.00, events: 12, hours: 4, win: [16, 21],
-    bank: { paidBy: 'the utility, under the CPUC\u2019s ELRP budget', vehicle: 'enrolment through an A.6 VPP aggregator', tenor: 'programme year; paid per called event' },
-    ref: 'CPUC ELRP pays $2/kWh of incremental reduction in called events (4–9 pm, May–October, at most 60 called hours a year); residential batteries enrol through an A.6 VPP aggregator. The pilot is authorized through 2027 (D.23-12-005). Event count varies with the summer — 12 four-hour events is a planning year.' },
+    segments: SEGMENTS, kind: 'event', perKwh: 2.00, events: 12, hours: 3, win: [16, 21],
+    bank: { paidBy: 'the utility, under the CPUC\u2019s ELRP budget', vehicle: 'enrolment through a VPP aggregator (ELRP sub-group A.4)', tenor: 'programme year; paid per called event' },
+    ref: 'CPUC ELRP pays $2/kWh of incremental reduction in called events (4–9 pm, May–October, at most 60 called hours a year); a managed battery enrols through a VPP aggregator (ELRP sub-group A.4; the residential A.6 sub-group closed at the end of 2025, as D.26-10-053 recounts). The pilot is authorized through 2027 (D.23-12-005), and D.26-10-053 (Decision Approving Two-Year Bridge Funding for Demand Response Programs, adopted 29 October 2026, issued 3 November 2026) carries the A.4 and EV-aggregator (A.5) sub-groups through the 2028-2029 bridge years for all IOUs, with their minimum dispatch reduced to a uniform 18 hours from 2028; every other sub-group closes at the end of 2027, except SDG&E keeps its non-residential A.1. The decision declines the utilities’ request to cut the incentive rate, so the $2/kWh carries forward, with the programme terms updated by Tier 2 advice letter by 30 November 2027. The sub-group’s events run three hours, so 12 three-hour events is a planning year; event count varies with the summer.' },
   { id: 'ca.dsgs', exportOk: true, name: 'Demand Side Grid Support (DSGS) Option 3', markets: ['CAISO'], group: 'ca-dr',
     segments: ['residential', 'commercial'], kind: 'capacity', perKwYear: 62.10, minHours: 2,
     bank: { paidBy: 'the CEC (state programme funds)', vehicle: 'DSGS aggregator agreement', tenor: 'summer season (May\u2013Oct), re-enrolled yearly' },
@@ -666,6 +666,11 @@ var PROGRAMS = [
     segments: SEGMENTS, kind: 'capacity', perKwYear: 10, minHours: 2,
     bank: { paidBy: 'ComEd, under Rider SDVPP (approved; tariff sheets effective 16 July 2026)', vehicle: 'Rider SDVPP enrolment — service begins no later than 1 March 2027', tenor: 'five-year programme term; paid per season (June–September)' },
     ref: 'ComEd\'s Rider SDVPP (the PA 104-0458 compliance filing, ICC-stamped 1 June 2026, tariff sheets effective 16 July 2026) pays $10 per kW of performance per season, measured 4–6 pm weekdays June–September. It replaced the withdrawn Rider VPP / BYODLR proposal; the $150/kW-year planning figure carried before it had no primary source and is retired.' },
+
+  { id: 'nj.powerup', name: 'PowerUp New Jersey — GSESP Phase 2 Block 1 (BTM storage)', markets: ['PJM'], states: ['NJ'], group: 'pjm-cap',
+    segments: ['residential', 'commercial'], kind: 'capacity', perKwYear: 200, minHours: 2,
+    bank: { paidBy: 'the electric distribution company, under the BPU’s PowerUp NJ budget', vehicle: 'enrolment through a registered DER Provider', tenor: 'ten programme years; paid yearly on verified dispatch performance' },
+    ref: 'New Jersey BPU order of 12 November 2026 (dockets QO26100658, QO26030099, QO26040116) establishes the PowerUp NJ Program; its GSESP Phase 2 Block 1 pays a performance-based incentive of UP TO $200 per kW-year for ten years for new behind-the-meter storage (150 MW statewide; $100 per kW-year for up to 100 MW of storage operating before 12 November 2026), residential and small commercial, enrolled through a DER Provider: the yearly payment is the rate times the awarded kW times a verified performance factor over EDC dispatch events called on forecast PJM peak (5CP/1CP) hours — never a payment for installing. NOTHING IS CLAIMABLE YET: each EDC files its programme by 12 February 2027 and enrolment opens 60 days after its approval, so roughly mid-2027. The same discharge also lowers the capacity tag, so this row shares the PJM capacity group and only the best figure is counted.' },
 
   { id: 'ny.dlm', name: 'Utility DLM (Con Edison CSRP + DLRP)', markets: ['NYISO'], group: 'ny-dlm',
     segments: SEGMENTS, kind: 'capacity', perKwYear: 30, perKwYearNyc: 120, minHours: 4,
