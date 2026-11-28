@@ -343,7 +343,7 @@
       id: "md.rces.grant", utility: "Maryland Energy Administration", name: "Maryland RCES storage grant",
       state: "MD", nonresidential: true,
       pctOfCost: 0.30, capUsd: 150000,
-      tier: "planning", asOf: "FY2027 round open (FOA issued 2026-09-24); read 2026-11-26 on the MyMEA portal",
+      tier: "planning", asOf: "FY2027 round open (FOA issued 2026-09-24); read 2026-11-28 on the MyMEA portal",
       ref: "Maryland Energy Administration Residential and Commercial Energy Storage "
          + "(RCES) grant: 30% of total installed cost, up to $150,000 for a commercial "
          + "system (FY27 figures as relayed from the FOA — confirm in the FOA itself "
@@ -351,8 +351,8 @@
          + "since the end of 2024.",
       url: "https://energy.maryland.gov/Pages/Energy-Storage-Grant-Program.aspx",
       conditions: "First-come grants from a small annual budget. The FY27 round is "
-         + "OPEN: up to $4M anticipated, 32.85% of the budget requested and 22.28% "
-         + "reserved on the MyMEA portal's own meter, calculated 2026-11-26 "
+         + "OPEN: up to $4M anticipated, 33.1% of the budget requested (as the portal prints it) and 22.28% "
+         + "reserved on the MyMEA portal's own meter, calculated 2026-11-28 "
          + "6:00 AM ET (the portal updates daily and became the live source when "
          + "MEA froze its website pages for a migration on 2026-11-13; the frozen "
          + "page still shows the 2026-11-09 posting), applications due 31 May 2027 "
